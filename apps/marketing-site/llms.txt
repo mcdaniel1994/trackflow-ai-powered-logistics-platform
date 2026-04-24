@@ -1,0 +1,37 @@
+# TrackFlow
+
+TrackFlow is a third-party logistics (3PL) provider founded in 2009, headquartered in Los Angeles, California, with a second warehouse in Zaragoza, Spain. TrackFlow serves e-commerce brands operating in the United States and Spain.
+
+## Services
+
+- **Warehouse Management** — Storage, picking, packing, and real-time inventory tracking across two facilities
+- **Last-Mile Delivery** — Certified carrier network covering the full United States (UPS, FedEx, DHL) and Spain (MRW, SEUR, DHL)
+- **Reverse Logistics** — Complete returns management including inspection, reconditioning, and platform integration
+
+## Key Facts
+
+- Founded: 2009
+- Locations: Los Angeles, California (US) and Zaragoza, Aragón (Spain)
+- Team: 130+ logistics professionals
+- Markets served: United States (national) and Spain (peninsular and island coverage)
+- Specializations: Fashion, electronics, cosmetics
+- Minimum volume: 100+ shipments per month
+- Languages: English, Spanish
+- Annual revenue: approximately 9M EUR
+
+## Pages
+
+- Homepage: https://trackflow.com/
+- Request Information: https://trackflow.com/application.html
+- Privacy Policy: https://trackflow.com/privacy.html
+
+## Contact
+
+- Sales email: comercial@trackflow.com
+- Los Angeles: +1 213 555 0147
+- Zaragoza: +34 976 123 456
+- LinkedIn: https://linkedin.com/company/trackflow
+
+## Note
+
+TrackFlow is a portfolio project built as part of an AI Engineering program at 4Geeks Academy. The company scenario and operational details are realistic and representative of a professional logistics operation.

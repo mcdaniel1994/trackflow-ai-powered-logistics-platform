@@ -1,0 +1,10 @@
+{
+  "name": "trackflow-tailwind",
+  "scripts": {
+    "build": "tailwindcss -i ./src/input.css -o ../../apps/marketing-site/assets/css/styles.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ../../apps/marketing-site/assets/css/styles.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}
