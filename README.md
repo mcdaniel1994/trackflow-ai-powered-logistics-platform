@@ -2,15 +2,17 @@
 
 An AI-powered platform for last-mile delivery and warehouse management.
 
+🌐 **Live demo:** [trackflow-ai-powered-logistics-plat.vercel.app](https://trackflow-ai-powered-logistics-plat.vercel.app/)
+
 TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza, serving e-commerce brands across the United States and Spain. This repository is the engineering platform that powers the company — a growing monorepo of websites, APIs, AI agents, and data pipelines built to replace manual operations with reliable, automated systems.
 
 ---
 
-## 🚧 Currently Building
+## 🚧 Current Status
 
-**Engagement 2 — TypeScript utilities for inventory and carrier scoring**
+**Engagement 2** is complete. Planning is underway for Engagement 3.
 
-See `docs/briefs/` for the active brief.
+See `docs/briefs/` for past and upcoming briefs.
 
 ---
 
@@ -57,7 +59,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🟡 Engagement 2 — Inventory & Carrier Scoring Engine *(brief documented, code not yet started)*
+### ✅ Engagement 2 — Inventory & Carrier Scoring Engine *(delivered)*
 
 - Inventory filtering by location and stock
 - Carrier scoring (cost, speed, reliability)
@@ -79,7 +81,7 @@ TrackFlow reflects real-world logistics challenges:
 | Engagement | Focus | Status |
 |----------|------|--------|
 | 1 | Corporate website + lead capture | ✅ Delivered |
-| 2 | Inventory & carrier scoring (TypeScript) | 🟡 In progress |
+| 2 | Inventory & carrier scoring (TypeScript) | ✅ Delivered |
 | 3 | AI-driven UI generation | ⏳ Upcoming |
 | 4 | Next.js portals (operations, loyalty, client) | ⏳ Upcoming |
 | 5 | Central API | ⏳ Upcoming |
@@ -94,7 +96,7 @@ TrackFlow reflects real-world logistics challenges:
 ## 🏗️ Repository Architecture
 
 ```text
-trackflow-logistics-ai-platform/
+trackflow/
 ├── apps/                          # User-facing products
 │   └── marketing-site/            # Engagement 1 — corporate site
 │       ├── assets/
@@ -104,7 +106,7 @@ trackflow-logistics-ai-platform/
 │       └── *.html                 # index, application, privacy
 │
 ├── packages/                      # Shared code libraries
-│   ├── shared/                    # Types + utilities
+│   ├── shared/                    # @repo/shared-types: types + utilities
 │   └── tailwind-config/           # Shared Tailwind setup
 │
 ├── agents/                        # AI agents (Engagement 8)
@@ -118,10 +120,17 @@ trackflow-logistics-ai-platform/
 │   └── eval/                      # AI evaluation datasets
 │
 ├── skills/                        # Reusable agent capabilities
+│   ├── _template/                 # Starter pattern for new skills
+│   ├── code-review/
+│   ├── data-analysis/
+│   └── research/
+│
 ├── workflows/                     # n8n automation workflows
 │
 ├── docs/                          # Documentation
-│   ├── briefs/                    # Stakeholder briefs
+│   ├── briefs/                    # Stakeholder briefs (per engagement)
+│   ├── standards/                 # Cross-cutting standards (visibility, etc.)
+│   └── archive/                   # Historical planning artifacts
 │
 ├── scripts/                       # Repo-wide utilities
 └── resources/                     # Non-code shared resources
@@ -132,7 +141,7 @@ trackflow-logistics-ai-platform/
 
 - `apps/` depends on `packages/`, never the reverse
 - Types are first-class and shared across the system
-- Every working directory includes a README
+- Meaningful top-level working directories include a README
 
 ---
 
@@ -151,24 +160,11 @@ trackflow-logistics-ai-platform/
 
 ## 📌 About This Project
 
-This is a long-running portfolio project built during the AI Engineering program at 4Geeks Academy. [![4Geeks Academy](https://img.shields.io/badge/AI%20Engineering-4Geeks%20Academy-orange)](https://4geeksacademy.com/)
+A long-running portfolio project built during the AI Engineering program at 4Geeks Academy. [![4Geeks Academy](https://img.shields.io/badge/AI%20Engineering-4Geeks%20Academy-orange)](https://4geeksacademy.com/)
 
-## Acknowledgment
+Rather than isolated demos, TrackFlow is a **single, cohesive platform** for a realistic logistics company. Each engagement solves a real operational problem for a specific stakeholder and integrates into the growing system.
 
-This project uses the base architecture template from 4Geeks Academy:
-
-- https://github.com/4GeeksAcademy/ai-engineering-company-project-monorepo
-
-The template provides an initial monorepo structure and development framework. This repository significantly extends that foundation with custom architecture decisions, business logic, and AI system design tailored to the TrackFlow platform.
-
-Instead of isolated demos, this project builds a **single, cohesive platform** for a realistic logistics company.
-
-Each engagement:
-- Solves a real operational problem
-- Targets a specific stakeholder
-- Integrates into a growing system
-
-**Goal:** Demonstrate the ability to build real-world, scalable AI systems — not just tutorial projects.
+Built on the [4Geeks monorepo template](https://github.com/4GeeksAcademy/ai-engineering-company-project-monorepo), then significantly extended with custom architecture, business logic, and AI system design.
 
 ---
 
@@ -185,8 +181,6 @@ Former controls engineer. Now building AI systems that help small businesses sav
 
 ---
 
-## 🎯 Availability Options
+## 🎯 Availability
 
-###  Flexible
-
-Currently open to opportunities in AI engineering, automation, and applied AI. Open to remote, contract, or sub-contract.
+Open to AI engineering, automation, and applied AI roles — remote, contract, or sub-contract.

@@ -1,3 +1,7 @@
+> ⚠️ **Archived.** Current standard: [`docs/standards/visibility.md`](../../standards/visibility.md). This file is kept for historical context only.
+
+---
+
 As we plan this web app, ensure every decision accounts for:
 - Semantic HTML (meaningful tags, logical structure)
 - Web Accessibility (WCAG 2.1 AA: ARIA, keyboard nav, contrast, alt text)

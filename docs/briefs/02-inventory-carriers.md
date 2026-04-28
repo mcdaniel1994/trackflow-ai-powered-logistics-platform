@@ -2,6 +2,10 @@
 
 ## Client: TrackFlow · Stakeholder: Ana Whitfield (Head of Warehouse Operations)
 
+## Status
+
+Delivered in Engagement 2. Implementation lives in `packages/shared/`.
+
 ## About TrackFlow
 
 TrackFlow is a last-mile delivery and warehouse management company operating in the United States (Los Angeles) and Spain (Zaragoza). The company manages warehouses for e-commerce brands and handles the final delivery to end customers. You're part of TrackFlow Tech, the internal unit leading the company's digital transformation.

@@ -1,7 +1,11 @@
-# `docs` folder
+# `docs/`
 
-This folder holds **cross-cutting documentation** for the monorepo: architecture guides, technical decisions, conventions, processes, and any material shared across applications, pipelines, agents, and workflows.
+Cross-cutting documentation for the TrackFlow monorepo — material shared across applications, packages, pipelines, agents, and workflows.
 
-- **Main purpose**: provide a single place for “global” project documentation (not tied to one app or agent only).
-- **Recommendation**: organize docs by topic (architecture, deployment, data, security, observability, etc.) and keep links from each component’s README to these guides.
+## Contents
 
+- **[`briefs/`](briefs/)** — Stakeholder briefs, one per engagement. Source of truth for scope and acceptance criteria.
+- **[`standards/`](standards/)** — Cross-cutting standards that apply across engagements (e.g., public-page visibility requirements).
+- **[`archive/`](archive/)** — Historical planning artifacts. Read for context only; do not update.
+
+Component-level documentation (how a single app or package works) belongs in that folder's own README, not here.

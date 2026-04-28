@@ -2,13 +2,19 @@
   "name": "@repo/shared-types",
   "version": "0.0.1",
   "private": true,
-  "description": "Shared types for AI Engineering transversal projects",
-  "main": "types/index.ts",
-  "types": "types/index.ts",
-  "scripts": {},
+  "description": "Shared types and utilities for TrackFlow inventory and carrier management",
+  "main": "src/utils/index.ts",
+  "types": "src/types/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "type-check": "tsc --noEmit"
+  },
   "keywords": [
     "types",
-    "shared"
+    "shared",
+    "inventory",
+    "carrier",
+    "warehouse"
   ],
   "author": "",
   "license": "MIT"

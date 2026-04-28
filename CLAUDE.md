@@ -11,10 +11,11 @@ Orientation file for AI coding agents working in this repo. Read this before mak
 
 2. **`docs/briefs/`**  
    Every engagement has a stakeholder brief here. The brief is the source of truth for what that engagement needs to deliver.  
+    Brief filenames use numeric prefixes (example: `01-website.md`, `02-inventory-carriers.md`).
    Read the brief for whatever engagement is being worked on before writing any code.
 
 3. **The README in the folder you're working in**  
-   Every meaningful folder has one explaining its purpose.
+    Most meaningful folders have one explaining their purpose. Add one when missing.
 
 > If a question is answered by one of those files, don’t ask — read it.
 
@@ -22,13 +23,15 @@ Orientation file for AI coding agents working in this repo. Read this before mak
 
 ## Repo Navigation
 
+Use `docs/briefs/` for engagement-specific scope and acceptance criteria. Use `docs/` for standards and guidance that apply across engagements.
+
 | If you're looking for... | Go here |
 |---|---|
 | What this project is | `README.md` |
-| Active brief | `docs/briefs/NN-slug.md` |
-| Past briefs | `docs/briefs/` |
-| Archived course and planning artifacts from bootcamp setup | `docs/archive/` |
-| Cross-cutting docs | `docs/` |
+| Current engagement brief (when assigned) | `docs/briefs/NN-title.md` |
+| All briefs (completed + upcoming) | `docs/briefs/` |
+| Cross-cutting standards and guidance | `docs/` |
+| Archived planning artifacts | `docs/archive/` |
 | Engagement 1 deliverable | `apps/marketing-site/` |
 | Shared TypeScript code (types, utilities) | `packages/shared/` |
 | Tailwind build setup | `packages/tailwind-config/` |
@@ -46,7 +49,10 @@ Orientation file for AI coding agents working in this repo. Read this before mak
 - **Engagement 1** — `apps/marketing-site/`  
   Built.
 
-- **Engagement 2+** — TBD per engagement.  
+- **Engagement 2** — `packages/shared/`  
+  Built.
+
+- **Engagement 3+** — TBD per engagement.  
   Confirm with Cory before placing new code.
 
 ---
@@ -69,3 +75,17 @@ This applies to:
 
 - `apps/` depends on `packages/`. Never the reverse.
 - Empty folders with READMEs are intentional scaffolding for future engagements. Do **not** delete them.
+
+---
+
+## Documentation Maintenance
+
+When an engagement is added, completed, or changes status, these files move together. Update all of them in the same change:
+
+- `README.md` — engagement table (status column) and "What's Been Built" section
+- `docs/briefs/NN-title.md` — `## Status` header at the top of the brief
+- `docs/briefs/README.md` — index row (status + delivered code path)
+- `CLAUDE.md` — "Where New Engagement Code Goes" list (above)
+- The new engagement's deliverable folder — add or update its README
+
+When a new top-level folder, package, or app is introduced, also update the architecture tree in `README.md` and the navigation table above.

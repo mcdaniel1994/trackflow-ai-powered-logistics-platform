@@ -2,6 +2,10 @@
 
 ## Client: TrackFlow · Stakeholder: Miguel Torres (Commercial Director)
 
+## Status
+
+Delivered in Engagement 1. Implementation lives in `apps/marketing-site/`.
+
 ---
 
 TrackFlow is a last-mile delivery and warehouse management company founded in 2009 in Los Angeles, United States. It operates in two markets — United States and Spain — with warehouses in Los Angeles and Zaragoza. The company employs approximately 130 people and generates around 9 million euros in annual revenue.
