@@ -10,7 +10,7 @@ TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza
 
 ## 🚧 Current Status
 
-**Engagement 2** is complete. Planning is underway for Engagement 3.
+**Engagement 3** is complete: the Talent Pipeline Tracker lives in `apps/uis/`.
 
 See `docs/briefs/` for past and upcoming briefs.
 
@@ -76,13 +76,28 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### ✅ Engagement 3 — Talent Pipeline Tracker *(delivered)*
+
+- Candidate list for the Executive Assistant search
+- Status and stage filtering
+- Candidate detail, registration, editing, and notes
+
+**Tech:**
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+
+📁 Location: `apps/uis/`
+
+---
+
 ## 🗺️ Roadmap
 
 | Engagement | Focus | Status |
 |----------|------|--------|
 | 1 | Corporate website + lead capture | ✅ Delivered |
 | 2 | Inventory & carrier scoring (TypeScript) | ✅ Delivered |
-| 3 | AI-driven UI generation | ⏳ Upcoming |
+| 3 | Talent Pipeline Tracker | ✅ Delivered — `apps/uis/` |
 | 4 | Next.js portals (operations, loyalty, client) | ⏳ Upcoming |
 | 5 | Central API | ⏳ Upcoming |
 | 6 | Data pipelines & telemetry | ⏳ Upcoming |
@@ -98,12 +113,16 @@ TrackFlow reflects real-world logistics challenges:
 ```text
 trackflow/
 ├── apps/                          # User-facing products
-│   └── marketing-site/            # Engagement 1 — corporate site
-│       ├── assets/
-│       │   ├── css/               # Compiled Tailwind output (styles.css)
-│       │   ├── js/                # Client-side scripts (validation.js)
-│       │   └── images/            # Static images
-│       └── *.html                 # index, application, privacy
+│   ├── marketing-site/            # Engagement 1 — corporate site
+│   │   ├── assets/
+│   │   │   ├── css/               # Compiled Tailwind output (styles.css)
+│   │   │   ├── js/                # Client-side scripts (validation.js)
+│   │   │   └── images/            # Static images
+│   │   └── *.html                 # index, application, privacy
+│   └── uis/                       # Engagement 3 — talent pipeline tracker
+│       ├── app/                   # Next.js App Router routes
+│       ├── components/            # Feature and UI components
+│       └── lib/                   # API, labels, and local types
 │
 ├── packages/                      # Shared code libraries
 │   ├── shared/                    # @repo/shared-types: types + utilities

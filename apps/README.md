@@ -6,3 +6,10 @@ Each subfolder inside `apps/` must correspond to **one specific application** (f
 
 - **Main purpose**: to centralize in a single monorepo all the applications that support the company's use cases.
 - **Recommendation**: document in this file (or in sub-READMEs) the applications you add, their objective, the technology used, and how to run them in development, testing, and production environments.
+
+## Applications
+
+| App | Purpose | Status |
+|---|---|---|
+| `marketing-site/` | Public-facing TrackFlow website and lead capture flow | ✅ Delivered |
+| `uis/` | Internal Talent Pipeline Tracker for the Executive Assistant search | ✅ Delivered |

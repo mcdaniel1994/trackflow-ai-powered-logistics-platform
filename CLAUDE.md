@@ -33,6 +33,7 @@ Use `docs/briefs/` for engagement-specific scope and acceptance criteria. Use `d
 | Cross-cutting standards and guidance | `docs/` |
 | Archived planning artifacts | `docs/archive/` |
 | Engagement 1 deliverable | `apps/marketing-site/` |
+| Engagement 3 deliverable | `apps/uis/` |
 | Shared TypeScript code (types, utilities) | `packages/shared/` |
 | Tailwind build setup | `packages/tailwind-config/` |
 | Non-code shared resources (schemas, templates, config assets) | `resources/` |
@@ -52,7 +53,10 @@ Use `docs/briefs/` for engagement-specific scope and acceptance criteria. Use `d
 - **Engagement 2** — `packages/shared/`  
   Built.
 
-- **Engagement 3+** — TBD per engagement.  
+- **Engagement 3** — `apps/uis/`  
+  Built.
+
+- **Engagement 4+** — TBD per engagement.  
   Confirm with Cory before placing new code.
 
 ---
