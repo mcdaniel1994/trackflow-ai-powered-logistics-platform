@@ -1,4 +1,4 @@
-import { Product, Shipment, Carrier, ProductCategory, ShipmentStatus } from '../types/index.js';
+import { Product, Shipment, Carrier, ProductCategory, ShipmentStatus } from '../types/index';
 
 export function calculateShippingCost(
   shipment: Shipment,

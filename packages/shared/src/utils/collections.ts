@@ -1,4 +1,4 @@
-import { Product, Carrier, ProductCategory, WarehouseLocation } from '../types/index.js';
+import { Product, Carrier, ProductCategory, WarehouseLocation } from '../types/index';
 
 export function filterProductsByWarehouse(
   products: Product[],

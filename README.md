@@ -8,11 +8,11 @@ TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza
 
 ---
 
-## 🚧 Current Status
+## ✅ Current Status
 
-**Engagement 3** is complete: the Talent Pipeline Tracker lives in `apps/uis/`.
+**Engagement 4** delivered the AI-driven engineering infrastructure: persistent project memory in `memory-bank/`, the cross-agent operating guide in `AGENTS.md`, scoped coding-agent rules and the `start-engagement` skill under `.agents/`, the forward-looking Next.js + TypeScript UI workspace (`uis/website/`, `uis/backoffice/`), and the reserved `services/` boundary. See `AGENTS.md` for how `.agents/` (coding-agent infrastructure) differs from the customer-facing product agents in `agents/`.
 
-See `docs/briefs/` for past and upcoming briefs.
+**Engagement 5** (Central API) is the next planned engagement. See `docs/briefs/` for past and upcoming briefs.
 
 ---
 
@@ -87,7 +87,27 @@ TrackFlow reflects real-world logistics challenges:
 - TypeScript
 - Tailwind CSS
 
-📁 Location: `apps/uis/`
+📁 Location: `apps/talent-pipeline-tracker/`
+
+---
+
+### ✅ Engagement 4 — AI-Driven Engineering Infrastructure *(delivered)*
+
+- Persistent project memory for coding agents (business, tech, progress)
+- Root `AGENTS.md` operating guide with startup reading and pre-commit workflow
+- Scoped coding-agent rules and a reusable `start-engagement` skill
+- Forward-looking Next.js + TypeScript UI workspace (public website + internal backoffice)
+- Backoffice view consumes the Engagement 2 logic via `@repo/shared-types`
+- Reserved `services/` boundary for future APIs
+- npm workspaces wired across `apps/*`, `packages/*`, and `uis/*`
+
+**Tech:**
+- Next.js App Router
+- TypeScript
+- Tailwind CSS
+- npm workspaces
+
+📁 Location: `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/`
 
 ---
 
@@ -97,12 +117,12 @@ TrackFlow reflects real-world logistics challenges:
 |----------|------|--------|
 | 1 | Corporate website + lead capture | ✅ Delivered |
 | 2 | Inventory & carrier scoring (TypeScript) | ✅ Delivered |
-| 3 | Talent Pipeline Tracker | ✅ Delivered — `apps/uis/` |
-| 4 | Next.js portals (operations, loyalty, client) | ⏳ Upcoming |
+| 3 | Talent Pipeline Tracker | ✅ Delivered — `apps/talent-pipeline-tracker/` |
+| 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Central API | ⏳ Upcoming |
 | 6 | Data pipelines & telemetry | ⏳ Upcoming |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
-| 8 | AI agents | ⏳ Upcoming |
+| 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
 | 9 | Workflow automation (n8n) | ⏳ Upcoming |
 | 10 | Real-time dashboards & alerts | ⏳ Upcoming |
 
@@ -112,37 +132,57 @@ TrackFlow reflects real-world logistics challenges:
 
 ```text
 trackflow/
-├── apps/                          # User-facing products
+├── AGENTS.md                      # Cross-agent operating guide (Engagement 4)
+├── CLAUDE.md                      # Claude-specific orientation (Engagement 4)
+├── README.md                      # This file
+│
+├── memory-bank/                   # Persistent project context for coding agents (Engagement 4)
+│   ├── projectbrief.md            # Business, stakeholders, operational problems
+│   ├── techContext.md             # Stack, architecture, decisions
+│   └── progress.md                # Completed / active / planned engagements
+│
+├── .agents/                       # Coding-agent configuration (Engagement 4)
+│   ├── rules/                     # Scoped development rules
+│   └── skills/                    # Reusable repo-maintenance workflows
+│       └── start-engagement/      # SKILL.md for spinning up a new engagement
+│
+├── apps/                          # Delivered historical applications
 │   ├── marketing-site/            # Engagement 1 — corporate site
 │   │   ├── assets/
 │   │   │   ├── css/               # Compiled Tailwind output (styles.css)
 │   │   │   ├── js/                # Client-side scripts (validation.js)
 │   │   │   └── images/            # Static images
 │   │   └── *.html                 # index, application, privacy
-│   └── uis/                       # Engagement 3 — talent pipeline tracker
+│   └── talent-pipeline-tracker/   # Engagement 3 — talent pipeline tracker
 │       ├── app/                   # Next.js App Router routes
 │       ├── components/            # Feature and UI components
 │       └── lib/                   # API, labels, and local types
 │
+├── uis/                           # Forward-looking UI workspace (Engagement 4)
+│   ├── website/                   # Next.js + TS public site (component refactor of Engagement 1)
+│   └── backoffice/                # Next.js + TS internal shell; consumes @repo/shared-types
+│
+├── services/                      # Reserved for future APIs and backend services (Engagement 4)
+│
 ├── packages/                      # Shared code libraries
-│   ├── shared/                    # @repo/shared-types: types + utilities
+│   ├── shared/                    # @repo/shared-types: types + utilities (Engagement 2)
 │   └── tailwind-config/           # Shared Tailwind setup
 │
-├── agents/                        # AI agents (Engagement 8)
+├── agents/                        # Product AI agents shipped to customers (Engagement 8)
 │   ├── _template/                 # Starter pattern
 │   └── tools/                     # Reusable agent tools
+│
+├── skills/                        # Reusable capabilities for product agents in agents/
+│   ├── _template/                 # Starter pattern for new skills
+│   ├── code-review/
+│   ├── data-analysis/
+│   └── research/
 │
 ├── data/                          # Data engineering (Engagement 6)
 │   ├── raw/                       # Source data
 │   ├── process/                   # Cleaned data
 │   ├── pipelines/                 # ETL logic
 │   └── eval/                      # AI evaluation datasets
-│
-├── skills/                        # Reusable agent capabilities
-│   ├── _template/                 # Starter pattern for new skills
-│   ├── code-review/
-│   ├── data-analysis/
-│   └── research/
 │
 ├── workflows/                     # n8n automation workflows
 │
@@ -158,7 +198,7 @@ trackflow/
 
 ### Architectural Principles
 
-- `apps/` depends on `packages/`, never the reverse
+- `apps/` and `uis/` may depend on `packages/`, never the reverse
 - Types are first-class and shared across the system
 - Meaningful top-level working directories include a README
 
@@ -168,12 +208,12 @@ trackflow/
 
 | Layer | Tools |
 |------|------|
-| Frontend | HTML5, Tailwind CSS, JS → React + Next.js (planned) |
+| Frontend | HTML5, Tailwind CSS, vanilla JavaScript, React, Next.js App Router |
 | Language | TypeScript |
-| Backend | Node.js (planned) |
+| Backend | `services/` boundary reserved for future Node.js APIs |
 | AI | RAG, LLM agents, semantic search |
 | Automation | n8n workflows |
-| Infra | Monorepo, GitHub Codespaces |
+| Infra | npm workspaces, monorepo, GitHub Codespaces |
 
 ---
 

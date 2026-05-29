@@ -36,3 +36,6 @@ coverage/
 
 # TypeScript
 *.tsbuildinfo
+
+# AI tooling state
+.claude/

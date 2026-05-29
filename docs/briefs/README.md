@@ -10,7 +10,8 @@ Each brief is owned by an internal stakeholder and frames the problem, scope, an
 |---|---|---|---|---|
 | 01 | [Corporate Website & Lead Capture](01-website.md) | Marketing | ✅ Delivered | `apps/marketing-site/` |
 | 02 | [Inventory & Carrier Scoring Engine](02-inventory-carriers.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `packages/shared/` |
-| 03 | [Talent Pipeline Tracker](03-talent-pipeline-tracker.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `apps/uis/` |
+| 03 | [Talent Pipeline Tracker](03-talent-pipeline-tracker.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `apps/talent-pipeline-tracker/` |
+| 04 | [AI-Driven Engineering Infrastructure](04-ai-driven-engineering.md) | Andrés Kim, CTO | ✅ Delivered | `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/` |
 
 ## Conventions
 

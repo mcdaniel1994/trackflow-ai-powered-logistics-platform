@@ -1,4 +1,4 @@
-import { Product, Shipment } from '../types/index.js';
+import { Product, Shipment } from '../types/index';
 
 export function findProductBySKU(products: Product[], sku: string): Product | null {
   const lowerSku = sku.toLowerCase();

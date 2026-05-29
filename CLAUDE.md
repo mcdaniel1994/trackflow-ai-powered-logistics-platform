@@ -1,95 +1,66 @@
-# Agent Orientation
+# Claude-Specific Orientation
 
-Orientation file for AI coding agents working in this repo. Read this before making changes.
+Claude-specific orientation for AI coding agents working in this repo. For the cross-agent operating rules every agent must follow, read `AGENTS.md` first.
 
----
+Claude sessions should read, in order:
 
-## Read These First, in This Order
+1. `memory-bank/projectbrief.md`
+2. `memory-bank/techContext.md`
+3. `memory-bank/progress.md`
+4. `AGENTS.md`
+5. `README.md`
+6. `CLAUDE.md`
 
-1. **`README.md`**  
-   What the project is, what’s built, what’s planned, repo architecture, and tech stack.
-
-2. **`docs/briefs/`**  
-   Every engagement has a stakeholder brief here. The brief is the source of truth for what that engagement needs to deliver.  
-    Brief filenames use numeric prefixes (example: `01-website.md`, `02-inventory-carriers.md`).
-   Read the brief for whatever engagement is being worked on before writing any code.
-
-3. **The README in the folder you're working in**  
-    Most meaningful folders have one explaining their purpose. Add one when missing.
-
-> If a question is answered by one of those files, don’t ask — read it.
-
----
+Then read the active engagement brief and the README for every folder being modified.
 
 ## Repo Navigation
 
-Use `docs/briefs/` for engagement-specific scope and acceptance criteria. Use `docs/` for standards and guidance that apply across engagements.
-
 | If you're looking for... | Go here |
 |---|---|
+| Cross-agent operating rules | `AGENTS.md` |
+| Persistent project context | `memory-bank/` |
 | What this project is | `README.md` |
-| Current engagement brief (when assigned) | `docs/briefs/NN-title.md` |
-| All briefs (completed + upcoming) | `docs/briefs/` |
+| Current engagement brief when assigned | `docs/briefs/NN-title.md` |
+| All briefs | `docs/briefs/` |
 | Cross-cutting standards and guidance | `docs/` |
 | Archived planning artifacts | `docs/archive/` |
+| Coding-agent scoped rules and skills | `.agents/` |
+| Forward-looking UI workspace | `uis/` |
+| Future backend services and APIs | `services/` |
 | Engagement 1 deliverable | `apps/marketing-site/` |
-| Engagement 3 deliverable | `apps/uis/` |
-| Shared TypeScript code (types, utilities) | `packages/shared/` |
-| Tailwind build setup | `packages/tailwind-config/` |
-| Non-code shared resources (schemas, templates, config assets) | `resources/` |
-| AI agents | `agents/` |
+| Engagement 3 deliverable | `apps/talent-pipeline-tracker/` |
+| Shared TypeScript code | `packages/shared/` |
+| Tailwind build setup for the static marketing site | `packages/tailwind-config/` |
+| Non-code shared resources | `resources/` |
+| Product AI agents | `agents/` |
 | Data pipelines | `data/` |
 | Workflow automations | `workflows/` |
-| Reusable agent capabilities | `skills/` |
+| Product agent capabilities | `skills/` |
 | Repo-wide scripts and utilities | `scripts/` |
-
----
 
 ## Where New Engagement Code Goes
 
-- **Engagement 1** — `apps/marketing-site/`  
+- **Engagement 1** - `apps/marketing-site/`  
   Built.
 
-- **Engagement 2** — `packages/shared/`  
+- **Engagement 2** - `packages/shared/`  
   Built.
 
-- **Engagement 3** — `apps/uis/`  
+- **Engagement 3** - `apps/talent-pipeline-tracker/`  
   Built.
 
-- **Engagement 4+** — TBD per engagement.  
+- **Engagement 4** - `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/`  
+  Built.
+
+- **Engagement 5+** - TBD per engagement.  
   Confirm with Cory before placing new code.
 
----
+## Coding-Agent Infrastructure Vs. Product Agents
 
-## Public-Facing UI & Frontend Work
+For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical table in `AGENTS.md`.
 
-Before doing any work on public-facing pages, marketing content, or frontend HTML — **read `docs/standards/visibility.md` first.**
+## Claude Notes
 
-This file is the authority on how TrackFlow's public pages get found by search engines, AI engines, and human visitors. It governs semantic HTML, WCAG 2.1 AA accessibility, SEO metadata, GEO formatting, Schema.org structured data, Core Web Vitals targets, and bot access rules.
-
-All generated public pages must comply with sections 1 through 6 of that file. Do not generate or modify a public-facing page without reading it first.
-
-This applies to:
-- `apps/marketing-site/` (current)
-- Any future public portal pages, blog, knowledge base, or documentation
-
----
-
-## Repo Rules
-
-- `apps/` depends on `packages/`. Never the reverse.
-- Empty folders with READMEs are intentional scaffolding for future engagements. Do **not** delete them.
-
----
-
-## Documentation Maintenance
-
-When an engagement is added, completed, or changes status, these files move together. Update all of them in the same change:
-
-- `README.md` — engagement table (status column) and "What's Been Built" section
-- `docs/briefs/NN-title.md` — `## Status` header at the top of the brief
-- `docs/briefs/README.md` — index row (status + delivered code path)
-- `CLAUDE.md` — "Where New Engagement Code Goes" list (above)
-- The new engagement's deliverable folder — add or update its README
-
-When a new top-level folder, package, or app is introduced, also update the architecture tree in `README.md` and the navigation table above.
+- Prefer `rg` and `rg --files` for searches.
+- Before public-facing UI work, read `docs/standards/visibility.md` and apply the matching `.agents/rules/public-ui-visibility.md` rule.
+- Empty folders with READMEs are intentional scaffolding for future engagements.

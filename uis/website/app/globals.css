@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --jc-navy-deep: #2b486e;
+  --jc-navy: #2b4d74;
+  --jc-sky: #4b7aa6;
+  --jc-teal: #6ebab8;
+  --jc-coral: #ed7e4d;
+  --jc-ivory: #f0eee6;
+  --jc-mist: #e9eef3;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-neutral-50 font-sans text-navy-deep antialiased;
+}
+
+*:focus-visible {
+  @apply outline-none ring-2 ring-coral/70 ring-offset-2;
+}
+
+.hero-copy-shadow {
+  text-shadow: 0 2px 24px rgba(18, 28, 42, 0.42);
+}

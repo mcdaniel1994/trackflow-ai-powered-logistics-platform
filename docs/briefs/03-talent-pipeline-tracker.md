@@ -2,7 +2,7 @@
 
 ## Status
 
-✅ Delivered — Engagement 3 implementation lives in `apps/uis/`.
+✅ Delivered — Engagement 3 implementation lives in `apps/talent-pipeline-tracker/`.
 
 > **Repository path:** 
 

@@ -38,7 +38,7 @@ The shared `packages/tailwind-config/` is a CLI pipeline for the static marketin
 Build inside:
 
 ```txt
-apps/uis/
+apps/talent-pipeline-tracker/
 ```
 
 Initialize a new Next.js application in this directory.
@@ -50,7 +50,7 @@ Initialize a new Next.js application in this directory.
 Create:
 
 ```txt
-apps/uis/.env.example
+apps/talent-pipeline-tracker/.env.example
 ```
 
 Required variable:
@@ -249,7 +249,7 @@ The result should read as the same product as `apps/marketing-site/` — same na
 Keep it flat. This is a small app.
 
 ```txt
-apps/uis/
+apps/talent-pipeline-tracker/
 ├── app/
 │   ├── layout.tsx
 │   ├── globals.css

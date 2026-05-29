@@ -1,4 +1,4 @@
-# `apps/uis/`
+# `apps/talent-pipeline-tracker/`
 
 Internal TrackFlow talent pipeline tracker for the Executive Assistant search at Zaragoza HQ.
 

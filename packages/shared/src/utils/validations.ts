@@ -1,4 +1,4 @@
-import { Product, Shipment, Carrier } from '../types/index.js';
+import { Product, Shipment, Carrier } from '../types/index';
 
 export interface ValidationResult {
   valid: boolean;

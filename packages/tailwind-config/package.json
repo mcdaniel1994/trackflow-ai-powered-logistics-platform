@@ -1,7 +1,8 @@
 {
   "name": "trackflow-tailwind",
   "scripts": {
-    "build": "tailwindcss -i ./src/input.css -o ../../apps/marketing-site/assets/css/styles.css --minify",
+    "build": "node -e \"console.log('Skipped: apps/marketing-site CSS is a delivered artifact. Use npm run build:marketing-site to regenerate it intentionally.')\"",
+    "build:marketing-site": "tailwindcss -i ./src/input.css -o ../../apps/marketing-site/assets/css/styles.css --minify",
     "watch": "tailwindcss -i ./src/input.css -o ../../apps/marketing-site/assets/css/styles.css --watch"
   },
   "devDependencies": {

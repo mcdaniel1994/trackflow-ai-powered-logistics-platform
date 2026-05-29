@@ -12,4 +12,4 @@ Each subfolder inside `apps/` must correspond to **one specific application** (f
 | App | Purpose | Status |
 |---|---|---|
 | `marketing-site/` | Public-facing TrackFlow website and lead capture flow | ✅ Delivered |
-| `uis/` | Internal Talent Pipeline Tracker for the Executive Assistant search | ✅ Delivered |
+| `talent-pipeline-tracker/` | Internal Talent Pipeline Tracker for the Executive Assistant search | ✅ Delivered |
