@@ -9,6 +9,8 @@ export function calculateShippingCost(
   const weightCost = product.weightKg * shipment.quantity * carrier.ratePerKgUSD;
   const distanceCost = shipment.destination.distanceKm * carrier.ratePerKmUSD;
 
+  // Business surcharge rates: Express ships at a 30% premium and Same-day at
+  // a 60% premium over the Standard baseline.
   const priorityMultiplier =
     shipment.priority === 'Standard'
       ? 1.0
@@ -20,6 +22,9 @@ export function calculateShippingCost(
   return Math.round(subtotal * 100) / 100;
 }
 
+// Scoring model: max 100 points (20 country + 20 weight + 15 priority +
+// 15 fragile + up to 30 reliability). selectBestCarrier() treats >= 50 as
+// viable, then picks the cheapest viable carrier.
 export function scoreCarrierForShipment(
   carrier: Carrier,
   shipment: Shipment,

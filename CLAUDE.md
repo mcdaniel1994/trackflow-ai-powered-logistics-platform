@@ -27,10 +27,9 @@ Then read the active engagement brief and the README for every folder being modi
 | Coding-agent scoped rules and skills | `.agents/` |
 | Forward-looking UI workspace | `uis/` |
 | Future backend services and APIs | `services/` |
-| Engagement 1 deliverable | `apps/marketing-site/` |
-| Engagement 3 deliverable | `apps/talent-pipeline-tracker/` |
+| Engagement 1 surface (original app retired June 2026) | `uis/website/` + `docs/archive/marketing-site-retirement.md` |
+| Engagement 3 tracker (standalone app retired June 2026) | `uis/backoffice/app/talent/` + `docs/archive/talent-pipeline-tracker-retirement.md` |
 | Shared TypeScript code | `packages/shared/` |
-| Tailwind build setup for the static marketing site | `packages/tailwind-config/` |
 | Non-code shared resources | `resources/` |
 | Product AI agents | `agents/` |
 | Data pipelines | `data/` |
@@ -40,14 +39,14 @@ Then read the active engagement brief and the README for every folder being modi
 
 ## Where New Engagement Code Goes
 
-- **Engagement 1** - `apps/marketing-site/`  
-  Built.
+- **Engagement 1** - delivered in `apps/marketing-site/`  
+  Built; code retired June 2026. Surface lives at `uis/website/` — see `docs/archive/marketing-site-retirement.md`.
 
 - **Engagement 2** - `packages/shared/`  
   Built.
 
-- **Engagement 3** - `apps/talent-pipeline-tracker/`  
-  Built.
+- **Engagement 3** - delivered in `apps/talent-pipeline-tracker/`  
+  Built; code retired June 2026. Now at `uis/backoffice/app/talent/` — see `docs/archive/talent-pipeline-tracker-retirement.md`.
 
 - **Engagement 4** - `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/`  
   Built.

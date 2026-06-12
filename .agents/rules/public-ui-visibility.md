@@ -10,7 +10,7 @@ File-pattern based.
 
 ## Applies When
 
-Any change touches `apps/marketing-site/**`, `uis/website/**`, or any future folder containing public-facing pages.
+Any change touches `uis/website/**` or any future folder containing public-facing pages.
 
 ## Required Behavior
 

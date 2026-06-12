@@ -55,7 +55,7 @@ TrackFlow reflects real-world logistics challenges:
 - Schema.org structured data
 - Full client-side validation
 
-📁 Location: `apps/marketing-site/`
+📁 Now served by: `uis/website/` — the original static app was retired June 2026 (`docs/archive/marketing-site-retirement.md`)
 
 ---
 
@@ -87,7 +87,7 @@ TrackFlow reflects real-world logistics challenges:
 - TypeScript
 - Tailwind CSS
 
-📁 Location: `apps/talent-pipeline-tracker/`
+📁 Now lives at: `uis/backoffice/app/talent/` — the standalone app was retired June 2026 (`docs/archive/talent-pipeline-tracker-retirement.md`)
 
 ---
 
@@ -99,7 +99,7 @@ TrackFlow reflects real-world logistics challenges:
 - Forward-looking Next.js + TypeScript UI workspace (public website + internal backoffice)
 - Backoffice view consumes the Engagement 2 logic via `@repo/shared-types`
 - Reserved `services/` boundary for future APIs
-- npm workspaces wired across `apps/*`, `packages/*`, and `uis/*`
+- npm workspaces wired across `packages/*` and `uis/*` (originally also `apps/*`, retired June 2026)
 
 **Tech:**
 - Next.js App Router
@@ -115,9 +115,9 @@ TrackFlow reflects real-world logistics challenges:
 
 | Engagement | Focus | Status |
 |----------|------|--------|
-| 1 | Corporate website + lead capture | ✅ Delivered |
+| 1 | Corporate website + lead capture | ✅ Delivered — now `uis/website/` (original app retired June 2026) |
 | 2 | Inventory & carrier scoring (TypeScript) | ✅ Delivered |
-| 3 | Talent Pipeline Tracker | ✅ Delivered — `apps/talent-pipeline-tracker/` |
+| 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Central API | ⏳ Upcoming |
 | 6 | Data pipelines & telemetry | ⏳ Upcoming |
@@ -146,27 +146,17 @@ trackflow/
 │   └── skills/                    # Reusable repo-maintenance workflows
 │       └── start-engagement/      # SKILL.md for spinning up a new engagement
 │
-├── apps/                          # Delivered historical applications
-│   ├── marketing-site/            # Engagement 1 — corporate site
-│   │   ├── assets/
-│   │   │   ├── css/               # Compiled Tailwind output (styles.css)
-│   │   │   ├── js/                # Client-side scripts (validation.js)
-│   │   │   └── images/            # Static images
-│   │   └── *.html                 # index, application, privacy
-│   └── talent-pipeline-tracker/   # Engagement 3 — talent pipeline tracker
-│       ├── app/                   # Next.js App Router routes
-│       ├── components/            # Feature and UI components
-│       └── lib/                   # API, labels, and local types
-│
-├── uis/                           # Forward-looking UI workspace (Engagement 4)
-│   ├── website/                   # Next.js + TS public site (component refactor of Engagement 1)
+├── uis/                           # UI workspace (Engagement 4) — sole home of TrackFlow UIs
+│   ├── website/                   # Next.js + TS public site (Engagement 1 surface)
 │   └── backoffice/                # Next.js + TS internal shell; consumes @repo/shared-types
+│       ├── app/talent/            # Talent Pipeline Tracker (Engagement 3, migrated June 2026)
+│       └── app/incidents/         # Incident Report Processor UI (subproject)
 │
-├── services/                      # Reserved for future APIs and backend services (Engagement 4)
+├── services/                      # APIs and backend services
+│   └── incident-processor/        # Python/FastAPI incident analysis subproject (CLI + API)
 │
 ├── packages/                      # Shared code libraries
-│   ├── shared/                    # @repo/shared-types: types + utilities (Engagement 2)
-│   └── tailwind-config/           # Shared Tailwind setup
+│   └── shared/                    # @repo/shared-types: types + utilities (Engagement 2)
 │
 ├── agents/                        # Product AI agents shipped to customers (Engagement 8)
 │   ├── _template/                 # Starter pattern
@@ -188,6 +178,7 @@ trackflow/
 │
 ├── docs/                          # Documentation
 │   ├── briefs/                    # Stakeholder briefs (per engagement)
+│   ├── planning/                  # Subproject specs & architecture proposals
 │   ├── standards/                 # Cross-cutting standards (visibility, etc.)
 │   └── archive/                   # Historical planning artifacts
 │
@@ -198,7 +189,7 @@ trackflow/
 
 ### Architectural Principles
 
-- `apps/` and `uis/` may depend on `packages/`, never the reverse
+- `uis/` may depend on `packages/`, never the reverse
 - Types are first-class and shared across the system
 - Meaningful top-level working directories include a README
 

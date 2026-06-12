@@ -11,7 +11,7 @@ AI coding agents must reference this file before generating any public-facing pa
 
 ## Scope
 
-This file applies to public-facing web surfaces only — the marketing site (`apps/marketing-site/`), any future public portions of customer or partner portals, and any future public content (blog, knowledge base, documentation).
+This file applies to public-facing web surfaces only — the public website (`uis/website/`), any future public portions of customer or partner portals, and any future public content (blog, knowledge base, documentation).
 
 It does NOT apply to authenticated apps, internal dashboards, or anything behind a login. Those surfaces have different concerns (auth flows, runtime performance, internal usability) and are governed separately.
 

@@ -1,9 +1,12 @@
 # `services/`
 
-Reserved for future TrackFlow APIs and backend services.
+Reserved for TrackFlow APIs and backend services.
 
-No services exist yet in Engagement 4. Do not place UI code or shared library code here.
+Do not place UI code or shared library code here.
 
-Future subfolders should correspond to discrete services, for example `services/central-api/`.
+Subfolders correspond to discrete services:
 
-This folder is not yet an npm workspace member. Add `services/*` to the root workspace list when the first service lands.
+- `services/incident-processor/` - FastAPI service for the Incident Report Processor subproject. It is not Engagement 5.
+- `services/central-api/` - reserved name for the future Central API engagement.
+
+Python services are managed independently from npm workspaces. Use the service-level `pyproject.toml` and `uv` commands documented in each service README.

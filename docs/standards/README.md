@@ -14,4 +14,4 @@ Standards live here when they govern how multiple apps, packages, or pipelines m
 
 - One topic per file.
 - Each standard names its scope and review cadence at the top.
-- Reference standards from component READMEs (e.g., `apps/marketing-site/README.md` → `visibility.md`) so contributors find them at the point of work.
+- Reference standards from component READMEs (e.g., `uis/website/README.md` → `visibility.md`) so contributors find them at the point of work.

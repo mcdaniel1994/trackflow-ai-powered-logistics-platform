@@ -4,7 +4,7 @@ Next.js + TypeScript public website for TrackFlow.
 
 ## Purpose
 
-This app is the Engagement 4 component-based refactor of the delivered static marketing site in `apps/marketing-site/`. It preserves the public sections, bilingual client-side language toggle, visibility metadata, crawl assets, and lead-capture intent while moving future public website work into the `uis/` workspace.
+This app is the Engagement 4 component-based refactor of the delivered Engagement 1 static marketing site (originally `apps/marketing-site/`, retired June 2026 — see `docs/archive/marketing-site-retirement.md`). It preserves the public sections, bilingual client-side language toggle, visibility metadata, crawl assets, and lead-capture intent, and is now the sole home of TrackFlow's public website.
 
 ## Local Development
 

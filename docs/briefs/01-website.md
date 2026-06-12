@@ -4,7 +4,9 @@
 
 ## Status
 
-Delivered in Engagement 1. Implementation lives in `apps/marketing-site/`.
+Delivered in Engagement 1. Implementation lived in `apps/marketing-site/`.
+
+> Code retired June 2026; the surface is now served by `uis/website/`. See `docs/archive/marketing-site-retirement.md`.
 
 ---
 

@@ -28,11 +28,22 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Sensitive local datasets / Currently being allowed for grading purposes
+# scripts/incidents-trackflow.csv
+
+# Generated local exports (regenerable from the local dataset)
+# scripts/incidents-trackflow-analysis.csv
+
 # Vercel
 .vercel/
 
 # Coverage
 coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
 # TypeScript
 *.tsbuildinfo

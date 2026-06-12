@@ -2,7 +2,9 @@
 
 ## Status
 
-✅ Delivered — Engagement 3 implementation lives in `apps/talent-pipeline-tracker/`.
+✅ Delivered — Engagement 3 implementation lived in `apps/talent-pipeline-tracker/`.
+
+> Code retired June 2026; the tracker now lives at `uis/backoffice/app/talent/`. See `docs/archive/talent-pipeline-tracker-retirement.md`.
 
 > **Repository path:** 
 

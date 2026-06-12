@@ -1,5 +1,5 @@
 {
   "name": "trackflow",
   "private": true,
-  "workspaces": ["apps/*", "packages/*", "uis/*"]
+  "workspaces": ["packages/*", "uis/*"]
 }

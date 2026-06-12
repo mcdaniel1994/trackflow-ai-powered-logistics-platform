@@ -6,6 +6,10 @@ Next.js + TypeScript internal backoffice shell for TrackFlow.
 
 This Engagement 4 app establishes the forward-looking home for internal company tools. The first view shows inventory and carrier scoring using `@repo/shared-types` through npm workspaces.
 
+The Incident Report Processor subproject adds an internal CX route at `/incidents`. It uploads incident CSV exports to the FastAPI service in `services/incident-processor/` and displays aggregate metrics only.
+
+The Talent Pipeline Tracker (Engagement 3) lives at `/talent` (list), `/talent/new` (registration), and `/talent/[id]` (detail, edit, notes), migrated from the retired standalone app in June 2026 (`docs/archive/talent-pipeline-tracker-retirement.md`). Its components live under `components/talent/` and its API client under `lib/talent/`.
+
 ## Local Development
 
 ```bash
@@ -20,4 +24,9 @@ No login screen ships in Engagement 4. Authentication is deferred to Engagement 
 
 ## Environment Variables
 
-No environment variables are required for Engagement 4.
+Optional:
+
+- `NEXT_PUBLIC_INCIDENT_PROCESSOR_API_URL` - base URL for the incident processor API. Defaults to `http://localhost:8000`.
+- `NEXT_PUBLIC_TALENT_API_URL` - base URL for the talent pipeline backend. Defaults to the 4Geeks playground API. Kept separate from `NEXT_PUBLIC_API_URL` so the talent client and the incident client never point at each other's backend.
+
+No customer emails should be rendered in the backoffice UI.

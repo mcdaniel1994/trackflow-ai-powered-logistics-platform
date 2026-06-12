@@ -17,8 +17,8 @@ This rule covers:
 - `docs/briefs/`
 - `docs/archive/`
 - `docs/standards/visibility.md`
-- `apps/marketing-site/`
-- `apps/talent-pipeline-tracker/`
 - `packages/shared/`
 
 Delivered milestones remain intact unless an active engagement brief explicitly documents a migration or behavior change.
+
+Retired delivered code (e.g. the Engagement 1 and 3 standalone apps deleted in June 2026) is preserved through retirement notes in `docs/archive/` and git history, not on-disk copies. Do not recreate retired code; follow the replacement paths named in the retirement notes.

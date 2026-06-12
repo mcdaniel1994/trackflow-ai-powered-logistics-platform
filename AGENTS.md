@@ -35,13 +35,13 @@ This rule covers:
 - `docs/briefs/`
 - `docs/archive/`
 - `docs/standards/visibility.md`
-- `apps/marketing-site/`
-- `apps/talent-pipeline-tracker/`
 - `packages/shared/`
 
 ## Preserving Milestone Work
 
 Delivered engagements stay intact. New work goes into new folders such as `uis/`, `services/`, or the future engagement home named by the active brief unless an explicit migration decision is documented in that brief.
+
+When delivered code is retired (as the Engagement 1 and 3 standalone apps were in June 2026), the history is preserved through a retirement note in `docs/archive/` and git history — not by keeping dead code on disk. Retirement notes name the replacement path; do not recreate retired code.
 
 ## Repository Boundaries
 
