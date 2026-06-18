@@ -34,6 +34,9 @@ yarn-error.log*
 # Generated local exports (regenerable from the local dataset)
 # scripts/incidents-trackflow-analysis.csv
 
+# Generated local supplier directory database (regenerable from the seed command)
+services/supplier-directory/data/suppliers.json
+
 # Vercel
 .vercel/
 

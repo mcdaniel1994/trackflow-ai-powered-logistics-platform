@@ -14,6 +14,7 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 ## Subprojects
 
 - Incident Report Processor (spec: `docs/planning/incident-report-processor.md`) — built; explicitly **not** Engagement 5. Lives in `services/incident-processor/` (FastAPI + analysis core), `scripts/analyze.py` (CLI wrapper), and the backoffice `/incidents` route (`uis/backoffice/app/incidents/`). The local dataset `scripts/incidents-trackflow.csv` is git-ignored and protected by `.agents/rules/sensitive-local-datasets.md`.
+- Supplier Directory (spec: `docs/planning/supplier-directory.md`) — built; explicitly **not** Engagement 5. Lives in `services/supplier-directory/` (FastAPI + TinyDB + idempotent seed command) and the backoffice supplier routes (`/suppliers`, `/suppliers/new`, `/suppliers/[id]`). The generated TinyDB file `services/supplier-directory/data/suppliers.json` is git-ignored, and default list/detail responses expose only `has_contact_email`; raw contact email is revealed only from the supplier detail page.
 
 ## Migration Decisions
 
