@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { LocaleProvider } from "@/components/layout/LocaleProvider";
 import { MobileNav } from "@/components/layout/MobileNav";
 import { SiteFooter } from "@/components/layout/SiteFooter";
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <MobileNav />
         </LocaleProvider>
         <JsonLd data={organizationSchema()} />
+        <Analytics />
       </body>
     </html>
   );
