@@ -16,7 +16,7 @@ Claude-specific sessions also read `CLAUDE.md` after this file.
 
 ## Pre-Implementation Reading
 
-Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, read `docs/standards/visibility.md` and follow sections 1-6.
+Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, read `docs/standards/visibility.md` and follow sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, read `docs/standards/authentication-security-rule.md`.
 
 ## Mandatory Pre-Commit Workflow
 
@@ -47,6 +47,7 @@ When delivered code is retired (as the Engagement 1 and 3 standalone apps were i
 
 - `apps/` and `uis/` depend on `packages/`; never the reverse.
 - Public-facing pages must comply with `docs/standards/visibility.md` sections 1-6 before merge.
+- Authentication, authorization, sessions, cookies, tokens, and AI-agent user context must comply with `docs/standards/authentication-security-rule.md`.
 - APIs and backend services go under `services/`.
 - Product AI agents go under `agents/`; reusable product capabilities for those agents go under `skills/`.
 

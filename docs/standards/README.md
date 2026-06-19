@@ -8,6 +8,7 @@ Standards live here when they govern how multiple apps, packages, or pipelines m
 
 | Standard | Scope |
 |---|---|
+| [authentication-security-rule.md](authentication-security-rule.md) | Auth, sessions, tokens, cookies, authorization, protected routes, and AI-agent user context |
 | [visibility.md](visibility.md) | Public-facing pages: semantic HTML, WCAG 2.1 AA, SEO, GEO, Schema.org, Core Web Vitals, bot access |
 
 ## Conventions
