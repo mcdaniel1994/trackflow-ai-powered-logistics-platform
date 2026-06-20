@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
+from trackflow_auth import AuthenticatedPrincipal, authenticate_request, require_csrf
+
 from .analysis import analyze_csv_bytes
-from .config import get_cors_origins
+from .config import get_auth_config, get_cors_origins
 from .models import AnalysisResult, IncidentCsvError
 from .reporting import build_export_csv
 
@@ -19,17 +21,29 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=get_cors_origins(),
-        allow_credentials=False,
+        allow_credentials=True,
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )
+
+    # Verifies the Auth 1 access token for incident business routes.
+    def current_principal(request: Request) -> AuthenticatedPrincipal:
+        return authenticate_request(request, get_auth_config())
+
+    # Enforces CSRF on the file-upload mutation endpoint.
+    def csrf_guard(request: Request) -> None:
+        require_csrf(request, get_auth_config())
 
     @app.get("/health")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
     @app.post("/api/incidents/analyze")
-    async def analyze_incidents(file: UploadFile = File(...)) -> dict[str, object]:
+    async def analyze_incidents(
+        file: UploadFile = File(...),
+        _principal: AuthenticatedPrincipal = Depends(current_principal),
+        _csrf: None = Depends(csrf_guard),
+    ) -> dict[str, object]:
         try:
             payload = await file.read()
             result = analyze_csv_bytes(payload)
@@ -43,7 +57,9 @@ def create_app() -> FastAPI:
         return result.to_dict()
 
     @app.get("/api/incidents/results/export")
-    async def export_latest_analysis() -> Response:
+    async def export_latest_analysis(
+        _principal: AuthenticatedPrincipal = Depends(current_principal),
+    ) -> Response:
         result: AnalysisResult | None = app.state.latest_incident_analysis
         if result is None:
             raise HTTPException(
@@ -64,4 +80,3 @@ def create_app() -> FastAPI:
 
 
 app = create_app()
-

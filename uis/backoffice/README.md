@@ -28,7 +28,7 @@ The app runs on `http://localhost:3000` by default.
 
 ## Authentication
 
-No login screen ships in Engagement 4. Authentication is deferred to Engagement 5.
+No login screen ships in Engagement 4. Auth 1 protects backend APIs in `services/identity/`, `services/supplier-directory/`, and `services/incident-processor/`; frontend login/session handling is deferred to Auth 2, so direct Back Office API calls may receive `401` until that UI work lands.
 
 ## Environment Variables
 

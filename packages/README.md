@@ -6,3 +6,8 @@ Each subfolder under `packages/` should represent **one versionable package** (f
 
 - **Main purpose**: encourage reuse and consistency across all company deliverables.
 - **Recommendation**: document packages as you add them—their public API and how they are consumed from `apps/`, `agents/`, and `workflows/`.
+
+Current packages:
+
+- `packages/shared/` - TypeScript domain types and utilities consumed by the UI workspaces.
+- `packages/trackflow_auth/` - Python verify-only authentication helpers consumed by backend services.

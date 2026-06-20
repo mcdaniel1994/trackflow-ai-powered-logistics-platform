@@ -1,10 +1,12 @@
 [project]
-name = "trackflow-supplier-directory"
+name = "trackflow-identity"
 version = "0.1.0"
-description = "TrackFlow supplier directory FastAPI service."
+description = "TrackFlow identity FastAPI service."
 requires-python = ">=3.11"
 dependencies = [
+  "argon2-cffi>=23.1.0",
   "fastapi>=0.115.0",
+  "python-jose[cryptography]>=3.3.0",
   "tinydb>=4.8.0",
   "trackflow-auth",
   "uvicorn[standard]>=0.30.0",
@@ -17,7 +19,7 @@ dev = [
 ]
 
 [project.scripts]
-seed = "supplier_directory.seed:entrypoint"
+create-admin = "identity.cli:entrypoint"
 
 [tool.uv.sources]
 trackflow-auth = { path = "../../packages/trackflow_auth", editable = true }
@@ -27,7 +29,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["supplier_directory"]
+packages = ["identity"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
