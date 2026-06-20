@@ -62,4 +62,5 @@ For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical tabl
 
 - Prefer `rg` and `rg --files` for searches.
 - Before public-facing UI work, read `docs/standards/visibility.md` and apply the matching `.agents/rules/public-ui-visibility.md` rule.
+- Before auth, session, token, cookie, authorization, or AI-agent user-context work, read `docs/standards/authentication-security-rule.md` and apply the matching `.agents/rules/authentication-security.md` rule.
 - Empty folders with READMEs are intentional scaffolding for future engagements.

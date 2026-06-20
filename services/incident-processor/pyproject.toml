@@ -6,6 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115.0",
   "python-multipart>=0.0.9",
+  "trackflow-auth",
   "uvicorn[standard]>=0.30.0",
 ]
 
@@ -18,6 +19,9 @@ dev = [
 [project.scripts]
 analyze = "incident_processor.cli:entrypoint"
 
+[tool.uv.sources]
+trackflow-auth = { path = "../../packages/trackflow_auth", editable = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -27,4 +31,4 @@ packages = ["incident_processor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "../../packages/trackflow_auth"]

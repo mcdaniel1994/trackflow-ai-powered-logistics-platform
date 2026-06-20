@@ -16,6 +16,8 @@ The API exposes:
 - `POST /api/incidents/analyze`
 - `GET /api/incidents/results/export`
 
+`GET /health` is public. The incident analysis and export endpoints require an Auth 1 RS256 access token from `trackflow_access` or `Authorization: Bearer`. `POST /api/incidents/analyze` also requires the double-submit `X-CSRF-Token` header matching the `trackflow_csrf` cookie.
+
 ## CLI
 
 The same package powers the root CLI wrapper:
@@ -41,6 +43,13 @@ Set `INCIDENT_PROCESSOR_CORS_ORIGINS` to a comma-separated allowlist. Defaults:
 
 - `http://localhost:3000`
 - `http://127.0.0.1:3000`
+
+Auth verifier environment variables:
+
+- `IDENTITY_JWT_PUBLIC_KEY`
+- `IDENTITY_JWT_ALGORITHM`
+- `IDENTITY_JWT_ISSUER`
+- `IDENTITY_JWT_AUDIENCE`
 
 ## Tests
 

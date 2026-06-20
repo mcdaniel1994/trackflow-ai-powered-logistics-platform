@@ -37,6 +37,9 @@ yarn-error.log*
 # Generated local supplier directory database (regenerable from the seed command)
 services/supplier-directory/data/suppliers.json
 
+# Generated local identity database (contains users/session hashes)
+services/identity/data/identity.json
+
 # Vercel
 .vercel/
 
@@ -47,6 +50,7 @@ coverage/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+.venv/
 
 # TypeScript
 *.tsbuildinfo

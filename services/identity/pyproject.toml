@@ -1,0 +1,36 @@
+[project]
+name = "trackflow-identity"
+version = "0.1.0"
+description = "TrackFlow identity FastAPI service."
+requires-python = ">=3.11"
+dependencies = [
+  "argon2-cffi>=23.1.0",
+  "fastapi>=0.115.0",
+  "python-jose[cryptography]>=3.3.0",
+  "tinydb>=4.8.0",
+  "trackflow-auth",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.27.0",
+  "pytest>=8.2.0",
+]
+
+[project.scripts]
+create-admin = "identity.cli:entrypoint"
+
+[tool.uv.sources]
+trackflow-auth = { path = "../../packages/trackflow_auth", editable = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["identity"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "../../packages/trackflow_auth"]

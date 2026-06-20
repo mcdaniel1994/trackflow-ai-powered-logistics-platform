@@ -3,8 +3,10 @@
 ## Current Stack
 
 - `packages/shared/` - delivered Engagement 2 strict TypeScript domain types and pure utilities for inventory, carrier scoring, shipping costs, reporting, search, and validation.
+- `packages/trackflow_auth/` - Python verify-only authentication helper package for RS256 access-token validation and CSRF checks in backend services.
 - `uis/website/` - public Next.js + TypeScript website (Engagement 4); sole home of the Engagement 1 marketing surface since the static `apps/marketing-site/` was retired in June 2026.
 - `uis/backoffice/` - internal Next.js + TypeScript shell (Engagement 4) that consumes Engagement 2 logic; hosts the Talent Pipeline Tracker at `/talent` (Engagement 3, migrated June 2026) and the Incident Report Processor UI at `/incidents`.
+- `services/identity/` - Python/FastAPI + TinyDB identity service for Auth 1 backend authentication, refresh sessions, and user management.
 - `services/incident-processor/` - Python/FastAPI subproject (CLI + API + analysis core) for CX incident exports; intentionally outside the npm workspaces.
 
 ## Repository Architecture
@@ -20,8 +22,10 @@ trackflow/
 │   ├── website/
 │   └── backoffice/
 ├── packages/
-│   └── shared/
+│   ├── shared/
+│   └── trackflow_auth/
 ├── services/
+│   ├── identity/
 │   └── incident-processor/
 ├── agents/
 ├── skills/
@@ -44,7 +48,8 @@ trackflow/
 - `uis/` may depend on `packages/`; `packages/` must never depend on applications.
 - `apps/` was retired in June 2026: active UI work lives in `uis/`, and retired delivered code is preserved via `docs/archive/` retirement notes plus git history, not on-disk copies.
 - `uis/` is the sole UI workspace for public and internal Next.js + TypeScript interfaces.
-- `services/` hosts backend services. `services/incident-processor/` (Python/FastAPI) is the first; it is intentionally not an npm workspace member. `services/central-api/` remains reserved for Engagement 5.
+- `services/` hosts backend services. Python/FastAPI services are intentionally not npm workspace members. `services/central-api/` remains reserved for Engagement 5.
+- Auth 1 backend authentication lives in `services/identity/` with reusable verification helpers in `packages/trackflow_auth/`; frontend auth, password reset, and Central API work remain separate phases.
 - npm workspaces are wired for `packages/*` and `uis/*`.
 - `packages/shared` is consumed in this repo as `@repo/shared-types`; `uis/backoffice/` is the first workspace consumer.
 - `packages/shared` exposes TypeScript source directly. Next.js consumers transpile it with `transpilePackages`; future plain Node services may need a build step or service-side transpilation.

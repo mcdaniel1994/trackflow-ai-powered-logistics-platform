@@ -7,6 +7,7 @@ Scoped development rules for coding agents working in this repo. Apply any rule 
 | Rule | Scope | Summary |
 |---|---|---|
 | `preserve-delivered-engagements.md` | Always active | Do not rewrite delivered stakeholder briefs or delivered app behavior without confirmation. Covers `docs/briefs/`, `docs/archive/`, `docs/standards/visibility.md`, and `packages/shared/`. Retired code is preserved via `docs/archive/` retirement notes, not on-disk copies. |
+| `authentication-security.md` | File-pattern: auth, sessions, tokens, cookies, protected routes, roles, permissions, AI-agent user context | Read `docs/standards/authentication-security-rule.md` before the change. |
 | `public-ui-visibility.md` | File-pattern: `uis/website/**`, any folder with public-facing pages | Read `docs/standards/visibility.md` sections 1-6 before the change. Verify one H1, `<html lang>`, canonical, OG, Twitter Card, and parseable JSON-LD. |
 | `sensitive-local-datasets.md` | File-pattern: `scripts/incidents-trackflow.csv`, future documented sensitive local datasets | Do not read, print, copy, summarize, export, or inspect sensitive local datasets unless the user explicitly authorizes that exact access. Prefer safe fixtures and aggregate-only outputs. |
 

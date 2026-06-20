@@ -21,6 +21,8 @@ The API exposes:
 - `PATCH /suppliers/{id}/status`
 - `DELETE /suppliers/{id}`
 
+`GET /health` is public. All `/suppliers` business endpoints require an Auth 1 RS256 access token from `trackflow_access` or `Authorization: Bearer`, and state-changing requests also require the double-submit `X-CSRF-Token` header matching the `trackflow_csrf` cookie.
+
 ## Seeding
 
 The app seeds the demo supplier list on startup when the TinyDB file is empty.
@@ -53,6 +55,13 @@ Set `SUPPLIER_DIRECTORY_CORS_ORIGINS` to a comma-separated allowlist. Defaults:
 
 - `http://localhost:3000`
 - `http://127.0.0.1:3000`
+
+Auth verifier environment variables:
+
+- `IDENTITY_JWT_PUBLIC_KEY`
+- `IDENTITY_JWT_ALGORITHM`
+- `IDENTITY_JWT_ISSUER`
+- `IDENTITY_JWT_AUDIENCE`
 
 ## Tests
 
