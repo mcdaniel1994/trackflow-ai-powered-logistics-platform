@@ -14,7 +14,7 @@ TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza
 
 **Engagement 5** (Central API) is the next planned engagement. See `docs/briefs/` for past and upcoming briefs.
 
-Auth 1 is implemented as a backend subproject, not Engagement 5: `services/identity/` owns users, login, refresh sessions, and RS256 signing, while `packages/trackflow_auth/` provides verify-only helpers for domain APIs.
+Auth 1, Auth 2, and Auth 3 are implemented as authentication subprojects, not Engagement 5: `services/identity/` owns users, login, refresh sessions, RS256 signing, and password reset/account recovery; `packages/trackflow_auth/` provides verify-only helpers for domain APIs; and `uis/backoffice/` hosts the authenticated Back Office shell plus public forgot/reset-password pages through a same-origin BFF.
 
 ---
 
@@ -155,7 +155,7 @@ trackflow/
 │       └── app/incidents/         # Incident Report Processor UI (subproject)
 │
 ├── services/                      # APIs and backend services
-│   ├── identity/                  # Python/FastAPI Auth 1 identity service
+│   ├── identity/                  # Python/FastAPI identity service
 │   └── incident-processor/        # Python/FastAPI incident analysis subproject (CLI + API)
 │
 ├── packages/                      # Shared code libraries

@@ -82,6 +82,37 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=8, max_length=256)
 
 
+# Accepts an account-recovery request without disclosing account existence.
+class ForgotPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    email: str
+
+    # Normalizes the lookup key while preserving non-enumerating behavior.
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, value: str) -> str:
+        return _validate_email(value)
+
+
+# Carries the opaque reset token and replacement passphrase.
+class ResetPasswordRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+# Generic response for public account-recovery requests.
+class MessageResponse(BaseModel):
+    message: str
+
+
+# Generic response for successful password reset.
+class StatusResponse(BaseModel):
+    status: str
+
+
 # Restricts admin status changes to the three approved account states.
 class AdminStatusUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -112,6 +143,7 @@ class UserPublic(BaseModel):
 # Adds the one-time temporary password only to create-user responses.
 class UserCreated(UserPublic):
     temporary_password: str
+    setup_email_sent: bool = False
 
 
 # Documents the access-token claims identity signs and services verify.

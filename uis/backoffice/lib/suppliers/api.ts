@@ -8,13 +8,14 @@ import type {
   SupplierCategory,
   SupplierCreate,
 } from "@/lib/suppliers/types";
+import { fetchWithAuth } from "@/lib/auth/client-http";
+import type { ServerAPIContext } from "@/lib/server/request-context";
 
 type ThrownAPIError = APIError & {
   status?: number;
 };
 
-const DEFAULT_API_URL = "http://localhost:8001";
-const API_URL = (process.env.NEXT_PUBLIC_SUPPLIER_DIRECTORY_API_URL ?? DEFAULT_API_URL).replace(/\/$/, "");
+const API_PATH = "/api/suppliers";
 
 async function parseAPIError(response: Response): Promise<ThrownAPIError> {
   let payload: unknown;
@@ -76,16 +77,27 @@ async function parseAPIError(response: Response): Promise<ThrownAPIError> {
   return error;
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+async function request<T>(path: string, init?: RequestInit, context?: ServerAPIContext): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (context?.cookieHeader) {
+    headers.set("Cookie", context.cookieHeader);
+  }
+
+  const url = `${context?.baseUrl ?? ""}${API_PATH}${path}`;
+  const requestInit = {
     ...init,
     cache: init?.cache ?? "no-store",
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+    headers,
+  } satisfies RequestInit;
+
+  const response = context
+    ? await fetch(url, requestInit)
+    : await fetchWithAuth(url, requestInit);
 
   if (!response.ok) {
     throw await parseAPIError(response);
@@ -144,40 +156,40 @@ export async function listSuppliers(params: {
   }
 
   const query = searchParams.toString();
-  return request<Supplier[]>(query ? `/suppliers?${query}` : "/suppliers");
+  return request<Supplier[]>(query ? `?${query}` : "");
 }
 
-export async function getSupplier(id: string): Promise<Supplier> {
-  return request<Supplier>(`/suppliers/${encodeURIComponent(id)}`);
+export async function getSupplier(id: string, context?: ServerAPIContext): Promise<Supplier> {
+  return request<Supplier>(`/${encodeURIComponent(id)}`, undefined, context);
 }
 
 export async function getSupplierContact(id: string): Promise<SupplierContact> {
-  return request<SupplierContact>(`/suppliers/${encodeURIComponent(id)}/contact`);
+  return request<SupplierContact>(`/${encodeURIComponent(id)}/contact`);
 }
 
 export async function createSupplier(body: SupplierCreate): Promise<Supplier> {
-  return request<Supplier>("/suppliers", {
+  return request<Supplier>("", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
 export async function patchSupplierRate(id: string, body: RateUpdate): Promise<Supplier> {
-  return request<Supplier>(`/suppliers/${encodeURIComponent(id)}/rate`, {
+  return request<Supplier>(`/${encodeURIComponent(id)}/rate`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
 }
 
 export async function patchSupplierStatus(id: string, body: StatusUpdate): Promise<Supplier> {
-  return request<Supplier>(`/suppliers/${encodeURIComponent(id)}/status`, {
+  return request<Supplier>(`/${encodeURIComponent(id)}/status`, {
     method: "PATCH",
     body: JSON.stringify(body),
   });
 }
 
 export async function deleteSupplier(id: string): Promise<void> {
-  await request<void>(`/suppliers/${encodeURIComponent(id)}`, {
+  await request<void>(`/${encodeURIComponent(id)}`, {
     method: "DELETE",
   });
 }

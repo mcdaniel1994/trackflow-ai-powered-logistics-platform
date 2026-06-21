@@ -15,7 +15,9 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 
 - Incident Report Processor (spec: `docs/planning/incident-report-processor.md`) — built; explicitly **not** Engagement 5. Lives in `services/incident-processor/` (FastAPI + analysis core), `scripts/analyze.py` (CLI wrapper), and the backoffice `/incidents` route (`uis/backoffice/app/incidents/`). The local dataset `scripts/incidents-trackflow.csv` is git-ignored and protected by `.agents/rules/sensitive-local-datasets.md`.
 - Supplier Directory (spec: `docs/planning/supplier-directory.md`) — built; explicitly **not** Engagement 5. Lives in `services/supplier-directory/` (FastAPI + TinyDB + idempotent seed command) and the backoffice supplier routes (`/suppliers`, `/suppliers/new`, `/suppliers/[id]`). The generated TinyDB file `services/supplier-directory/data/suppliers.json` is git-ignored, and default list/detail responses expose only `has_contact_email`; raw contact email is revealed only from the supplier detail page.
-- Auth 1 Backend Authentication and API Route Protection (spec: `docs/planning/auth/plans/auth-1-implementation-plan.md`) — backend implementation in progress; explicitly **not** Engagement 5. Lives in `services/identity/` (FastAPI + TinyDB users/refresh sessions) and `packages/trackflow_auth/` (verify-only token/CSRF helpers), and protects the `supplier-directory` and `incident-processor` business endpoints. Auth 2 frontend login and Auth 3 password reset remain deferred.
+- Auth 1 Backend Authentication and API Route Protection (spec: `docs/planning/auth/plans/auth-1-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `services/identity/` (FastAPI + TinyDB users/refresh sessions) and `packages/trackflow_auth/` (verify-only token/CSRF helpers), and protects the `supplier-directory` and `incident-processor` business endpoints.
+- Auth 2 Back Office Authentication (spec: `docs/planning/auth/plans/auth-2-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `uis/backoffice/` with a same-origin BFF under `app/api/*`, protected Back Office views, login/logout, profile, change-password, admin user management, temporary-password first-login flow, CSRF forwarding, centralized `401` handling, and frontend tests.
+- Auth 3 Password Reset and Account Recovery (spec: `docs/planning/auth/plans/auth-3-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `services/identity/` with hashed single-use TinyDB reset tokens and Resend email delivery, and in `uis/backoffice/` with public `/forgot-password` and `/reset-password` pages through the same-origin BFF.
 
 ## Migration Decisions
 
@@ -34,6 +36,5 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 ## Open Decisions And Known Risks
 
 - Lead-form persistence is deferred to Engagement 5 and should be wired to the Central API when that service exists.
-- Backoffice authentication is deferred to Engagement 5; Engagement 4 intentionally ships the internal shell without login.
 - No CI workflow exists yet; add one in a follow-up.
 - Junecoast tokens are duplicated across `uis/website/` and `uis/backoffice/`; promoting them into a shared package is a follow-up. (The third copy disappeared with the June 2026 retirement of `apps/talent-pipeline-tracker/`.)

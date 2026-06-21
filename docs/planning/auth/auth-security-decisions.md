@@ -1,6 +1,6 @@
 # TrackFlow Authentication — Security Decision Record
 
-**Status:** Planning (no code written). **Owner:** Cory McDaniel. **Last updated:** 2026-06-19.
+**Status:** Auth 1-3 implemented locally. **Owner:** Cory McDaniel. **Last updated:** 2026-06-20.
 
 This is the authoritative decision log for TrackFlow authentication (Auth 1, Auth 2, Auth 3). It is referenced by:
 
@@ -135,7 +135,7 @@ Each decision records: **Question/Conflict · Decision · Why · Security/Archit
 - **Advantages:** Smaller attack surface; no unknown-visitor account creation; one non-duplicated contract.
 - **Tradeoffs:** Requires the admin Create-User flow + first-admin bootstrap (D5).
 - **Phase owner:** Auth 1 (endpoint), Auth 2 (admin UI).
-- **Deferred:** Email invitation / one-time set-password link (after Auth 3 email infra exists).
+- **Implemented after Auth 3:** Email invitation / one-time set-password link using the Auth 3 reset-token infrastructure. Temporary passwords are never emailed.
 - **Supports SQL migration:** Single creation path is simpler to port.
 
 The full administrator-controlled registration flow:
@@ -144,12 +144,11 @@ The full administrator-controlled registration flow:
 3. Admin opens `/admin/users`.
 4. Admin selects **Create User**, enters name + email.
 5. Frontend calls admin-protected `POST /users`.
-6. Backend: confirms admin → normalizes/validates email → rejects duplicates → creates `role="user"`, `status="active"` → generates a strong temporary password → stores only the Argon2id hash → sets `must_change_password=true` → returns the temp password **once**.
-7. Admin securely hands the temp password to the user.
-8. User signs in at `/login`.
-9. Because `must_change_password=true`, user is redirected to `/account/change-password`.
-10. Until changed, the user may only view auth state, change password, log out.
-11. After change: `must_change_password=false`, issue updated credentials, allow normal access.
+6. Backend: confirms admin → normalizes/validates email → rejects duplicates → creates `role="user"`, `status="active"` → generates a strong temporary password → stores only the Argon2id hash → sets `must_change_password=true` → sends an account setup email with a single-use reset link → returns the temp password **once** as a fallback.
+7. User follows the setup link from email and chooses a password, or the admin securely hands off the fallback temp password if email delivery fails.
+8. If the user signs in with the fallback temp password, `must_change_password=true` redirects them to `/account/change-password`.
+9. Until changed, the user may only view auth state, change password, log out.
+10. After change: `must_change_password=false`, issue updated credentials, allow normal access.
 
 ### D5 — First-admin bootstrap via CLI
 - **Question/Conflict:** With no public registration, how is the first admin created?
@@ -238,7 +237,7 @@ The full administrator-controlled registration flow:
 - **Advantages:** No email dependency in Auth 1; least-privilege until rotated.
 - **Tradeoffs:** Admin must hand off the password out-of-band.
 - **Phase owner:** Auth 1 (backend), Auth 2 (UI display + first-login redirect).
-- **Deferred:** Email invite / set-password link (after Auth 3).
+- **Implemented after Auth 3:** Email invite / set-password link using the Auth 3 reset-token infrastructure. Temporary passwords are still returned once to admins as a fallback, but they are never emailed.
 - **Supports SQL migration:** `must_change_password` is one boolean column.
 
 ### D14 — Environment-specific cookies + Production Deployment Gate
@@ -281,6 +280,43 @@ The full administrator-controlled registration flow:
 - **Deferred:** Rate limiting, audit logging, HTML email template (optional unless a repo-specific need is approved).
 - **Supports SQL migration:** Reset records sit behind a repository interface like users/sessions.
 
+### Auth 3 implementation notes — forgot password and onboarding
+
+These notes capture the decisions made during Auth 3 implementation and local testing so the operational behavior is easy to revisit later.
+
+#### Forgot password / account recovery
+
+- `POST /auth/forgot-password` is public and accepts only `{ "email": string }`.
+- The public response is always the same for valid input: `{"message":"If that address is registered, you'll receive a link shortly."}`. This applies whether the account exists, does not exist, is inactive, or email delivery fails.
+- Only active registered users receive reset emails. Suspended, disabled, missing, and malformed accounts do not produce an email, but valid requests still get the generic public response.
+- Reset tokens are opaque random values generated with `secrets.token_urlsafe(48)`. The raw token is sent only inside the reset link and is never stored.
+- TinyDB stores reset records in `password_resets` with `id`, `user_id`, `token_hash`, `expires_at`, `used`, `created_at`, and `purpose`.
+- `token_hash` is a SHA-256 digest of the raw token. Tokens, hashes, reset URLs, passwords, API keys, and email addresses must not be logged.
+- Reset tokens are single-use and time-limited. Local default is `RESET_TOKEN_EXPIRE_MINUTES=30`; valid configuration must stay within the approved 15-60 minute window.
+- Issuing a new reset token invalidates prior unused reset tokens for that user.
+- `POST /auth/reset-password` accepts `{ "token": string, "new_password": string }`.
+- Invalid, expired, used, wrong-purpose, or invalid-account reset tokens return a generic `400` error.
+- A successful reset writes a new Argon2id password hash, clears `must_change_password`, marks the token used, invalidates remaining reset tokens for the user, and revokes all refresh sessions.
+- Resend is the email provider for this phase. Email configuration must come only from environment variables: `RESEND_API_KEY`, `EMAIL_SENDER`, `FRONTEND_BASE_URL`, and `RESET_TOKEN_EXPIRE_MINUTES`.
+- Reset links are built from `FRONTEND_BASE_URL` as `/reset-password?token=<encoded-token>`. Local development uses `http://localhost:3000`; production must use the HTTPS Back Office origin.
+- Email provider failures are caught inside the forgot-password flow. The user still sees the same generic response, and logs contain only a redacted event with user id and error type.
+
+#### Admin-created user onboarding
+
+- Public registration remains intentionally unavailable. `/auth/register` does not exist. Admin-only `POST /users` is still the only user-creation path.
+- Admin-created users are created as `role="user"`, `status="active"`, and `must_change_password=true`.
+- The backend generates a strong one-time temporary password and stores only its Argon2id hash.
+- The temporary password is returned once to the admin as a fallback. It is never redisplayed and must never be logged.
+- After Auth 3 email infrastructure existed, onboarding was updated to send a safer account setup email instead of relying only on manual temp-password handoff.
+- The setup email uses the same reset-token infrastructure as forgot password, but the token purpose is `account_setup`.
+- Account setup emails contain a one-time `/reset-password?token=...` link that lets the new user choose their own password.
+- The raw temporary password is never emailed. This follows the authentication security rule: reset/setup flows use single-use, time-limited out-of-band tokens and never email passwords.
+- If account setup email delivery succeeds, the Back Office shows "Setup email sent..." and still displays the temporary password once as a fallback.
+- If account setup email delivery fails, the account is still created, the Back Office shows "Setup email could not be sent automatically...", and the admin can securely deliver the one-time temporary password.
+- A user who follows the setup email link and chooses a password has `must_change_password=false` after reset.
+- A user who signs in with the fallback temporary password is routed into the first-login password change flow and remains restricted until the password is changed.
+- Local testing revealed an important Resend limitation: `EMAIL_SENDER=onboarding@resend.dev` can only send testing emails to the Resend account owner's allowed email address. Sending setup emails to arbitrary recipients, including Gmail addresses, requires verifying a domain in Resend and using a sender address on that verified domain.
+
 ---
 
 ## 7. Decisions Still Requiring Approval
@@ -318,4 +354,5 @@ These are recorded rather than guessed; defaults are noted but should be confirm
 
 | Date | Change | Decisions affected |
 |---|---|---|
+| 2026-06-20 | Added implementation notes for forgot-password/account-recovery behavior and admin-created user onboarding setup emails. | D4, D13, D17 |
 | 2026-06-19 | Initial decision record created from planning handoff and four rounds of user direction. | D1–D17, deployment gate |
