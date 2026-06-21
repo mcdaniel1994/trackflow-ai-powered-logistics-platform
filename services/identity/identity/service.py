@@ -2,24 +2,35 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 from uuid import uuid4
 
 from .config import IdentitySettings
 from .constants import ROLE_ADMIN, ROLE_USER, STATUS_ACTIVE, STATUS_DISABLED, STATUS_SUSPENDED
+from .email import EmailDeliveryError, EmailSender
 from .models import UserCreate, UserCreated, UserPublic, UserUpdate, normalize_email, to_public_user
-from .repository import DuplicateEmailError, SessionRepository, UserRepository
+from .repository import DuplicateEmailError, PasswordResetRepository, SessionRepository, UserRepository
 from .security import (
+    generate_password_reset_token,
     generate_csrf_token,
     generate_refresh_token,
     generate_temporary_password,
     hash_password,
+    hash_password_reset_token,
     hash_refresh_token,
     now_iso,
+    now_utc,
     sign_access_token,
     verify_password,
 )
+
+LOGGER = logging.getLogger(__name__)
+ACCOUNT_SETUP_PURPOSE = "account_setup"
+PASSWORD_RESET_PURPOSE = "password_reset"
+VALID_RESET_PURPOSES = {ACCOUNT_SETUP_PURPOSE, PASSWORD_RESET_PURPOSE}
 
 
 # Indicates credential or refresh-token validation failure.
@@ -35,6 +46,11 @@ class AuthorizationError(ValueError):
 # Indicates a requested identity record was not found.
 class NotFoundError(ValueError):
     """Raised when a requested record does not exist."""
+
+
+# Indicates reset-token validation failure.
+class PasswordResetError(ValueError):
+    """Raised when a password reset token is invalid."""
 
 
 # Bundles issued cookies and the safe user response for auth routes.
@@ -104,6 +120,21 @@ class UserService:
     def list_users(self) -> list[UserPublic]:
         return [to_public_user(record) for record in self.repository.list_users()]
 
+    # Prevents admin-management actions from removing the last active admin.
+    def would_remove_last_active_admin(self, user_id: str) -> bool:
+        target = self.get_user(user_id)
+        if not target:
+            raise NotFoundError("User not found")
+        if target.get("role") != ROLE_ADMIN or target.get("status") != STATUS_ACTIVE:
+            return False
+
+        active_admins = [
+            user
+            for user in self.repository.list_users()
+            if user.get("role") == ROLE_ADMIN and user.get("status") == STATUS_ACTIVE
+        ]
+        return len(active_admins) <= 1
+
     # Applies the approved profile update fields.
     def update_user(self, user_id: str, payload: UserUpdate) -> UserPublic:
         record = self.repository.update_user(user_id, {"name": payload.name})
@@ -126,9 +157,17 @@ class UserService:
 # Encapsulates login, refresh rotation, logout, and password changes.
 class AuthService:
     # Receives user and session repositories for auth workflows.
-    def __init__(self, users: UserRepository, sessions: SessionRepository) -> None:
+    def __init__(
+        self,
+        users: UserRepository,
+        sessions: SessionRepository,
+        password_resets: PasswordResetRepository,
+        email_sender: EmailSender,
+    ) -> None:
         self.users = users
         self.sessions = sessions
+        self.password_resets = password_resets
+        self.email_sender = email_sender
 
     # Verifies credentials and issues a fresh cookie/session set.
     def login(self, *, email: str, password: str, settings: IdentitySettings) -> AuthTokens:
@@ -207,6 +246,81 @@ class AuthService:
         self.sessions.revoke_user_sessions(user_id, except_session_id=current_session_id)
         return updated
 
+    # Creates and emails a reset token without revealing account existence.
+    def request_password_reset(self, *, email: str, settings: IdentitySettings) -> None:
+        user = self.users.get_by_email(normalize_email(email))
+        if not user or user.get("status") != STATUS_ACTIVE:
+            return
+
+        user_id = str(user["id"])
+        token = self._create_reset_token(user_id=user_id, settings=settings, purpose=PASSWORD_RESET_PURPOSE)
+
+        try:
+            self.email_sender.send_password_reset(
+                to_email=str(user["email"]),
+                reset_link=self._reset_link(token, settings),
+                expires_minutes=settings.reset_token_expire_minutes,
+            )
+        except EmailDeliveryError as exc:
+            LOGGER.warning(
+                "password_reset_email_failed user_id=%s error_type=%s",
+                user_id,
+                type(exc).__name__,
+            )
+
+    # Sends a new-user setup email without exposing the temporary password.
+    def send_account_setup_email(self, *, user_id: str, to_email: str, settings: IdentitySettings) -> bool:
+        token = self._create_reset_token(user_id=user_id, settings=settings, purpose=ACCOUNT_SETUP_PURPOSE)
+
+        try:
+            self.email_sender.send_account_setup(
+                to_email=to_email,
+                setup_link=self._reset_link(token, settings),
+                expires_minutes=settings.reset_token_expire_minutes,
+            )
+        except EmailDeliveryError as exc:
+            LOGGER.warning(
+                "account_setup_email_failed user_id=%s error_type=%s",
+                user_id,
+                type(exc).__name__,
+            )
+            return False
+        return True
+
+    # Validates a single-use reset token and revokes every active session.
+    def reset_password(self, *, token: str, new_password: str) -> None:
+        self.password_resets.cleanup_expired()
+        reset = self.password_resets.get_by_token_hash(hash_password_reset_token(token))
+        if not reset or reset.get("used") is True:
+            raise PasswordResetError("Invalid or expired reset token")
+        if reset.get("purpose") not in VALID_RESET_PURPOSES:
+            raise PasswordResetError("Invalid or expired reset token")
+        if self._is_expired(str(reset["expires_at"])):
+            self.password_resets.mark_used(str(reset["id"]))
+            raise PasswordResetError("Invalid or expired reset token")
+
+        user_id = str(reset["user_id"])
+        user = self.users.get_by_id(user_id)
+        if not user or user.get("status") != STATUS_ACTIVE:
+            self.password_resets.mark_used(str(reset["id"]))
+            raise PasswordResetError("Invalid or expired reset token")
+
+        updated = self.users.update_user(
+            user_id,
+            {
+                "hashed_password": hash_password(new_password),
+                "must_change_password": False,
+            },
+        )
+        if not updated:
+            self.password_resets.mark_used(str(reset["id"]))
+            raise PasswordResetError("Invalid or expired reset token")
+
+        if not self.password_resets.mark_used(str(reset["id"])):
+            raise PasswordResetError("Invalid or expired reset token")
+        self.password_resets.invalidate_user_tokens(user_id)
+        self.sessions.revoke_user_sessions(user_id)
+
     # Revokes every refresh session for a user after admin action.
     def revoke_all_for_user(self, user_id: str) -> None:
         self.sessions.revoke_user_sessions(user_id)
@@ -250,3 +364,25 @@ class AuthService:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed <= datetime.now(timezone.utc)
+
+    # Builds the public Back Office reset URL without logging the token.
+    def _reset_link(self, token: str, settings: IdentitySettings) -> str:
+        return f"{settings.frontend_base_url}/reset-password?{urlencode({'token': token})}"
+
+    # Creates one reset/set-password token and stores only its digest.
+    def _create_reset_token(self, *, user_id: str, settings: IdentitySettings, purpose: str) -> str:
+        token = generate_password_reset_token()
+        expires_at = now_utc() + timedelta(minutes=settings.reset_token_expire_minutes)
+
+        self.password_resets.cleanup_expired()
+        self.password_resets.invalidate_user_tokens(user_id)
+        self.password_resets.create_reset(
+            {
+                "user_id": user_id,
+                "token_hash": hash_password_reset_token(token),
+                "expires_at": expires_at.isoformat(),
+                "used": False,
+                "purpose": purpose,
+            }
+        )
+        return token

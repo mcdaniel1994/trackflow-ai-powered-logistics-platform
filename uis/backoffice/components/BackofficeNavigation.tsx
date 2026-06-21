@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, ClipboardList, Package, Users, type LucideIcon } from "lucide-react";
+import {
+  Boxes,
+  ClipboardList,
+  LogOut,
+  Package,
+  ShieldCheck,
+  UserCircle,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { useAuth } from "@/lib/auth/context";
 
 interface NavigationItem {
   label: string;
@@ -15,6 +25,7 @@ const navigationItems: NavigationItem[] = [
   { label: "Incidents", href: "/incidents", icon: ClipboardList },
   { label: "Suppliers", href: "/suppliers", icon: Package },
   { label: "Talent Pipeline", href: "/talent", icon: Users },
+  { label: "Account", href: "/account/profile", icon: UserCircle },
 ];
 
 function isActivePath(pathname: string, href: string) {
@@ -26,15 +37,21 @@ function isActivePath(pathname: string, href: string) {
 
 type BackofficeNavigationProps = {
   collapsed?: boolean;
+  onNavigate?: () => void;
 };
 
-export function BackofficeNavigation({ collapsed = false }: BackofficeNavigationProps) {
+export function BackofficeNavigation({ collapsed = false, onNavigate }: BackofficeNavigationProps) {
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+  const items =
+    user.role === "admin"
+      ? [...navigationItems, { label: "User Management", href: "/admin/users", icon: ShieldCheck }]
+      : navigationItems;
 
   return (
     <nav className="min-w-0" aria-label="Backoffice navigation">
-      <ul className="flex max-w-full gap-2 overflow-x-auto lg:block lg:space-y-2">
-        {navigationItems.map((item) => {
+      <ul className="max-w-full space-y-2">
+        {items.map((item) => {
           const active = isActivePath(pathname, item.href);
 
           return (
@@ -43,7 +60,8 @@ export function BackofficeNavigation({ collapsed = false }: BackofficeNavigation
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 title={collapsed ? item.label : undefined}
-                className={`flex min-w-max items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition lg:w-full lg:min-w-0 ${
+                onClick={onNavigate}
+                className={`flex w-full min-w-0 items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold transition ${
                   collapsed ? "lg:justify-center lg:px-2" : ""
                 } ${
                   active
@@ -58,6 +76,30 @@ export function BackofficeNavigation({ collapsed = false }: BackofficeNavigation
           );
         })}
       </ul>
+      <div className="mt-4 border-t border-mist pt-4">
+        <div className={`mb-3 min-w-0 ${collapsed ? "lg:text-center" : ""}`}>
+          <p className={`truncate text-xs font-bold uppercase text-neutral-500 ${collapsed ? "lg:sr-only" : ""}`}>
+            Signed in
+          </p>
+          <p className={`truncate text-sm font-black text-navy-deep ${collapsed ? "lg:sr-only" : ""}`}>
+            {user.name}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate?.();
+            void logout();
+          }}
+          title={collapsed ? "Log out" : undefined}
+          className={`flex w-full min-w-0 items-center gap-2 rounded-lg border border-transparent px-3 py-2 text-sm font-bold text-neutral-600 transition hover:border-mist hover:bg-ivory hover:text-navy ${
+            collapsed ? "lg:justify-center lg:px-2" : ""
+          }`}
+        >
+          <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className={`truncate ${collapsed ? "lg:sr-only" : ""}`}>Log out</span>
+        </button>
+      </div>
     </nav>
   );
 }

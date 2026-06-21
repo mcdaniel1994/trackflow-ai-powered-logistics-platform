@@ -54,8 +54,18 @@ def generate_refresh_token() -> str:
     return secrets.token_urlsafe(48)
 
 
+# Creates high-entropy opaque reset tokens for account recovery.
+def generate_password_reset_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
 # Stores only a digest of refresh tokens in TinyDB.
 def hash_refresh_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+# Stores only a digest of reset tokens in TinyDB.
+def hash_password_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 

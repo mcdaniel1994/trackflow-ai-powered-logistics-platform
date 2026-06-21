@@ -1,8 +1,8 @@
 # `services/identity/`
 
-FastAPI identity service for Auth 1.
+FastAPI identity service for TrackFlow authentication.
 
-This service owns TrackFlow Back Office users, password hashing, login, refresh rotation, logout, and user-management APIs. It is not Engagement 5 and does not contain password reset or frontend authentication work.
+This service owns TrackFlow Back Office users, password hashing, login, refresh rotation, logout, user-management APIs, and Auth 3 password reset/account recovery. It is not Engagement 5 and does not contain public registration.
 
 ## Runtime
 
@@ -18,14 +18,39 @@ The API exposes:
 - `POST /auth/logout`
 - `GET /auth/me`
 - `POST /auth/change-password`
+- `POST /auth/forgot-password`
+- `POST /auth/reset-password`
 - `POST /users`
 - `GET /users`
 - `GET /users/{id}`
 - `PUT /users/{id}`
 - `PATCH /users/{id}/status`
+- `POST /users/{id}/sessions/revoke`
 - `DELETE /users/{id}`
 
-There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`, and the first admin is created from the server CLI.
+There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`, and the first admin is created from the server CLI. When an admin creates a user, the API generates a one-time temporary password and automatically sends an account setup email with a time-limited password reset link when email delivery is configured. The temporary password is never emailed; it is returned once to the admin as a fallback if setup email delivery fails.
+
+Administrators may revoke a user's active refresh sessions without changing account status through `POST /users/{id}/sessions/revoke`. The route is CSRF-protected and intended for the Auth 2 Back Office user-management UI.
+
+## Password Reset
+
+Auth 3 adds public account-recovery endpoints:
+
+- `POST /auth/forgot-password` accepts an email address and always returns the same success response for valid input.
+- `POST /auth/reset-password` accepts an opaque reset token and a new password.
+
+Reset tokens are cryptographically random, stored only as SHA-256 hashes in TinyDB's `password_resets` collection, expire after `RESET_TOKEN_EXPIRE_MINUTES` (default 30, allowed range 15-60), and are single-use. A successful reset stores a new Argon2id password hash, clears `must_change_password`, invalidates outstanding reset tokens for that user, and revokes all refresh sessions.
+
+Reset emails are sent through Resend using environment-only configuration:
+
+```bash
+RESEND_API_KEY=
+EMAIL_SENDER=no-reply@trackflow.example
+FRONTEND_BASE_URL=http://localhost:3000
+RESET_TOKEN_EXPIRE_MINUTES=30
+```
+
+`FRONTEND_BASE_URL` must be the HTTPS Back Office origin in hosted environments so reset links are generated for the correct public app. Do not log reset tokens, reset links, email API keys, password values, or password hashes.
 
 ## First Admin
 

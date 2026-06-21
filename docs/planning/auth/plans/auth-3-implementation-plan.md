@@ -1,6 +1,6 @@
 # Auth 3 — Implementation Plan: Password Reset + Account Recovery
 
-**Status:** Planning (no code written). **Phase:** 3 of 3. **Requirements:** `docs/planning/auth/auth-3-password-reset-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-rule.md`.
+**Status:** Implemented and locally verified on 2026-06-20. **Phase:** 3 of 3. **Requirements:** `docs/planning/auth/auth-3-password-reset-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-rule.md`.
 
 > **Phase gate:** Auth 3 must not begin until Auth 1 and Auth 2 are implemented, tested, reviewed, and approved. All password-reset persistence, email, endpoints, and pages live **only** in this phase.
 
@@ -180,14 +180,14 @@ Frontend tests use the Auth 2 Vitest + RTL + Playwright setup.
 
 ## 14. Implementation Checklist
 
-- [ ] Add `EmailSender` + `ResendEmailSender` (`email.py`).
-- [ ] Add `PasswordResetRepository` interface + TinyDB impl; `password_resets` collection.
-- [ ] `AuthService.request_password_reset` + `reset_password` (reuse Argon2id + revoke-all-sessions).
-- [ ] Add `POST /auth/forgot-password` + `POST /auth/reset-password` (public).
-- [ ] Identity `config.py`/`.env.example`/`pyproject.toml` updates.
-- [ ] Frontend `/forgot-password`, `/reset-password`, `/login` link; BFF forwarding; open-route config.
-- [ ] Tests per §11; manual verification per §12.
-- [ ] Update engagement-tracking docs per AGENTS.md pre-commit workflow.
+- [x] Add `EmailSender` + `ResendEmailSender` (`email.py`).
+- [x] Add `PasswordResetRepository` interface + TinyDB impl; `password_resets` collection.
+- [x] `AuthService.request_password_reset` + `reset_password` (reuse Argon2id + revoke-all-sessions).
+- [x] Add `POST /auth/forgot-password` + `POST /auth/reset-password` (public).
+- [x] Identity `config.py`/`.env.example`/`pyproject.toml` updates.
+- [x] Frontend `/forgot-password`, `/reset-password`, `/login` link; BFF forwarding; open-route config.
+- [x] Tests per §11; local verification per §12 using mocked email delivery.
+- [x] Update engagement-tracking docs per AGENTS.md pre-commit workflow.
 
 ---
 

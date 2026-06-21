@@ -10,6 +10,8 @@ from pathlib import Path
 DEFAULT_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
 # Stores the local TinyDB file inside the identity service by default.
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "identity.json"
+# Password-reset links target the local Back Office by default.
+DEFAULT_FRONTEND_BASE_URL = "http://localhost:3000"
 
 
 # Carries all identity runtime settings after environment parsing.
@@ -23,6 +25,10 @@ class IdentitySettings:
     jwt_audience: str
     access_token_expire_minutes: int
     refresh_token_expire_days: int
+    reset_token_expire_minutes: int
+    resend_api_key: str
+    email_sender: str
+    frontend_base_url: str
     cors_origins: list[str]
     cookie_secure: bool
     cookie_samesite: str
@@ -47,6 +53,14 @@ def _get_int(name: str, default: int) -> int:
     if not raw.strip():
         return default
     return int(raw)
+
+
+# Keeps Auth 3 reset tokens inside the approved 15-60 minute window.
+def _get_reset_token_expire_minutes() -> int:
+    minutes = _get_int("RESET_TOKEN_EXPIRE_MINUTES", 30)
+    if minutes < 15 or minutes > 60:
+        raise ValueError("RESET_TOKEN_EXPIRE_MINUTES must be between 15 and 60")
+    return minutes
 
 
 # Resolves the TinyDB path from env or the service-local default.
@@ -76,6 +90,10 @@ def get_settings() -> IdentitySettings:
         jwt_audience=os.getenv("IDENTITY_JWT_AUDIENCE", "trackflow-backoffice").strip() or "trackflow-backoffice",
         access_token_expire_minutes=_get_int("ACCESS_TOKEN_EXPIRE_MINUTES", 15),
         refresh_token_expire_days=_get_int("REFRESH_TOKEN_EXPIRE_DAYS", 14),
+        reset_token_expire_minutes=_get_reset_token_expire_minutes(),
+        resend_api_key=os.getenv("RESEND_API_KEY", "").strip(),
+        email_sender=os.getenv("EMAIL_SENDER", "").strip(),
+        frontend_base_url=(os.getenv("FRONTEND_BASE_URL", DEFAULT_FRONTEND_BASE_URL).strip() or DEFAULT_FRONTEND_BASE_URL).rstrip("/"),
         cors_origins=get_cors_origins(),
         cookie_secure=_get_bool("AUTH_COOKIE_SECURE", False),
         cookie_samesite=os.getenv("AUTH_COOKIE_SAMESITE", "lax").strip().lower() or "lax",

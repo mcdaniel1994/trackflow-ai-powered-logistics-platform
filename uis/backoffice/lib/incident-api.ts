@@ -1,19 +1,7 @@
 import type { IncidentAnalysisResult } from "./incident-types";
+import { fetchWithAuth } from "@/lib/auth/client-http";
 
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
-
-// Base-URL precedence: the dedicated incident-processor var wins, then the
-// generic shared-backend var, then localhost for local dev. The talent client
-// (lib/talent/api.ts) deliberately uses NEXT_PUBLIC_TALENT_API_URL instead so
-// the two features never end up pointed at each other's backend.
-function getApiBaseUrl() {
-  const configured =
-    process.env.NEXT_PUBLIC_INCIDENT_PROCESSOR_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    DEFAULT_API_BASE_URL;
-
-  return configured.replace(/\/$/, "");
-}
+const API_PATH = "/api/incidents";
 
 async function readSafeError(response: Response) {
   try {
@@ -29,7 +17,7 @@ export async function analyzeIncidentCsv(file: File): Promise<IncidentAnalysisRe
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(`${getApiBaseUrl()}/api/incidents/analyze`, {
+  const response = await fetchWithAuth(`${API_PATH}/analyze`, {
     method: "POST",
     body: formData,
   });
@@ -42,6 +30,5 @@ export async function analyzeIncidentCsv(file: File): Promise<IncidentAnalysisRe
 }
 
 export function getIncidentExportUrl() {
-  return `${getApiBaseUrl()}/api/incidents/results/export`;
+  return `${API_PATH}/results/export`;
 }
-

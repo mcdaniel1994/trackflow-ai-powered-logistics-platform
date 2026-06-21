@@ -22,6 +22,8 @@ import type {
   Stage,
   Status,
 } from "@/lib/talent/types";
+import { fetchWithAuth } from "@/lib/auth/client-http";
+import type { ServerAPIContext } from "@/lib/server/request-context";
 
 // The mock API uses `applied_at` in some responses and `application_date` in others,
 // and can return `null` for optional URL fields. The normalizer below hides this.
@@ -53,13 +55,7 @@ type ThrownAPIError = APIError & {
   status?: number;
 };
 
-// `NEXT_PUBLIC_` prefix is required for env vars that need to reach the browser.
-// We strip a trailing slash so endpoint paths can start with `/records` cleanly.
-// This client uses its own NEXT_PUBLIC_TALENT_API_URL var: the backoffice's
-// incident client (lib/incident-api.ts) falls back to NEXT_PUBLIC_API_URL, so
-// sharing that name would point the talent tracker at the wrong backend.
-const FALLBACK_API_URL = "https://playground.4geeks.com/tracker/api/v1";
-const API_URL = (process.env.NEXT_PUBLIC_TALENT_API_URL ?? FALLBACK_API_URL).replace(/\/$/, "");
+const API_PATH = "/api/talent";
 
 // Squashes server quirks so the rest of the app sees one clean shape:
 //   - `null` LinkedIn/CV URLs become empty strings (simpler to render).
@@ -179,16 +175,27 @@ async function parseAPIError(response: Response): Promise<ThrownAPIError> {
 //   - Non-2xx -> parse and throw a typed APIError (caught by callers as `unknown`,
 //     handled via the `errorMessage` / `errorFieldErrors` helpers below).
 //   - 204 No Content -> resolve with undefined (used by deleteNote).
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_URL}${path}`, {
+async function request<T>(path: string, init?: RequestInit, context?: ServerAPIContext): Promise<T> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
+  if (init?.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  if (context?.cookieHeader) {
+    headers.set("Cookie", context.cookieHeader);
+  }
+
+  const url = `${context?.baseUrl ?? ""}${API_PATH}${path}`;
+  const requestInit = {
     ...init,
     cache: init?.cache ?? "no-store",
-    headers: {
-      Accept: "application/json",
-      ...(init?.body ? { "Content-Type": "application/json" } : {}),
-      ...init?.headers,
-    },
-  });
+    headers,
+  } satisfies RequestInit;
+
+  const response = context
+    ? await fetch(url, requestInit)
+    : await fetchWithAuth(url, requestInit);
 
   if (!response.ok) {
     throw await parseAPIError(response);
@@ -286,8 +293,8 @@ export async function getCandidates(params: {
   };
 }
 
-export async function getCandidate(id: string): Promise<Candidate> {
-  const response = await request<RawCandidate>(`/records/${encodeURIComponent(id)}`);
+export async function getCandidate(id: string, context?: ServerAPIContext): Promise<Candidate> {
+  const response = await request<RawCandidate>(`/records/${encodeURIComponent(id)}`, undefined, context);
   return normalizeCandidate(response);
 }
 
@@ -311,9 +318,11 @@ export async function patchCandidate(id: string, body: CandidatePatch): Promise<
   return normalizeCandidate(response);
 }
 
-export async function getNotes(id: string): Promise<Note[]> {
+export async function getNotes(id: string, context?: ServerAPIContext): Promise<Note[]> {
   const response = await request<ListResponse<RawNote>>(
     `/records/${encodeURIComponent(id)}/notes`,
+    undefined,
+    context,
   );
 
   return (response.data ?? []).map(normalizeNote);
