@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
-from trackflow_auth import AuthenticatedPrincipal, authenticate_request, require_csrf
+from trackflow_auth import (
+    AuthenticatedPrincipal,
+    authenticate_request,
+    require_csrf,
+    safe_request_validation_exception_handler,
+)
 
 from .analysis import analyze_csv_bytes
 from .config import get_auth_config, get_cors_origins
@@ -16,6 +22,7 @@ from .reporting import build_export_csv
 
 def create_app() -> FastAPI:
     app = FastAPI(title="TrackFlow Incident Processor", version="0.1.0")
+    app.add_exception_handler(RequestValidationError, safe_request_validation_exception_handler)
     app.state.latest_incident_analysis = None
 
     app.add_middleware(

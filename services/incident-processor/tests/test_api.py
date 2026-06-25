@@ -136,6 +136,32 @@ def test_api_errors_are_safe_and_do_not_leak_values(client: TestClient, key_pair
     assert "private@example.com" not in str(body)
 
 
+def test_request_validation_errors_do_not_echo_sensitive_inputs(
+    client: TestClient,
+    key_pair,
+    caplog: pytest.LogCaptureFixture,
+):
+    private_pem, _public_pem = key_pair
+    csrf_headers = authenticate(client, private_pem)
+    sensitive_email = "private@example.com"
+    sensitive_token = "incident-upload-token-secret"
+
+    response = client.post(
+        "/api/incidents/analyze",
+        data={"file": sensitive_email, "token": sensitive_token},
+        headers=csrf_headers,
+    )
+
+    assert response.status_code == 422
+    serialized = response.text
+    assert "input" not in serialized
+    assert "ctx" not in serialized
+    assert sensitive_email not in serialized
+    assert sensitive_token not in serialized
+    assert sensitive_email not in caplog.text
+    assert sensitive_token not in caplog.text
+
+
 def test_analyze_requires_csrf(client: TestClient, key_pair):
     private_pem, _public_pem = key_pair
     authenticate(client, private_pem)

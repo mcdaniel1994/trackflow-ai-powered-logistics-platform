@@ -23,6 +23,10 @@ Then read the active engagement brief and the README for every folder being modi
 | Current engagement brief when assigned | `docs/briefs/NN-title.md` |
 | All briefs | `docs/briefs/` |
 | Cross-cutting standards and guidance | `docs/` |
+| Engineering quality standards (testing, error handling, observability, production readiness) | `docs/standards/` |
+| Operational runbooks (deployment, etc.) | `docs/runbooks/` |
+| Intended CI workflow architecture | `.github/workflows/README.md` |
+| Repo-specific quality remediation/improvement plans | `docs/planning/` |
 | Archived planning artifacts | `docs/archive/` |
 | Coding-agent scoped rules and skills | `.agents/` |
 | Forward-looking UI workspace | `uis/` |
@@ -63,4 +67,5 @@ For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical tabl
 - Prefer `rg` and `rg --files` for searches.
 - Before public-facing UI work, read `docs/standards/visibility.md` and apply the matching `.agents/rules/public-ui-visibility.md` rule.
 - Before auth, session, token, cookie, authorization, or AI-agent user-context work, read `docs/standards/authentication-security-rule.md` and apply the matching `.agents/rules/authentication-security.md` rule.
+- Before adding or changing behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, read the relevant engineering-quality standard in `docs/standards/` (testing, error-handling, observability, production-readiness) and apply the matching `.agents/rules/testing-error-handling-ci.md` rule.
 - Empty folders with READMEs are intentional scaffolding for future engagements.

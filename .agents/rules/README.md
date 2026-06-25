@@ -10,6 +10,7 @@ Scoped development rules for coding agents working in this repo. Apply any rule 
 | `authentication-security.md` | File-pattern: auth, sessions, tokens, cookies, protected routes, roles, permissions, AI-agent user context | Read `docs/standards/authentication-security-rule.md` before the change. |
 | `public-ui-visibility.md` | File-pattern: `uis/website/**`, any folder with public-facing pages | Read `docs/standards/visibility.md` sections 1-6 before the change. Verify one H1, `<html lang>`, canonical, OG, Twitter Card, and parseable JSON-LD. |
 | `sensitive-local-datasets.md` | File-pattern: `scripts/incidents-trackflow.csv`, future documented sensitive local datasets | Do not read, print, copy, summarize, export, or inspect sensitive local datasets unless the user explicitly authorizes that exact access. Prefer safe fixtures and aggregate-only outputs. |
+| `testing-error-handling-ci.md` | File-pattern: production code, APIs/validation/persistence/failure paths, logging/monitoring, CI/coverage/build/deploy under `services/`, `packages/`, `uis/`, `.github/workflows/`, `docs/runbooks/` | Read the applicable `docs/standards/` doc (testing, error-handling, observability, production-readiness) before the change. Cover success and failure paths, add/update tests, preserve coverage, never log sensitive data, and report which standards were reviewed. |
 
 ## Adding a new rule
 

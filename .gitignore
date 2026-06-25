@@ -46,6 +46,11 @@ services/identity/data/identity.json
 # Coverage
 coverage/
 
+# Test coverage artifacts
+.coverage
+coverage.xml
+htmlcov/
+
 # Python
 __pycache__/
 *.py[cod]

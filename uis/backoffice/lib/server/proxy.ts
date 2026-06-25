@@ -14,6 +14,8 @@ type ProxyOptions = {
   relaySetCookie?: boolean;
 };
 
+const UPSTREAM_TIMEOUT_MS = 15_000;
+
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "content-encoding",
@@ -104,6 +106,15 @@ function setCookieHeaders(upstream: Response) {
   return combined ? [combined] : [];
 }
 
+function isTimeoutError(error: unknown) {
+  if (!error || typeof error !== "object" || !("name" in error)) {
+    return false;
+  }
+
+  const name = (error as { name?: unknown }).name;
+  return name === "AbortError" || name === "TimeoutError";
+}
+
 export function appendClearAuthCookies(response: NextResponse) {
   const secure = (process.env.AUTH_COOKIE_SECURE ?? "false").toLowerCase() === "true";
   const secureFlag = secure ? "; Secure" : "";
@@ -123,13 +134,24 @@ export function appendClearAuthCookies(response: NextResponse) {
 }
 
 export async function proxyRequest(request: NextRequest, options: ProxyOptions) {
-  const upstream = await fetch(buildURL(request, options.baseUrl, options.upstreamPath), {
-    method: request.method,
-    cache: "no-store",
-    redirect: "manual",
-    headers: requestHeaders(request, options),
-    body: await requestBody(request),
-  });
+  let upstream: Response;
+
+  try {
+    upstream = await fetch(buildURL(request, options.baseUrl, options.upstreamPath), {
+      method: request.method,
+      cache: "no-store",
+      redirect: "manual",
+      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+      headers: requestHeaders(request, options),
+      body: await requestBody(request),
+    });
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      return NextResponse.json({ detail: "Service timed out" }, { status: 504 });
+    }
+
+    return NextResponse.json({ detail: "Service temporarily unavailable" }, { status: 503 });
+  }
 
   const response = new NextResponse(upstream.body, {
     status: upstream.status,
