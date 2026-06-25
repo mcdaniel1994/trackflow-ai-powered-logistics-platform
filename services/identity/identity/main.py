@@ -6,9 +6,15 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from trackflow_auth import ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, require_csrf
+from trackflow_auth import (
+    ACCESS_COOKIE_NAME,
+    REFRESH_COOKIE_NAME,
+    require_csrf,
+    safe_request_validation_exception_handler,
+)
 
 from .config import IdentitySettings, get_settings
 from .constants import STATUS_ACTIVE, STATUS_DISABLED, STATUS_SUSPENDED
@@ -62,6 +68,7 @@ def create_app() -> FastAPI:
             store.close()
 
     app = FastAPI(title="TrackFlow Identity", version="0.1.0", lifespan=lifespan)
+    app.add_exception_handler(RequestValidationError, safe_request_validation_exception_handler)
 
     initial_settings = get_settings()
     app.add_middleware(

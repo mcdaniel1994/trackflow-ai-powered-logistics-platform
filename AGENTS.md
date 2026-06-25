@@ -16,12 +16,12 @@ Claude-specific sessions also read `CLAUDE.md` after this file.
 
 ## Pre-Implementation Reading
 
-Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, read `docs/standards/visibility.md` and follow sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, read `docs/standards/authentication-security-rule.md`.
+Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, read `docs/standards/visibility.md` and follow sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, read `docs/standards/authentication-security-rule.md`. If you add or change behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, read the relevant engineering-quality standard (`docs/standards/testing.md`, `error-handling.md`, `observability.md`, `production-readiness.md`) and apply `.agents/rules/testing-error-handling-ci.md`.
 
 ## Mandatory Pre-Commit Workflow
 
 1. Confirm the engagement brief and acceptance criteria for the change in flight.
-2. Run `type-check`, `build`, and `lint` for every touched package or app.
+2. Run `type-check`, `build`, `lint`, and the tests for every touched package or app, and meet the release gates in `docs/standards/production-readiness.md` (tests pass, coverage preserved, failure paths handled, no sensitive data logged).
 3. Update the engagement-tracking docs that move together: `README.md` roadmap row plus "What's Been Built", `docs/briefs/README.md` index, the engagement brief's `## Status`, `CLAUDE.md` "Where New Engagement Code Goes", `memory-bank/progress.md`, and the deliverable folder's README.
 4. Verify no protected files were modified outside the engagement scope.
 5. Write a commit message naming the engagement.
@@ -49,6 +49,7 @@ When delivered code is retired (as the Engagement 1 and 3 standalone apps were i
 - Public-facing pages must comply with `docs/standards/visibility.md` sections 1-6 before merge.
 - Authentication, authorization, sessions, cookies, tokens, and AI-agent user context must comply with `docs/standards/authentication-security-rule.md`.
 - APIs and backend services go under `services/`.
+- Code that adds or changes behavior must meet the engineering-quality standards in `docs/standards/` (testing, error-handling, observability, production-readiness) before merge.
 - Product AI agents go under `agents/`; reusable product capabilities for those agents go under `skills/`.
 
 ## Coding-Agent Infrastructure Vs. Product Agents

@@ -6,9 +6,15 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 
-from trackflow_auth import AuthenticatedPrincipal, authenticate_request, require_csrf
+from trackflow_auth import (
+    AuthenticatedPrincipal,
+    authenticate_request,
+    require_csrf,
+    safe_request_validation_exception_handler,
+)
 
 from .config import get_auth_config, get_cors_origins, get_db_path
 from .constants import COUNTRY_CURRENCY, VALID_CATEGORIES
@@ -31,6 +37,7 @@ def create_app() -> FastAPI:
             repository.close()
 
     app = FastAPI(title="TrackFlow Supplier Directory", version="0.1.0", lifespan=lifespan)
+    app.add_exception_handler(RequestValidationError, safe_request_validation_exception_handler)
 
     app.add_middleware(
         CORSMiddleware,

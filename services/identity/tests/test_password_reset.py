@@ -114,6 +114,46 @@ def test_forgot_password_email_failure_keeps_public_response_and_safe_logs(clien
     assert "token" not in caplog.text.lower()
 
 
+def test_password_reset_validation_does_not_echo_sensitive_inputs(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    secret_token = "reset-token-secret-123"
+    short_password = "pw"
+
+    response = client.post(
+        "/auth/reset-password",
+        json={"token": secret_token, "new_password": short_password},
+    )
+
+    assert response.status_code == 422
+    body = response.json()
+    assert body == {"detail": [{"loc": ["body", "new_password"], "msg": "Value is too short."}]}
+    serialized = response.text
+    assert "input" not in serialized
+    assert "ctx" not in serialized
+    assert secret_token not in serialized
+    assert short_password not in serialized
+    assert secret_token not in caplog.text
+    assert short_password not in caplog.text
+
+
+def test_forgot_password_validation_does_not_echo_email(
+    client: TestClient,
+    caplog: pytest.LogCaptureFixture,
+):
+    submitted_email = "private.example.com"
+
+    response = client.post("/auth/forgot-password", json={"email": submitted_email})
+
+    assert response.status_code == 422
+    serialized = response.text
+    assert "input" not in serialized
+    assert "ctx" not in serialized
+    assert submitted_email not in serialized
+    assert submitted_email not in caplog.text
+
+
 def test_reset_password_rejects_invalid_expired_used_and_wrong_purpose_tokens(client: TestClient):
     admin = create_admin(client)
     sender = _use_email_sender(client, RecordingEmailSender())

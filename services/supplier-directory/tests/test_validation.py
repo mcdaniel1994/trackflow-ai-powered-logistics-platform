@@ -95,3 +95,32 @@ def test_create_supplier_rejects_invalid_payloads(client: TestClient, key_pair, 
     )
 
     assert response.status_code == 422
+
+
+def test_create_supplier_validation_does_not_echo_sensitive_inputs(
+    client: TestClient,
+    key_pair,
+    caplog: pytest.LogCaptureFixture,
+):
+    private_pem, _public_pem = key_pair
+    sensitive_email = "supplier-secret@example.com"
+    sensitive_token = "supplier-reset-token-secret"
+
+    response = client.post(
+        "/suppliers",
+        json=valid_payload(
+            status="paused",
+            contact_email=sensitive_email,
+            notes=f"Escalation token: {sensitive_token}",
+        ),
+        headers=authenticate(client, private_pem),
+    )
+
+    assert response.status_code == 422
+    serialized = response.text
+    assert "input" not in serialized
+    assert "ctx" not in serialized
+    assert sensitive_email not in serialized
+    assert sensitive_token not in serialized
+    assert sensitive_email not in caplog.text
+    assert sensitive_token not in caplog.text

@@ -15,18 +15,23 @@ export async function getServerSessionUser(): Promise<AuthUser | null> {
     return null;
   }
 
-  const response = await fetch(`${getIdentityAPIURL()}/auth/me`, {
-    method: "GET",
-    cache: "no-store",
-    headers: {
-      Accept: "application/json",
-      Cookie: cookieStore.toString(),
-    },
-  });
+  try {
+    const response = await fetch(`${getIdentityAPIURL()}/auth/me`, {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+        Cookie: cookieStore.toString(),
+      },
+    });
 
-  if (!response.ok) {
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as AuthUser;
+  } catch {
+    // Fail closed for SSR auth gates if identity is unreachable or returns bad JSON.
     return null;
   }
-
-  return (await response.json()) as AuthUser;
 }
