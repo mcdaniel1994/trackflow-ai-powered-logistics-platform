@@ -44,6 +44,7 @@ trackflow/
 - Engagement 2 - Inventory & Carrier Scoring Engine: `packages/shared/`
 - Engagement 3 - Talent Pipeline Tracker: delivered in `apps/talent-pipeline-tracker/`; code retired June 2026, now at `uis/backoffice/app/talent/` (`docs/archive/talent-pipeline-tracker-retirement.md`)
 - Engagement 4 - AI-Driven Engineering Infrastructure: `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/`, and npm workspace wiring
+- Engagement 5 - Backend Inventory Management: `services/central-api/` FastAPI modular monolith with SQLModel, Alembic, PostgreSQL, Identity token verification, and transactional inventory movements
 
 ## Architectural Decisions
 

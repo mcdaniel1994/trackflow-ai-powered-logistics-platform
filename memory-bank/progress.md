@@ -6,10 +6,11 @@
 - Engagement 2 - Inventory & Carrier Scoring Engine (`docs/briefs/02-inventory-carriers.md`): delivered in `packages/shared/`.
 - Engagement 3 - Talent Pipeline Tracker (`docs/briefs/03-talent-pipeline-tracker.md`): delivered in `apps/talent-pipeline-tracker/`; code retired June 2026, now lives at `uis/backoffice/app/talent/` (see `docs/archive/talent-pipeline-tracker-retirement.md`).
 - Engagement 4 - AI-Driven Engineering Infrastructure (`docs/briefs/04-ai-driven-engineering.md`): delivered in `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, and `services/`.
+- Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`): delivered in `services/central-api/` with FastAPI, SQLModel, Alembic, PostgreSQL inventory movements, Identity token verification, idempotent seed data, and disposable-database tests.
 
 ## Active
 
-- Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`) — in progress at `services/central-api/`.
+_None — Engagement 6 is the next planned engagement._
 
 ## Subprojects
 

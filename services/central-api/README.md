@@ -3,6 +3,17 @@
 Engagement 5's independently managed FastAPI service for PostgreSQL-backed inventory
 management across the Los Angeles (`LA`) and Zaragoza (`ZGZ`) warehouses.
 
+## Delivery status
+
+Engagement 5 is delivered locally. The release baseline is 39 passing tests with 92%
+coverage, including disposable-PostgreSQL migration rollback, seed repeatability,
+security and failure paths, aggregate query counts, and concurrent outbound protection.
+
+Supabase has not been migrated or seeded. That smoke test remains approval-gated until
+the target is confirmed as disposable development infrastructure. Production deployment,
+backup/restore, rollback, monitoring, and a backend runbook remain operational
+follow-ups, so this README does not claim production deployment readiness.
+
 ## Ownership and boundaries
 
 - Central API owns inventory SKUs and stock movements in PostgreSQL.

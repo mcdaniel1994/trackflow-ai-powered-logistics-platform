@@ -12,7 +12,7 @@ Each brief is owned by an internal stakeholder and frames the problem, scope, an
 | 02 | [Inventory & Carrier Scoring Engine](02-inventory-carriers.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `packages/shared/` |
 | 03 | [Talent Pipeline Tracker](03-talent-pipeline-tracker.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `uis/backoffice/app/talent/` (original `apps/talent-pipeline-tracker/` retired June 2026 — [retirement note](../archive/talent-pipeline-tracker-retirement.md)) |
 | 04 | [AI-Driven Engineering Infrastructure](04-ai-driven-engineering.md) | Andrés Kim, CTO | ✅ Delivered | `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/` |
-| 05 | [Backend Inventory Management](05-backend-inventory-management.md) | Andrés Kim, CTO | 🚧 In progress | `services/central-api/` |
+| 05 | [Backend Inventory Management](05-backend-inventory-management.md) | Andrés Kim, CTO | ✅ Delivered | `services/central-api/` |
 
 ## Conventions
 

@@ -4,7 +4,13 @@
 
 ## Status
 
-In progress — Engagement 5. Implementation lives in `services/central-api/`.
+Delivered — Engagement 5. Implementation lives in `services/central-api/`.
+
+Local release verification completed against disposable Docker PostgreSQL: 39 tests
+pass with 92% coverage, Ruff and mypy pass, the package builds, and Alembic upgrade and
+rollback paths pass. Supabase migration and seed smoke testing remain intentionally
+unperformed until a disposable development target is confirmed and explicit approval
+is granted.
 
 ## Background
 

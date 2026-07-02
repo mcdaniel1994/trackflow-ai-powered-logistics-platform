@@ -12,9 +12,9 @@ TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza
 
 **Engagement 4** delivered the AI-driven engineering infrastructure: persistent project memory in `memory-bank/`, the cross-agent operating guide in `AGENTS.md`, scoped coding-agent rules and the `start-engagement` skill under `.agents/`, the forward-looking Next.js + TypeScript UI workspace (`uis/website/`, `uis/backoffice/`), and the reserved `services/` boundary. See `AGENTS.md` for how `.agents/` (coding-agent infrastructure) differs from the customer-facing product agents in `agents/`.
 
-**Engagement 5** is in progress: Backend Inventory Management is establishing the
-FastAPI Central API, PostgreSQL inventory persistence, and exact `/inventory/...`
-contract under `services/central-api/`.
+**Engagement 5** delivered Backend Inventory Management: the FastAPI Central API,
+PostgreSQL inventory persistence, and exact `/inventory/...` contract live under
+`services/central-api/`.
 
 Auth 1, Auth 2, and Auth 3 are implemented as authentication subprojects, not Engagement 5: `services/identity/` owns users, login, refresh sessions, RS256 signing, and password reset/account recovery; `packages/trackflow_auth/` provides verify-only helpers for domain APIs; and `uis/backoffice/` hosts the authenticated Back Office shell plus public forgot/reset-password pages through a same-origin BFF.
 
@@ -115,7 +115,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚧 Engagement 5 — Backend Inventory Management *(in progress)*
+### ✅ Engagement 5 — Backend Inventory Management *(delivered)*
 
 - Unified SKU inventory across Los Angeles and Zaragoza
 - Computed stock from immutable inbound and outbound movements
@@ -140,7 +140,7 @@ TrackFlow reflects real-world logistics challenges:
 | 2 | Inventory & carrier scoring (TypeScript) | ✅ Delivered |
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
-| 5 | Backend Inventory Management (Central API) | 🚧 In progress |
+| 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
 | 6 | Data pipelines & telemetry | ⏳ Upcoming |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
 | 8 | AI agents (product, customer-facing) | ⏳ Upcoming |

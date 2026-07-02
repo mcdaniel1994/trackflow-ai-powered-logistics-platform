@@ -56,7 +56,7 @@ Then read the active engagement brief and the README for every folder being modi
   Built.
 
 - **Engagement 5** - `services/central-api/`
-  In progress. See `docs/briefs/05-backend-inventory-management.md`.
+  Built. See `docs/briefs/05-backend-inventory-management.md`.
 
 - **Engagement 6+** - TBD per engagement.
   Confirm with Cory before placing new code.
