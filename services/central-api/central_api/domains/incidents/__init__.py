@@ -1,0 +1,2 @@
+"""Centralized incident management domain."""
+

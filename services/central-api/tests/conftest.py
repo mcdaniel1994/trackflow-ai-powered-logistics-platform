@@ -42,7 +42,7 @@ def engine(database_url: str) -> Engine:
 def clean_database(engine: Engine) -> Generator[None, None, None]:
     """Give every test deterministic tables without bypassing Alembic schema ownership."""
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE stock_exits, stock_entries, skus RESTART IDENTITY CASCADE"))
+        connection.execute(text("TRUNCATE incidents, stock_exits, stock_entries, skus RESTART IDENTITY CASCADE"))
     yield
 
 
@@ -142,6 +142,17 @@ def product_payload() -> dict[str, object]:
         "client_name": "PureStep Footwear",
         "category": "fashion",
         "warehouse": "LA",
+    }
+
+
+@pytest.fixture
+def incident_payload() -> dict[str, object]:
+    return {
+        "title": "Carrier missed delivery window",
+        "description": "The assigned carrier missed the committed delivery window.",
+        "category": "carrier_issue",
+        "origin": "branch",
+        "branch": "la_office",
     }
 
 

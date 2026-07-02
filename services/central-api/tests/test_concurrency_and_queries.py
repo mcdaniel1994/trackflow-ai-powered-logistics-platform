@@ -8,6 +8,8 @@ from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
+from central_api.domains.incidents.schemas import IncidentStatus, IncidentStatusUpdate
+from central_api.domains.incidents.service import IncidentError, IncidentService
 from central_api.domains.inventory.schemas import ExitType, StockExitCreate, Warehouse
 from central_api.domains.inventory.service import InventoryError, InventoryService
 
@@ -100,3 +102,35 @@ def test_product_and_movement_lists_do_not_use_n_plus_one_queries(
     # Each list uses one bounded data query and one total-count query regardless of rows.
     assert product_queries == 2
     assert movement_queries == 2
+
+
+def test_concurrent_incident_transitions_serialize_from_open(
+    engine: Engine,
+    client: TestClient,
+    auth_headers: dict[str, str],
+    incident_payload: dict[str, object],
+) -> None:
+    created = client.post("/api/incidents", json=incident_payload, headers=auth_headers)
+    incident_id = created.json()["id"]
+    barrier = Barrier(2)
+
+    def attempt(next_status: IncidentStatus) -> int:
+        with Session(engine) as session:
+            service = IncidentService(session)
+            barrier.wait()
+            try:
+                service.update_status(incident_id, IncidentStatusUpdate(status=next_status))
+            except IncidentError as exc:
+                return exc.status_code
+            return 200
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        outcomes = sorted(
+            executor.map(attempt, (IncidentStatus.IN_PROGRESS, IncidentStatus.DISCARDED))
+        )
+
+    assert outcomes == [200, 400]
+    assert client.get(f"/api/incidents/{incident_id}", headers=auth_headers).json()["status"] in {
+        "in_progress",
+        "discarded",
+    }

@@ -33,7 +33,9 @@ def test_invalid_identity_claims_are_rejected(
 
 def test_tampered_token_is_rejected(client: TestClient, token_factory: Any) -> None:
     token = token_factory()
-    tampered = f"{token[:-1]}{'A' if token[-1] != 'A' else 'B'}"
+    header, payload, signature = token.split(".")
+    tampered_signature = f"{'A' if signature[0] != 'A' else 'B'}{signature[1:]}"
+    tampered = f"{header}.{payload}.{tampered_signature}"
     response = client.get("/inventory/products", headers={"Authorization": f"Bearer {tampered}"})
     assert response.status_code == 401
 

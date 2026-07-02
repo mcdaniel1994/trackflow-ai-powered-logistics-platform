@@ -1323,6 +1323,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "sqlmodel" },
     { name = "trackflow-auth" },
+    { name = "trackflow-incidents" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -1351,8 +1352,23 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
     { name = "sqlmodel", specifier = ">=0.0.24" },
     { name = "trackflow-auth", editable = "../../packages/trackflow_auth" },
+    { name = "trackflow-incidents", editable = "../../packages/trackflow_incidents" },
     { name = "types-psycopg2", marker = "extra == 'dev'", specifier = ">=2.9.21.20250516" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.35.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "trackflow-incidents"
+version = "0.1.0"
+source = { editable = "../../packages/trackflow_incidents" }
+
+[package.metadata]
+requires-dist = [
+    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2.2" },
+    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.16.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.12.0" },
 ]
 provides-extras = ["dev"]
 

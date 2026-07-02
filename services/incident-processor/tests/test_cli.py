@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from io import StringIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from jose import jwt
+from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 from incident_processor.analysis import analyze_csv_bytes
 from incident_processor.cli import main
 from incident_processor.main import create_app
-from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-incidents.csv"
 
@@ -44,7 +44,7 @@ def test_cli_and_api_share_equivalent_analysis_results(monkeypatch):
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     ).decode("utf-8")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     token = jwt.encode(
         {
             "sub": "cli-api-test-user",

@@ -1,13 +1,15 @@
 # TrackFlow Central API
 
-Engagement 5's independently managed FastAPI service for PostgreSQL-backed inventory
-management across the Los Angeles (`LA`) and Zaragoza (`ZGZ`) warehouses.
+TrackFlow's independently managed FastAPI service for PostgreSQL-backed inventory
+management and centralized operational incidents.
 
 ## Delivery status
 
-Engagement 5 is delivered locally. The release baseline is 39 passing tests with 92%
-coverage, including disposable-PostgreSQL migration rollback, seed repeatability,
-security and failure paths, aggregate query counts, and concurrent outbound protection.
+Engagement 5 inventory and the Centralized Incident Manager subproject are delivered
+locally. The release suite covers disposable-PostgreSQL migration rollback, repeatable
+seeds, security and failure paths, aggregate queries, lifecycle transitions, and
+concurrent inventory/incident protection. The current baseline is 50 passing tests
+with 92% source coverage.
 
 Supabase has not been migrated or seeded. That smoke test remains approval-gated until
 the target is confirmed as disposable development infrastructure. Production deployment,
@@ -17,12 +19,13 @@ follow-ups, so this README does not claim production deployment readiness.
 ## Ownership and boundaries
 
 - Central API owns inventory SKUs and stock movements in PostgreSQL.
+- Central API owns operational incidents, lifecycle transitions, and summary metrics.
 - Identity remains the sole owner of TinyDB users and sessions.
 - Central API verifies Identity-issued RS256 access tokens through
   `packages/trackflow_auth`; it never opens Identity's TinyDB.
-- The current engagement implements only the inventory domain. Inventory UI,
-  lead-form persistence, carriers, returns, and other domains are out of scope.
 - All inventory routes use the exact `/inventory/...` paths from the engagement brief.
+- Incident routes use `/api/incidents...` and remain a subproject rather than a
+  numbered engagement.
 
 The internal dependency direction is:
 
@@ -46,6 +49,8 @@ docker compose -f services/central-api/compose.yml up -d
 uv sync --project services/central-api --extra dev
 uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
 uv run --project services/central-api seed-inventory
+uv run --project services/central-api seed-incidents \
+  services/incident-processor/tests/fixtures/sample-incidents.csv
 uv run --project services/central-api uvicorn central_api.main:app --reload --port 8002
 ```
 
@@ -85,3 +90,8 @@ The seed command validates `SEED_USER_UUID` syntax and writes that external iden
 without opening Identity's TinyDB. Before running it, choose an existing user UUID from
 the local Identity service. Because the databases are deliberately isolated, PostgreSQL
 cannot enforce that cross-service reference.
+
+`seed-incidents` validates the complete legacy export, stores only normalized incident
+fields and a SHA-256 idempotency key, and reports aggregate counts plus safe row/field
+rule identifiers. Never run it against `scripts/incidents-trackflow.csv` without the
+explicit authorization required by `.agents/rules/sensitive-local-datasets.md`.

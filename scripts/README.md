@@ -17,3 +17,16 @@ uv run --project services/incident-processor analyze scripts/incidents-trackflow
 ```
 
 The official incident CSV belongs at `scripts/incidents-trackflow.csv`. That path is ignored because the file can contain real customer email addresses.
+
+## Centralized Incident Seed
+
+`seed_incidents.py` is a thin wrapper around Central API's idempotent historical
+import. Use the synthetic fixture for development:
+
+```bash
+uv run --project services/central-api python scripts/seed_incidents.py \
+  services/incident-processor/tests/fixtures/sample-incidents.csv
+```
+
+The command prints aggregate inserted/skipped/invalid counts only. Access to the
+real CSV requires explicit authorization under the sensitive-dataset rule.

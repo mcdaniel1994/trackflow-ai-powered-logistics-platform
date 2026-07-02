@@ -16,6 +16,7 @@ test("protected routes redirect unauthenticated users to login", async ({ page }
     "/backoffice/inventory/orders/inbound",
     "/backoffice/inventory/orders/outbound",
     "/backoffice/inventory/orders",
+    "/incidents",
   ];
 
   for (const route of protectedRoutes) {
