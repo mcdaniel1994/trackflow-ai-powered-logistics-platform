@@ -28,7 +28,7 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass
 class InventoryError(Exception):
     """Typed domain failure translated to HTTP only at the application boundary."""
 

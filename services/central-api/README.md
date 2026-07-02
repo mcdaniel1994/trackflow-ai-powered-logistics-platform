@@ -46,7 +46,8 @@ Local health endpoint: `http://127.0.0.1:8002/health`
 uv run --project services/central-api ruff check services/central-api
 uv run --project services/central-api mypy services/central-api/central_api
 uv build --project services/central-api
-uv run --project services/central-api pytest
+uv run --project services/central-api pytest -c services/central-api/pyproject.toml \
+  services/central-api/tests --cov=central_api --cov-report=term-missing
 ```
 
 Migration, seed, integration, and concurrency tests target the disposable PostgreSQL
