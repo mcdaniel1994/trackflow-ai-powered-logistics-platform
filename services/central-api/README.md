@@ -34,6 +34,7 @@ and provide the Identity RS256 public key before exercising protected routes.
 docker compose -f services/central-api/compose.yml up -d
 uv sync --project services/central-api --extra dev
 uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
+uv run --project services/central-api seed-inventory
 uv run --project services/central-api uvicorn central_api.main:app --reload --port 8002
 ```
 
@@ -67,3 +68,8 @@ given.
 
 Stock is computed from movements per SKU row and warehouse. It is never stored or
 accepted from clients.
+
+The seed command validates `SEED_USER_UUID` syntax and writes that external identifier
+without opening Identity's TinyDB. Before running it, choose an existing user UUID from
+the local Identity service. Because the databases are deliberately isolated, PostgreSQL
+cannot enforce that cross-service reference.

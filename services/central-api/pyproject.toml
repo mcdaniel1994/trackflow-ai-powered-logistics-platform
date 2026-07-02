@@ -13,6 +13,9 @@ dependencies = [
   "uvicorn[standard]>=0.35.0",
 ]
 
+[project.scripts]
+seed-inventory = "central_api.domains.inventory.seed:entrypoint"
+
 [project.optional-dependencies]
 dev = [
   "build>=1.2.2",
