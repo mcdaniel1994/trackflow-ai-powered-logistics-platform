@@ -9,6 +9,14 @@ existing monorepo (`memory-bank/`, `AGENTS.md`, `CLAUDE.md`, `README.md`,
 
 ---
 
+> **Engagement 5 decision (July 2026):** The architecture rationale for a
+> domain-oriented FastAPI modular monolith remains authoritative. The active
+> [Engagement 5 brief](../briefs/05-backend-inventory-management.md) supersedes this
+> proposal's illustrative folder names and route versioning: implementation uses the
+> `central_api/` package layout and exact unversioned `/inventory/...` routes, not
+> `/api/v1/inventory`. Engagement 5 is inventory-only; the other domains and lead-form
+> persistence below remain future possibilities, not current scope.
+
 ## 1. Purpose & Scope
 
 This document is the architecture proposal for TrackFlow's **Central API** — the
@@ -212,16 +220,18 @@ interactions should go **service-to-service inside the monolith** (one domain's 
 calling another's), never repository-to-repository or router-to-router. Keeping the
 cross-talk at the service layer is what preserves the option to extract a domain later.
 
-**Contract alignment with existing code:** the TypeScript domain model already exists in
-`@repo/shared-types` (`packages/shared/src/types/index.ts`) — `Product`, `Shipment`,
-`Carrier`, `InventoryMovement`, and their enums. The FastAPI Pydantic **schemas** for
-`inventory`, `carriers`, and `orders` should mirror these shapes so the same domain
-concept means the same thing on both sides of the wire. Keeping them in sync is a
-standing concern (see §10).
+**Contract alignment with existing code:** the delivered TypeScript domain model remains
+in `@repo/shared-types` (`packages/shared/src/types/index.ts`). Engagement 5 does not
+modify it: the stakeholder brief requires the API names `SKU`, `StockEntry`, and
+`StockExit`. A future UI adapter or generated client may reconcile those contracts when
+the inventory UI is scoped.
 
 ---
 
 ## 6. FastAPI Router & Endpoint Organization
+
+The versioned route layout below is historical planning context. Engagement 5 uses the
+brief's exact `/inventory/...` routes without `/api/v1`.
 
 - **One `APIRouter` per domain**, defined in that domain's `router.py`.
 - **All domain routers are aggregated** in `app/api/v1/router.py`, which is mounted once
@@ -250,7 +260,8 @@ standing concern (see §10).
   keeps the HTTP layer swappable and the logic testable.
 - **Prefix handling:** prefixes are declared at include-time in the aggregator, not
   hard-coded into each path, so the whole API can be re-rooted in one place.
-- **API versioning:** the `/api/v1` prefix is deliberate. New, incompatible contracts go
+- **Historical versioning proposal:** the `/api/v1` prefix was proposed for future
+  multi-domain work. New, incompatible contracts could go
   under `/api/v2` (a parallel `api/v2/` aggregator) while `v1` keeps serving existing
   clients. This matters because the frontends are deployed independently and cannot be
   forced to upgrade in lockstep — versioning is how the backend evolves without breaking
@@ -293,13 +304,13 @@ The frontends (`apps/`, `uis/website/`, `uis/backoffice/`) and the Central API a
 **separate systems** that communicate only over HTTP:
 
 ```text
-Frontend UI  →  HTTP API request (/api/v1/...)  →  FastAPI backend  →  database / services
+Frontend UI  →  HTTP API request  →  FastAPI backend  →  database / services
 ```
 
 - **Frontends never touch the database.** All reads and writes go through the API. This
   keeps business rules and credentials server-side, gives one auditable place for logic,
-  and lets the backend evolve its storage without breaking any UI. (It is also what makes
-  the deferred lead-form persistence and backoffice auth land cleanly behind the API.)
+  and lets the backend evolve its storage without breaking any UI. Engagement 5 does not
+  add or modify a frontend.
 - **Base URL via environment variable.** Frontends already follow this pattern: the
   talent tracker reads `NEXT_PUBLIC_TALENT_API_URL`
   ([`uis/backoffice/lib/talent/api.ts`](../../uis/backoffice/lib/talent/api.ts))
@@ -373,26 +384,22 @@ Each risk below states the problem **and** why it matters for TrackFlow.
 
 ---
 
-## 10. Open Items & Follow-ups (non-binding notes for the Engagement 5 brief)
+## 10. Engagement 5 Decisions and Later Follow-ups
 
-These are flagged for whoever writes the Engagement 5 brief. **No action is taken here.**
+The active brief resolved the Engagement 5 architecture choices. Remaining items stay
+outside the inventory implementation.
 
-- **README "Node.js" reconciliation.** The README tech-stack table currently reserves the
-  `services/` boundary for *"future Node.js APIs,"* which predates the FastAPI/Python
-  direction in the planning brief. The AI/data roadmap (Eng. 6–8) justifies Python. This
-  line should be reconciled **when the Engagement 5 brief lands**, via the normal
-  engagement-tracking-doc update workflow — not as part of this planning task.
-- **Pydantic ↔ TypeScript contract sync.** Decide the mechanism for keeping FastAPI
-  schemas aligned with `@repo/shared-types` (manual discipline, generated OpenAPI client,
-  or generated types). Recommended to settle in Engagement 5.
-- **Workspace registration.** Decide how/whether a Python service is represented in the
-  npm workspace tooling, per the note in `services/README.md`.
-- **Auth & lead-form persistence inflow.** `progress.md` defers backoffice auth and
-  lead-form persistence to Engagement 5; both land behind this API (the `auth` and
-  `customers` domains).
+- **Runtime and workspace.** Engagement 5 uses Python/FastAPI as an independent `uv`
+  project, not an npm workspace.
+- **Routes and contract.** Engagement 5 uses the brief's exact `/inventory/...` routes
+  and the `SKU`, `StockEntry`, and `StockExit` names.
+- **Pydantic ↔ TypeScript contract sync.** A future inventory UI can choose an adapter,
+  generated OpenAPI client, or generated types without changing Engagement 2 now.
+- **Lead-form persistence.** This remains deferred but is explicitly outside Engagement
+  5. No future engagement number is assigned here.
 
 ---
 
-*This proposal provides the reasoning and structure needed to begin planning the Central
-API. The actual scaffold, dependencies, and endpoints are Engagement 5 work, to be guided
-by the brief that accompanies it.*
+*This proposal preserves the architectural rationale for the Central API. The active
+Engagement 5 brief controls the implemented inventory scope, package structure, and
+routes.*

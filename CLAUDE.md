@@ -55,7 +55,10 @@ Then read the active engagement brief and the README for every folder being modi
 - **Engagement 4** - `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/`  
   Built.
 
-- **Engagement 5+** - TBD per engagement.  
+- **Engagement 5** - `services/central-api/`
+  In progress. See `docs/briefs/05-backend-inventory-management.md`.
+
+- **Engagement 6+** - TBD per engagement.
   Confirm with Cory before placing new code.
 
 ## Coding-Agent Infrastructure Vs. Product Agents

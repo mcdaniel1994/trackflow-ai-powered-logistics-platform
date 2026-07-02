@@ -7,6 +7,7 @@
 - `uis/website/` - public Next.js + TypeScript website (Engagement 4); sole home of the Engagement 1 marketing surface since the static `apps/marketing-site/` was retired in June 2026.
 - `uis/backoffice/` - internal Next.js + TypeScript shell (Engagement 4) that consumes Engagement 2 logic; hosts the Talent Pipeline Tracker at `/talent` (Engagement 3, migrated June 2026) and the Incident Report Processor UI at `/incidents`.
 - `services/identity/` - Python/FastAPI + TinyDB identity service for Auth 1 backend authentication, refresh sessions, and user management.
+- `services/central-api/` - Engagement 5 Python/FastAPI modular monolith for inventory, with SQLModel, Alembic, and PostgreSQL; it verifies Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `services/incident-processor/` - Python/FastAPI subproject (CLI + API + analysis core) for CX incident exports; intentionally outside the npm workspaces.
 
 ## Repository Architecture
@@ -26,6 +27,7 @@ trackflow/
 │   └── trackflow_auth/
 ├── services/
 │   ├── identity/
+│   ├── central-api/
 │   └── incident-processor/
 ├── agents/
 ├── skills/
@@ -48,8 +50,8 @@ trackflow/
 - `uis/` may depend on `packages/`; `packages/` must never depend on applications.
 - `apps/` was retired in June 2026: active UI work lives in `uis/`, and retired delivered code is preserved via `docs/archive/` retirement notes plus git history, not on-disk copies.
 - `uis/` is the sole UI workspace for public and internal Next.js + TypeScript interfaces.
-- `services/` hosts backend services. Python/FastAPI services are intentionally not npm workspace members. `services/central-api/` remains reserved for Engagement 5.
-- Auth 1 backend authentication lives in `services/identity/` with reusable verification helpers in `packages/trackflow_auth/`; frontend auth, password reset, and Central API work remain separate phases.
+- `services/` hosts independently managed backend services. Python/FastAPI services are intentionally not npm workspace members. Engagement 5 lives in `services/central-api/`.
+- Auth 1 backend authentication lives in `services/identity/` with reusable verification helpers in `packages/trackflow_auth/`; Central API consumes those helpers while Identity remains the sole TinyDB owner.
 - npm workspaces are wired for `packages/*` and `uis/*`.
 - `packages/shared` is consumed in this repo as `@repo/shared-types`; `uis/backoffice/` is the first workspace consumer.
 - `packages/shared` exposes TypeScript source directly. Next.js consumers transpile it with `transpilePackages`; future plain Node services may need a build step or service-side transpilation.

@@ -9,7 +9,7 @@
 
 ## Active
 
-_None — Engagement 5 (Central API) is the next planned engagement._
+- Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`) — in progress at `services/central-api/`.
 
 ## Subprojects
 
@@ -26,7 +26,6 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 
 ## Planned Next
 
-- Engagement 5 - Central API.
 - Engagement 6 - Data pipelines and telemetry.
 - Engagement 7 - RAG knowledge base and semantic search.
 - Engagement 8 - AI agents.
@@ -35,6 +34,6 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 
 ## Open Decisions And Known Risks
 
-- Lead-form persistence is deferred to Engagement 5 and should be wired to the Central API when that service exists.
+- Lead-form persistence remains deferred and is not part of Engagement 5.
 - No CI workflow exists yet; add one in a follow-up.
 - Junecoast tokens are duplicated across `uis/website/` and `uis/backoffice/`; promoting them into a shared package is a follow-up. (The third copy disappeared with the June 2026 retirement of `apps/talent-pipeline-tracker/`.)
