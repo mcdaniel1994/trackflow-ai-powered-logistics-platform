@@ -115,6 +115,22 @@ describe("Back Office responsive layout", () => {
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
   });
 
+  it("uses one Inventory Management sidebar entry across every inventory route", () => {
+    authMocks.pathname = "/backoffice/inventory/orders/outbound";
+
+    render(
+      <AppShell>
+        <div>Inventory content</div>
+      </AppShell>,
+    );
+
+    const inventoryLink = screen.getByRole("link", { name: "Inventory Management" });
+    expect(inventoryLink).toHaveAttribute("href", "/backoffice/inventory/products");
+    expect(inventoryLink).toHaveAttribute("aria-current", "page");
+    expect(screen.queryByRole("link", { name: "Inventory Products" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Inventory History" })).not.toBeInTheDocument();
+  });
+
   it("keeps user management overflow inside responsive panels", async () => {
     render(<AdminUsersView />);
 

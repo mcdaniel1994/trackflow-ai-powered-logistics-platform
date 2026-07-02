@@ -20,7 +20,6 @@ import {
   MapPin,
   PackageSearch,
   Route,
-  ShieldCheck,
   Truck,
   Warehouse,
   Weight,
@@ -160,7 +159,7 @@ export function InventoryCarrierView() {
 
   return (
     <div className="space-y-8">
-      <header className="flex flex-col justify-between gap-4 border-b border-mist pb-6 lg:flex-row lg:items-end">
+      <header className="border-b border-mist pb-6">
         <div className="min-w-0">
           <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">
             Warehouse Operations
@@ -171,10 +170,6 @@ export function InventoryCarrierView() {
           <p className="mt-3 max-w-[20rem] break-words text-neutral-600 sm:max-w-3xl">
             Pending shipments scored against active carrier lanes for today&apos;s dispatch plan.
           </p>
-        </div>
-        <div className="flex w-fit items-center gap-2 rounded-lg border border-mist bg-white px-3 py-2 text-sm font-bold text-navy shadow-sm">
-          <ShieldCheck className="h-4 w-4 text-teal" aria-hidden="true" />
-          Engagement 2 utilities live
         </div>
       </header>
 
