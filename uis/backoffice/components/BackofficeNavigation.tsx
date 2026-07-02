@@ -18,21 +18,31 @@ interface NavigationItem {
   label: string;
   href: string;
   icon: LucideIcon;
+  activePrefix?: string;
 }
 
 const navigationItems: NavigationItem[] = [
   { label: "Inventory + Carriers", href: "/", icon: Boxes },
+  {
+    label: "Inventory Management",
+    href: "/backoffice/inventory/products",
+    icon: Package,
+    activePrefix: "/backoffice/inventory",
+  },
   { label: "Incidents", href: "/incidents", icon: ClipboardList },
   { label: "Suppliers", href: "/suppliers", icon: Package },
   { label: "Talent Pipeline", href: "/talent", icon: Users },
   { label: "Account", href: "/account/profile", icon: UserCircle },
 ];
 
-function isActivePath(pathname: string, href: string) {
-  if (href === "/") {
+function isActivePath(pathname: string, item: NavigationItem) {
+  if (item.href === "/") {
     return pathname === "/";
   }
-  return pathname === href || pathname.startsWith(`${href}/`);
+  if (item.activePrefix) {
+    return pathname === item.activePrefix || pathname.startsWith(`${item.activePrefix}/`);
+  }
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
 type BackofficeNavigationProps = {
@@ -52,7 +62,7 @@ export function BackofficeNavigation({ collapsed = false, onNavigate }: Backoffi
     <nav className="min-w-0" aria-label="Backoffice navigation">
       <ul className="max-w-full space-y-2">
         {items.map((item) => {
-          const active = isActivePath(pathname, item.href);
+          const active = isActivePath(pathname, item);
 
           return (
             <li key={item.href}>

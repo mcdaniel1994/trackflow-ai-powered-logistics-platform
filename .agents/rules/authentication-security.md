@@ -14,5 +14,5 @@ Any change touches login/logout, registration, password reset, sessions, tokens,
 
 ## Required Behavior
 
-- Before producing the change, read `docs/standards/authentication-security-rule.md`.
+- Before producing the change, read `docs/standards/authentication-security-standard.md`.
 - Treat that standard as the source of truth for authentication, authorization, session, token, cookie, and AI-agent user-context security.

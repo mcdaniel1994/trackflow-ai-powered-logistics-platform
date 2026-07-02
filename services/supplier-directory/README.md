@@ -45,6 +45,9 @@ services/supplier-directory/data/suppliers.json
 
 The generated database file is git-ignored.
 
+Database and persistent-storage changes in this service must follow
+[`docs/standards/database-engineering-standard.md`](../../docs/standards/database-engineering-standard.md).
+
 ## Contact Email Privacy
 
 Default list and detail responses expose only `has_contact_email`. Raw `contact_email` is accepted on create and stored internally, but it is readable only through `GET /suppliers/{id}/contact`, which exists for this local demo and should be treated as privileged. The backoffice detail page uses this endpoint only after the user clicks the reveal control.

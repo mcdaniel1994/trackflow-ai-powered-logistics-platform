@@ -6,10 +6,11 @@
 - Engagement 2 - Inventory & Carrier Scoring Engine (`docs/briefs/02-inventory-carriers.md`): delivered in `packages/shared/`.
 - Engagement 3 - Talent Pipeline Tracker (`docs/briefs/03-talent-pipeline-tracker.md`): delivered in `apps/talent-pipeline-tracker/`; code retired June 2026, now lives at `uis/backoffice/app/talent/` (see `docs/archive/talent-pipeline-tracker-retirement.md`).
 - Engagement 4 - AI-Driven Engineering Infrastructure (`docs/briefs/04-ai-driven-engineering.md`): delivered in `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, and `services/`.
+- Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`): delivered in `services/central-api/` with FastAPI, SQLModel, Alembic, PostgreSQL inventory movements, Identity token verification, idempotent seed data, and disposable-database tests.
 
 ## Active
 
-_None — Engagement 5 (Central API) is the next planned engagement._
+_None — Engagement 6 is the next planned engagement._
 
 ## Subprojects
 
@@ -26,7 +27,6 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 
 ## Planned Next
 
-- Engagement 5 - Central API.
 - Engagement 6 - Data pipelines and telemetry.
 - Engagement 7 - RAG knowledge base and semantic search.
 - Engagement 8 - AI agents.
@@ -35,6 +35,6 @@ _None — Engagement 5 (Central API) is the next planned engagement._
 
 ## Open Decisions And Known Risks
 
-- Lead-form persistence is deferred to Engagement 5 and should be wired to the Central API when that service exists.
+- Lead-form persistence remains deferred and is not part of Engagement 5.
 - No CI workflow exists yet; add one in a follow-up.
 - Junecoast tokens are duplicated across `uis/website/` and `uis/backoffice/`; promoting them into a shared package is a follow-up. (The third copy disappeared with the June 2026 retirement of `apps/talent-pipeline-tracker/`.)

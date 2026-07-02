@@ -1,6 +1,6 @@
 # Auth 3 — Implementation Plan: Password Reset + Account Recovery
 
-**Status:** Implemented and locally verified on 2026-06-20. **Phase:** 3 of 3. **Requirements:** `docs/planning/auth/auth-3-password-reset-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-rule.md`.
+**Status:** Implemented and locally verified on 2026-06-20. **Phase:** 3 of 3. **Requirements:** `docs/planning/auth/auth-3-password-reset-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-standard.md`.
 
 > **Phase gate:** Auth 3 must not begin until Auth 1 and Auth 2 are implemented, tested, reviewed, and approved. All password-reset persistence, email, endpoints, and pages live **only** in this phase.
 

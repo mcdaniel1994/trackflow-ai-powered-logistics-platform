@@ -11,10 +11,18 @@ test("login page excludes public registration and shows recovery", async ({ page
 });
 
 test("protected routes redirect unauthenticated users to login", async ({ page }) => {
-  await page.goto("/suppliers");
+  const protectedRoutes = [
+    "/backoffice/inventory/products",
+    "/backoffice/inventory/orders/inbound",
+    "/backoffice/inventory/orders/outbound",
+    "/backoffice/inventory/orders",
+  ];
 
-  await expect(page).toHaveURL(/\/login\?next=%2Fsuppliers$/);
-  await expect(page.getByRole("heading", { name: /backoffice sign in/i })).toBeVisible();
+  for (const route of protectedRoutes) {
+    await page.goto(route);
+    await expect(page).toHaveURL(`/login?next=${encodeURIComponent(route)}`);
+    await expect(page.getByRole("heading", { name: /backoffice sign in/i })).toBeVisible();
+  }
 });
 
 test("forgot-password page is public and non-enumerating", async ({ page }) => {

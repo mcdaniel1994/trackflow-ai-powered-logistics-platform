@@ -20,7 +20,7 @@ enforcement values (exact thresholds, runner flags) live in test configuration a
 see [Coverage policy](#3-coverage-policy) and `../../.github/workflows/README.md`.
 
 It does not restate auth or visibility test requirements — those remain in
-[authentication-security-rule.md](authentication-security-rule.md) and [visibility.md](visibility.md).
+[authentication-security-standard.md](authentication-security-standard.md) and [visibility.md](visibility.md).
 
 ---
 

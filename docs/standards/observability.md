@@ -80,5 +80,5 @@ governs *code-level* logging discipline; do not claim platform observability tha
 
 - [error-handling.md](error-handling.md) — what to log when a failure is handled.
 - [testing.md](testing.md) — asserting sensitive data is not logged.
-- [authentication-security-rule.md](authentication-security-rule.md) — auth audit and logging rules.
+- [authentication-security-standard.md](authentication-security-standard.md) — auth audit and logging rules.
 - [production-readiness.md](production-readiness.md) — observability as a release gate.

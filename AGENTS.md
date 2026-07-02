@@ -16,7 +16,7 @@ Claude-specific sessions also read `CLAUDE.md` after this file.
 
 ## Pre-Implementation Reading
 
-Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, read `docs/standards/visibility.md` and follow sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, read `docs/standards/authentication-security-rule.md`. If you add or change behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, read the relevant engineering-quality standard (`docs/standards/testing.md`, `error-handling.md`, `observability.md`, `production-readiness.md`) and apply `.agents/rules/testing-error-handling-ci.md`.
+Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, apply `.agents/rules/public-ui-visibility.md` and follow its linked `docs/standards/visibility.md` sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, apply `.agents/rules/authentication-security.md` and follow its linked `docs/standards/authentication-security-standard.md`. If database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations are touched, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`. If you add or change behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard (`docs/standards/testing.md`, `error-handling.md`, `observability.md`, `production-readiness.md`).
 
 ## Mandatory Pre-Commit Workflow
 
@@ -47,7 +47,7 @@ When delivered code is retired (as the Engagement 1 and 3 standalone apps were i
 
 - `apps/` and `uis/` depend on `packages/`; never the reverse.
 - Public-facing pages must comply with `docs/standards/visibility.md` sections 1-6 before merge.
-- Authentication, authorization, sessions, cookies, tokens, and AI-agent user context must comply with `docs/standards/authentication-security-rule.md`.
+- Authentication, authorization, sessions, cookies, tokens, and AI-agent user context must comply with `docs/standards/authentication-security-standard.md`.
 - APIs and backend services go under `services/`.
 - Code that adds or changes behavior must meet the engineering-quality standards in `docs/standards/` (testing, error-handling, observability, production-readiness) before merge.
 - Product AI agents go under `agents/`; reusable product capabilities for those agents go under `skills/`.
@@ -62,6 +62,17 @@ This table is the canonical reference for the `.agents/` vs `agents/` vs `skills
 | `.agents/skills/` | Coding agents | Reusable repo-maintenance workflows (e.g. `start-engagement`) |
 | `agents/` | TrackFlow customers / operations | Product AI agents the company ships in later engagements (e.g. support bot, returns triage) |
 | `skills/` | TrackFlow product agents | Reusable product capabilities those agents call (e.g. code-review, data-analysis, research) |
+
+## Rules and Standards Philosophy
+
+- Files in `.agents/rules/` are short, stable triggers. They define when guidance applies and route
+  coding agents to the authoritative standard.
+- Files in `docs/standards/` contain the detailed engineering requirements. Standards may evolve as
+  technology, official guidance, and TrackFlow's production needs change.
+- Rules do not duplicate standards. Update a rule only when its trigger scope or destination
+  changes; update the standard when the underlying technical guidance changes.
+- When a rule matches the work, read the rule and its linked standard before planning or
+  implementation.
 
 ## `.agents/` Rules And Skills
 

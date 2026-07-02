@@ -1,13 +1,17 @@
-# Authentication & Session Security Rule
+# Authentication & Session Security Standard
 
-## 1. Rule Name
-**Authentication & Session Security Standard** — web apps (Python/FastAPI + SQL + JS frontends) and AI-driven applications.
+**Last reviewed:** June 2026  
+**Next review due:** September 2026 (quarterly)
+
+## 1. Scope
+
+Applies to web apps (Python/FastAPI + SQL + JS frontends) and AI-driven applications.
 
 ## 2. Purpose
 A reusable operating standard for implementing, modifying, and reviewing authentication. It sets secure defaults, names tradeoffs, and marks each choice as **recommended**, **acceptable for prototypes**, or **unsafe for production**. It is the bar to clear before auth code ships — not a tutorial.
 
-## 3. When To Use This Rule
-Apply to any change touching login/logout, registration, password reset, sessions, tokens, cookies, CORS/CSRF/XSS surface, middleware, route protection, role/permission checks, or any flow where an AI agent acts for a user. If a change can affect *who is authenticated* or *what they can reach*, this rule applies.
+## 3. When To Use This Standard
+Apply this standard to any change touching login/logout, registration, password reset, sessions, tokens, cookies, CORS/CSRF/XSS surface, middleware, route protection, role/permission checks, or any flow where an AI agent acts for a user. If a change can affect *who is authenticated* or *what they can reach*, this standard applies.
 
 ## 4. Core Security Rules
 - **The backend is the only real security boundary.** The frontend is attacker-controlled. Never trust client-supplied identity, roles, or flags.

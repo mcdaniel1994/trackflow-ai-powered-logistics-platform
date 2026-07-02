@@ -18,6 +18,14 @@ These routes connect to the FastAPI + TinyDB service in `services/supplier-direc
 
 The Talent Pipeline Tracker (Engagement 3) lives at `/talent` (list), `/talent/new` (registration), and `/talent/[id]` (detail, edit, notes), migrated from the retired standalone app in June 2026 (`docs/archive/talent-pipeline-tracker-retirement.md`). Its components live under `components/talent/` and its API client under `lib/talent/`.
 
+The Backoffice Inventory Management UI consumes Engagement 5 through a same-origin,
+allowlisted BFF and leaves the original Inventory + Carriers dashboard at `/` intact:
+
+- `/backoffice/inventory/products` - paginated products and computed stock.
+- `/backoffice/inventory/orders/inbound` - receive stock.
+- `/backoffice/inventory/orders/outbound` - record dispatches and confirmed losses.
+- `/backoffice/inventory/orders` - read-only movement history.
+
 ## Local Development
 
 ```bash
@@ -49,6 +57,7 @@ Server-only values used by the BFF:
 - `SUPPLIER_DIRECTORY_API_URL` - supplier directory service URL. Defaults to `http://localhost:8001`.
 - `INCIDENT_PROCESSOR_API_URL` - incident processor service URL. Defaults to `http://localhost:8000`.
 - `TALENT_API_URL` - talent pipeline backend URL. Defaults to the 4Geeks playground API.
+- `CENTRAL_API_URL` - Central API server URL. Defaults to `http://localhost:8003` to avoid Identity's local port 8002.
 - `AUTH_COOKIE_SECURE` - set `false` only for local HTTP development; hosted deployments require HTTPS and secure cookies.
 
 Do not expose service URLs or token material through `NEXT_PUBLIC_*` values.

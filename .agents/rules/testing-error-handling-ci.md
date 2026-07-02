@@ -45,5 +45,5 @@ Then:
 
 - Pure copy/markdown edits with no behavior change.
 - Auth-specific work — use `.agents/rules/authentication-security.md` (defer auth security to
-  `docs/standards/authentication-security-rule.md`).
+  `docs/standards/authentication-security-standard.md`).
 - Public-page visibility work — use `.agents/rules/public-ui-visibility.md`.
