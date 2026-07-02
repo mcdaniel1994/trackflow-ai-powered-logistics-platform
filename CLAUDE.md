@@ -68,7 +68,8 @@ For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical tabl
 ## Claude Notes
 
 - Prefer `rg` and `rg --files` for searches.
-- Before public-facing UI work, read `docs/standards/visibility.md` and apply the matching `.agents/rules/public-ui-visibility.md` rule.
-- Before auth, session, token, cookie, authorization, or AI-agent user-context work, read `docs/standards/authentication-security-rule.md` and apply the matching `.agents/rules/authentication-security.md` rule.
-- Before adding or changing behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, read the relevant engineering-quality standard in `docs/standards/` (testing, error-handling, observability, production-readiness) and apply the matching `.agents/rules/testing-error-handling-ci.md` rule.
+- Before public-facing UI work, apply `.agents/rules/public-ui-visibility.md` and follow its linked `docs/standards/visibility.md`.
+- Before auth, session, token, cookie, authorization, or AI-agent user-context work, apply `.agents/rules/authentication-security.md` and follow its linked `docs/standards/authentication-security-standard.md`.
+- Before database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`.
+- Before adding or changing behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard in `docs/standards/` (testing, error-handling, observability, production-readiness).
 - Empty folders with READMEs are intentional scaffolding for future engagements.

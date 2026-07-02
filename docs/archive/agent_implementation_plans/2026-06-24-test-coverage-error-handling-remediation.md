@@ -3,7 +3,7 @@
 **Type:** Planning-only (evaluation + phased remediation). No code to be written until approved.
 **Date:** 2026-06-24 · **Branch:** `main`
 **Standards compared against:** `docs/standards/testing.md`, `error-handling.md`, `observability.md`,
-`production-readiness.md`, `authentication-security-rule.md`; rule `.agents/rules/testing-error-handling-ci.md`;
+`production-readiness.md`, `authentication-security-standard.md`; rule `.agents/rules/testing-error-handling-ci.md`;
 CI design `.github/workflows/README.md`; ops `docs/runbooks/README.md`.
 
 ## Context
@@ -207,7 +207,7 @@ npm run test --workspace uis/backoffice
 | `error-handling.md` | **Fails on a core rule** — boundary mapping good, but **default 422 echoes submitted input (confirmed password leak)**, missing timeouts, no global 500 handler, no upstream-failure/storage-failure handling | §5 |
 | `observability.md` | **Weak** — 3 log statements backend-wide; no audit/correlation; sensitive-data-exclusion tested only where logging exists | §6 |
 | `production-readiness.md` | **Gate failing** — §1.5 "no sensitive data returned" is violated by the 422 leak; also no automated CI/coverage/secret/dependency gates (expected), no backend deploy/rollback | §1,9 |
-| `authentication-security-rule.md` | **Strong core, prototype storage** — verification/hashing/CSRF compliant; deviations: TinyDB≠SQL, no rate limiting/lockout, no CSP/security headers, `cookie_secure` env-gated (must be true in prod) | §2,5 |
+| `authentication-security-standard.md` | **Strong core, prototype storage** — verification/hashing/CSRF compliant; deviations: TinyDB≠SQL, no rate limiting/lockout, no CSP/security headers, `cookie_secure` env-gated (must be true in prod) | §2,5 |
 
 ## 8. Prioritized risk list (P0–P3)
 

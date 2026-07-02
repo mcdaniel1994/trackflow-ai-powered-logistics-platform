@@ -1,6 +1,6 @@
 # Auth 2 — Implementation Plan: Frontend Authentication Flows + Protected Views
 
-**Status:** Planning (no code written). **Phase:** 2 of 3. **Requirements:** `docs/planning/auth/auth-2-frontend-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-rule.md`.
+**Status:** Planning (no code written). **Phase:** 2 of 3. **Requirements:** `docs/planning/auth/auth-2-frontend-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-standard.md`.
 
 > **Phase gate:** Auth 2 must not begin until Auth 1 is implemented, tested, reviewed, and approved. Password-reset pages/links are **not** in this phase (Auth 3).
 

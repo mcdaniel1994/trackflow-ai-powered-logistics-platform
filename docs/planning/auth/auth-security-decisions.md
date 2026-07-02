@@ -8,13 +8,13 @@ This is the authoritative decision log for TrackFlow authentication (Auth 1, Aut
 - `docs/planning/auth/plans/auth-2-implementation-plan.md`
 - `docs/planning/auth/plans/auth-3-implementation-plan.md`
 
-It is tied directly to this repository: the three requirement files in `docs/planning/auth/`, the standard `docs/standards/authentication-security-rule.md`, the FastAPI services in `services/`, the Next.js app in `uis/backoffice`, the public site in `uis/website`, the existing TinyDB persistence, and the existing pytest setup.
+It is tied directly to this repository: the three requirement files in `docs/planning/auth/`, the standard `docs/standards/authentication-security-standard.md`, the FastAPI services in `services/`, the Next.js app in `uis/backoffice`, the public site in `uis/website`, the existing TinyDB persistence, and the existing pytest setup.
 
 ---
 
 ## 1. Decision Summary
 
-Where the three authentication **requirement files conflict with `docs/standards/authentication-security-rule.md`, the security rule wins.** TrackFlow is being built as a production application, so it adopts the production-oriented posture: Argon2id hashing, HttpOnly/Secure/SameSite cookies (never `localStorage`), short-lived access tokens with rotating refresh tokens, a server-side revocation store, CSRF protection, and backend-enforced authorization. Persistence stays on the repo's existing **TinyDB** for now (SQL is deferred to a future engagement) but is hidden behind repository interfaces so the later SQL migration does not rewrite the auth API or services.
+Where the three authentication **requirement files conflict with `docs/standards/authentication-security-standard.md`, the security standard wins.** TrackFlow is being built as a production application, so it adopts the production-oriented posture: Argon2id hashing, HttpOnly/Secure/SameSite cookies (never `localStorage`), short-lived access tokens with rotating refresh tokens, a server-side revocation store, CSRF protection, and backend-enforced authorization. Persistence stays on the repo's existing **TinyDB** for now (SQL is deferred to a future engagement) but is hidden behind repository interfaces so the later SQL migration does not rewrite the auth API or services.
 
 Every requirement that was superseded is documented in §2 and §6 — none were silently changed.
 
@@ -22,7 +22,7 @@ Every requirement that was superseded is documented in §2 and §6 — none were
 
 ## 2. Conflicting Requirements
 
-| # | Requirement-file instruction | `authentication-security-rule.md` | Resolution |
+| # | Requirement-file instruction | `authentication-security-standard.md` | Resolution |
 |---|---|---|---|
 | C1 | **bcrypt** via passlib (Auth 1 §"Required Approach", §13) | §5/§8: **Argon2id** preferred; bcrypt only "acceptable for legacy" | **Argon2id** |
 | C2 | Store JWT in **`localStorage`** (Auth 2 §5) | §5/§15: never `localStorage`/`sessionStorage` | **HttpOnly cookie**, no web storage |
@@ -98,7 +98,7 @@ Each decision records: **Question/Conflict · Decision · Why · Security/Archit
 
 ### D1 — Security posture
 - **Question/Conflict:** Follow the requirement files (bcrypt, localStorage, stateless) or the security rule? (C1–C5)
-- **Decision:** Follow `authentication-security-rule.md`.
+- **Decision:** Follow `authentication-security-standard.md`.
 - **Why:** TrackFlow is production-bound, not a throwaway demo.
 - **Advantages:** Token-theft resistance, real revocation, modern hashing.
 - **Tradeoffs:** CSRF, cookies, session store, more tests.

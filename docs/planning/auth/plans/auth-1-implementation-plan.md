@@ -1,6 +1,6 @@
 # Auth 1 — Implementation Plan: Backend Authentication + API Route Protection
 
-**Status:** Planning (no code written). **Phase:** 1 of 3. **Requirements:** `docs/planning/auth/auth-1-backend-api-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-rule.md`.
+**Status:** Planning (no code written). **Phase:** 1 of 3. **Requirements:** `docs/planning/auth/auth-1-backend-api-requirements.md`. **Decisions:** `docs/planning/auth/auth-security-decisions.md`. **Standard:** `docs/standards/authentication-security-standard.md`.
 
 > **Phase gate:** Auth 1 must be implemented, tested, reviewed, and approved before Auth 2 begins. Password-reset persistence/email is **not** in this phase (Auth 3 only).
 

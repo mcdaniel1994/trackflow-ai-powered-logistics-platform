@@ -16,7 +16,7 @@ response.
 
 Applies to all code that validates input, talks to storage, calls another service, or returns
 errors to a caller or UI. Auth-specific error behavior (login failure messaging, token handling,
-lockout) remains governed by [authentication-security-rule.md](authentication-security-rule.md);
+lockout) remains governed by [authentication-security-standard.md](authentication-security-standard.md);
 this file references it rather than restating it.
 
 ---
@@ -64,7 +64,7 @@ this file references it rather than restating it.
   PII, internal paths, queries, or stack traces.
 - **Do not enable enumeration.** Follow the auth standard's pattern — e.g. identical responses for
   "unknown email" and "wrong password," and for password-reset requests regardless of account
-  existence. See [authentication-security-rule.md](authentication-security-rule.md).
+  existence. See [authentication-security-standard.md](authentication-security-standard.md).
 
 ## 4. Database & Storage Failures
 
@@ -96,6 +96,6 @@ section 2.
 
 - [testing.md](testing.md) — coverage of failure paths.
 - [observability.md](observability.md) — what to log when an error is handled.
-- [authentication-security-rule.md](authentication-security-rule.md) — auth-specific error behavior
+- [authentication-security-standard.md](authentication-security-standard.md) — auth-specific error behavior
   and anti-enumeration responses.
 - [production-readiness.md](production-readiness.md) — error handling as a release gate.

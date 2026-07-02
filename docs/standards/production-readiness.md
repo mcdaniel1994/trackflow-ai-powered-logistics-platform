@@ -15,7 +15,7 @@ Applies to every change merged toward `main` and any deployment. It defines *wha
 before release. *How* those gates are automated lives in the CI design at
 [`../../.github/workflows/README.md`](../../.github/workflows/README.md); *how* deployments run lives
 in [`../runbooks/`](../runbooks/). Authentication-specific security remains governed by
-[authentication-security-rule.md](authentication-security-rule.md); this file references it for
+[authentication-security-standard.md](authentication-security-standard.md); this file references it for
 auth concerns and covers general security below.
 
 ---
@@ -24,7 +24,7 @@ auth concerns and covers general security below.
 
 - Read this file before finishing a change, wiring CI, or preparing a release.
 - Treat the [Release Gates](#1-release-gates) as a checklist; do not call work "done" until they pass.
-- For auth-related security, defer to [authentication-security-rule.md](authentication-security-rule.md);
+- For auth-related security, defer to [authentication-security-standard.md](authentication-security-standard.md);
   apply the general security requirements here for everything else.
 - Report which standards you reviewed and which gates you verified.
 
@@ -51,7 +51,7 @@ CI README to record which are enforced by machine.
 ## 2. General Security Requirements
 
 These apply to all code; authentication, sessions, tokens, cookies, and authorization are governed
-in detail by [authentication-security-rule.md](authentication-security-rule.md) — follow it for
+in detail by [authentication-security-standard.md](authentication-security-standard.md) — follow it for
 those concerns and the requirements below for the rest.
 
 - **Validate and sanitize all input** at the boundary — see [error-handling.md](error-handling.md).
@@ -89,5 +89,5 @@ and [`../runbooks/README.md`](../runbooks/README.md).
 ## Related Standards
 
 - [testing.md](testing.md) · [error-handling.md](error-handling.md) · [observability.md](observability.md)
-- [authentication-security-rule.md](authentication-security-rule.md) — auth-specific security.
+- [authentication-security-standard.md](authentication-security-standard.md) — auth-specific security.
 - CI: [`../../.github/workflows/README.md`](../../.github/workflows/README.md) · Ops: [`../runbooks/`](../runbooks/)

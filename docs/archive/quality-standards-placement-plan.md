@@ -74,4 +74,4 @@ point-of-work references. Agent files link to standards; they never inline the f
 - `docs/planning/` for future TrackFlow-specific remediation plans.
 - Update `AGENTS.md`/`CLAUDE.md` for discovery.
 - No standalone general `security.md`; non-auth security folded into `production-readiness.md`,
-  auth-specific concerns continue to defer to `authentication-security-rule.md`.
+  auth-specific concerns continue to defer to `authentication-security-standard.md`.

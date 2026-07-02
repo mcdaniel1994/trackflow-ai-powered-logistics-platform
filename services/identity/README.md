@@ -83,6 +83,9 @@ The generated database file is git-ignored.
 
 TinyDB has no SQL-level transactions, constraints, or indexes. Auth 1 coordinates writes in repository methods and must run the identity service as a single worker until SQL or a tested file-locking strategy replaces it.
 
+Database and persistent-storage changes in this service must follow
+[`docs/standards/database-engineering-standard.md`](../../docs/standards/database-engineering-standard.md).
+
 ## Cookies And CSRF
 
 Login sets:
