@@ -34,6 +34,7 @@ Then read the active engagement brief and the README for every folder being modi
 | Engagement 1 surface (original app retired June 2026) | `uis/website/` + `docs/archive/marketing-site-retirement.md` |
 | Engagement 3 tracker (standalone app retired June 2026) | `uis/backoffice/app/talent/` + `docs/archive/talent-pipeline-tracker-retirement.md` |
 | Shared TypeScript code | `packages/shared/` |
+| Shared incident contracts and CSV validation | `packages/trackflow_incidents/` |
 | Non-code shared resources | `resources/` |
 | Product AI agents | `agents/` |
 | Data pipelines | `data/` |
@@ -56,7 +57,9 @@ Then read the active engagement brief and the README for every folder being modi
   Built.
 
 - **Engagement 5** - `services/central-api/`
-  Built. See `docs/briefs/05-backend-inventory-management.md`.
+  Built. Inventory and the Centralized Incident Manager use separate domains in
+  this service. See `docs/briefs/05-backend-inventory-management.md` and
+  `docs/planning/centralized-incident-manager.md`.
 
 - **Engagement 6+** - TBD per engagement.
   Confirm with Cory before placing new code.

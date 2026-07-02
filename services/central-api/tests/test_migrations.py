@@ -30,12 +30,16 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
 
         command.upgrade(config, "head")
         engine = create_engine(migration_url)
-        assert {"skus", "stock_entries", "stock_exits"}.issubset(inspect(engine).get_table_names())
+        assert {"skus", "stock_entries", "stock_exits", "incidents"}.issubset(inspect(engine).get_table_names())
+        incident_indexes = {index["name"] for index in inspect(engine).get_indexes("incidents")}
+        assert "ix_incidents_created_at_id" in incident_indexes
         engine.dispose()
 
         command.downgrade(config, "base")
         engine = create_engine(migration_url)
-        assert not {"skus", "stock_entries", "stock_exits"}.intersection(inspect(engine).get_table_names())
+        assert not {"skus", "stock_entries", "stock_exits", "incidents"}.intersection(
+            inspect(engine).get_table_names()
+        )
         engine.dispose()
     finally:
         get_settings.cache_clear()

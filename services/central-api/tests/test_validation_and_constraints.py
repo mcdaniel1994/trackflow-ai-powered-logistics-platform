@@ -9,6 +9,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
+from central_api.domains.incidents.models import Incident
 from central_api.domains.inventory.models import SKU, StockEntry, StockExit
 
 
@@ -116,6 +117,22 @@ def test_database_enforces_unique_sku_warehouse(engine: Engine) -> None:
         session.add(_base_sku())
         session.commit()
         session.add(_base_sku())
+        with pytest.raises(IntegrityError):
+            session.commit()
+
+
+def test_database_enforces_incident_enums(engine: Engine) -> None:
+    with Session(engine) as session:
+        session.add(
+            Incident(
+                title="Invalid incident",
+                description="This row must be rejected by PostgreSQL.",
+                category="not-a-category",
+                status="open",
+                origin="internal",
+                branch="central",
+            )
+        )
         with pytest.raises(IntegrityError):
             session.commit()
 

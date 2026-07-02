@@ -1,8 +1,10 @@
 # `services/incident-processor/`
 
-FastAPI service and shared Python package for the TrackFlow Incident Report Processor subproject.
+Historical FastAPI and CLI tooling for aggregate analysis of TrackFlow incident exports.
 
-This is not Engagement 5. The Central API remains reserved for a future engagement under `services/central-api/`.
+The primary operational manager now lives in Central API and the Back Office `/incidents`
+route. This service remains available for historical aggregate analysis and export.
+Its validation is shared through `packages/trackflow_incidents/`.
 
 ## Runtime
 

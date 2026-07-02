@@ -31,7 +31,7 @@ def format_console_report(result: AnalysisResult, source_file: str) -> str:
     ]
     if nonzero_rules:
         for rule in nonzero_rules:
-            lines.append(f"  - {str(rule['label']):<31} {rule['count']}")
+            lines.append(f"  - {rule['label']!s:<31} {rule['count']}")
     else:
         lines.append("  - None .......................... 0")
 
@@ -39,21 +39,21 @@ def format_console_report(result: AnalysisResult, source_file: str) -> str:
     for item in data["categories"]:
         if isinstance(item, dict):
             lines.append(
-                f"  - {str(item['code']):<31} {item['count']:>3}  ({item['percentage']}%)"
+                f"  - {item['code']!s:<31} {item['count']:>3}  ({item['percentage']}%)"
             )
 
     lines.extend(["", "BREAKDOWN BY STATUS (valid records)"])
     for item in data["statuses"]:
         if isinstance(item, dict):
             lines.append(
-                f"  - {str(item['code']):<31} {item['count']:>3}  ({item['percentage']}%)"
+                f"  - {item['code']!s:<31} {item['count']:>3}  ({item['percentage']}%)"
             )
 
     lines.extend(["", "BREAKDOWN BY COUNTRY (valid records)"])
     for item in data["countries"]:
         if isinstance(item, dict):
             lines.append(
-                f"  - {str(item['code']):<31} {item['count']:>3}  ({item['percentage']}%)"
+                f"  - {item['code']!s:<31} {item['count']:>3}  ({item['percentage']}%)"
             )
 
     satisfaction = data["satisfaction"]

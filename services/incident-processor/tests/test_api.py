@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 from jose import jwt
+from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 from incident_processor.main import create_app
-from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAME
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample-incidents.csv"
 
@@ -39,7 +39,7 @@ def client(monkeypatch, key_pair):
 
 
 def authenticate(client: TestClient, private_key: str, *, must_change_password: bool = False) -> dict[str, str]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     claims = {
         "sub": "test-user",
         "role": "user",

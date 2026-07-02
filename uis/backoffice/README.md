@@ -6,7 +6,10 @@ Next.js + TypeScript internal backoffice shell for TrackFlow.
 
 This Engagement 4 app establishes the forward-looking home for internal company tools. The first view shows inventory and carrier scoring using `@repo/shared-types` through npm workspaces.
 
-The Incident Report Processor subproject adds an internal CX route at `/incidents`. It uploads incident CSV exports to the FastAPI service in `services/incident-processor/` and displays aggregate metrics only.
+The Centralized Incident Manager adds an internal operations route at `/incidents`.
+It registers incidents through Central API, filters them by operational context,
+enforces lifecycle transitions, and shows summary metrics. The former CSV upload
+surface is retained only as historical CLI/API tooling in `services/incident-processor/`.
 
 The Supplier Directory subproject adds internal operations routes for supplier management:
 
@@ -43,7 +46,8 @@ Auth 2 protects the Back Office with a same-origin Next.js BFF:
 - `/account/profile` lets authenticated users update their display name.
 - `/account/change-password` supports normal password changes and the temporary-password first-login flow.
 - `/admin/users` lets admins create users, view/filter accounts, suspend, disable, reactivate, and revoke refresh sessions. New users receive an account setup email when identity email delivery is configured; the one-time temporary password remains visible once to the admin as a fallback.
-- `app/api/*` route handlers proxy browser requests to identity, supplier-directory, incident-processor, and talent APIs.
+- `app/api/*` route handlers proxy browser requests to identity, Central API,
+  supplier-directory, and talent APIs.
 
 The browser calls only same-origin `/api/*` URLs. Tokens are never stored in web storage, and state-changing requests forward the `trackflow_csrf` cookie value as `X-CSRF-Token`.
 
@@ -55,7 +59,6 @@ Server-only values used by the BFF:
 
 - `IDENTITY_API_URL` - identity service URL. Defaults to `http://localhost:8002`.
 - `SUPPLIER_DIRECTORY_API_URL` - supplier directory service URL. Defaults to `http://localhost:8001`.
-- `INCIDENT_PROCESSOR_API_URL` - incident processor service URL. Defaults to `http://localhost:8000`.
 - `TALENT_API_URL` - talent pipeline backend URL. Defaults to the 4Geeks playground API.
 - `CENTRAL_API_URL` - Central API server URL. Defaults to `http://localhost:8003` to avoid Identity's local port 8002.
 - `AUTH_COOKIE_SECURE` - set `false` only for local HTTP development; hosted deployments require HTTPS and secure cookies.

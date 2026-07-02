@@ -18,6 +18,11 @@ PostgreSQL inventory persistence, and exact `/inventory/...` contract live under
 
 Auth 1, Auth 2, and Auth 3 are implemented as authentication subprojects, not Engagement 5: `services/identity/` owns users, login, refresh sessions, RS256 signing, and password reset/account recovery; `packages/trackflow_auth/` provides verify-only helpers for domain APIs; and `uis/backoffice/` hosts the authenticated Back Office shell plus public forgot/reset-password pages through a same-origin BFF.
 
+The Centralized Incident Manager is also delivered as a subproject: Central API
+persists incidents and their lifecycle in PostgreSQL, while the authenticated
+Back Office `/incidents` route provides registration, filtering, status updates,
+and leadership summaries.
+
 ---
 
 ## ❗ The Problem
@@ -132,6 +137,19 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### ✅ Centralized Incident Manager *(delivered subproject)*
+
+- Browser-based incident registration across Central, Los Angeles, and Zaragoza
+- Enforced open → in progress → resolved/discarded lifecycle
+- Filters and aggregate metrics by status, category, origin, and branch
+- Idempotent, privacy-safe import of the historical customer-service CSV
+
+**Tech:** FastAPI, SQLModel, PostgreSQL, Alembic, Next.js, and shared Python validation
+
+📁 Locations: `services/central-api/`, `packages/trackflow_incidents/`, and `uis/backoffice/`
+
+---
+
 ## 🗺️ Roadmap
 
 | Engagement | Focus | Status |
@@ -171,16 +189,17 @@ trackflow/
 │   ├── website/                   # Next.js + TS public site (Engagement 1 surface)
 │   └── backoffice/                # Next.js + TS internal shell; consumes @repo/shared-types
 │       ├── app/talent/            # Talent Pipeline Tracker (Engagement 3, migrated June 2026)
-│       └── app/incidents/         # Incident Report Processor UI (subproject)
+│       └── app/incidents/         # Centralized Incident Manager UI (subproject)
 │
 ├── services/                      # APIs and backend services
 │   ├── identity/                  # Python/FastAPI identity service
-│   ├── central-api/               # Engagement 5 FastAPI + PostgreSQL inventory service
-│   └── incident-processor/        # Python/FastAPI incident analysis subproject (CLI + API)
+│   ├── central-api/               # PostgreSQL inventory + incident domains
+│   └── incident-processor/        # Historical Python/FastAPI incident analysis tooling
 │
 ├── packages/                      # Shared code libraries
 │   ├── shared/                    # @repo/shared-types: types + utilities (Engagement 2)
-│   └── trackflow_auth/            # Python verify-only auth helpers for backend services
+│   ├── trackflow_auth/            # Python verify-only auth helpers for backend services
+│   └── trackflow_incidents/       # Shared Python incident contracts and CSV validation
 │
 ├── agents/                        # Product AI agents shipped to customers (Engagement 8)
 │   ├── _template/                 # Starter pattern

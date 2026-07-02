@@ -1,5 +1,5 @@
-import { IncidentProcessorView } from "@/components/incidents/IncidentProcessorView";
+import { IncidentManagerView } from "@/components/incidents/IncidentManagerView";
 
 export default function IncidentsPage() {
-  return <IncidentProcessorView />;
+  return <IncidentManagerView />;
 }
