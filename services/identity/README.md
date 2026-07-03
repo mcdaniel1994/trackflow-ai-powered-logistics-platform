@@ -78,6 +78,13 @@ openssl rsa -in private.pem -pubout -out public.pem
 
 Set `IDENTITY_JWT_PRIVATE_KEY` only for this service. Set `IDENTITY_JWT_PUBLIC_KEY` for this service and for every domain service that validates access tokens. In `.env` files, multiline PEM values can be represented with escaped `\n` characters.
 
+Always preserve the complete PEM framing, including the exact
+`-----BEGIN ...-----` and `-----END ...-----` lines. In Coolify, paste each
+complete value without a variable name or surrounding quotes and enable
+Multiline. Identity parses both RSA keys and verifies that they match during
+startup; incomplete, malformed, mismatched, or non-RS256 configuration prevents
+the service from becoming healthy.
+
 ## Storage
 
 Set `IDENTITY_DB_PATH` to choose where TinyDB persists data. Default:

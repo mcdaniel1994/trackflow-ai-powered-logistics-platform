@@ -69,20 +69,25 @@ those concerns and the requirements below for the rest.
 
 - A deployable surface needs a documented deployment procedure — see [`../runbooks/`](../runbooks/).
   The public website has one ([`../runbooks/frontend-vercel-deployment.md`](../runbooks/frontend-vercel-deployment.md));
-  backend services do not yet (a tracked gap).
+  the production-verified Back Office, Identity, and Central API procedure lives
+  in [`../runbooks/backend-coolify-deployment.md`](../runbooks/backend-coolify-deployment.md).
 - Services should expose health/liveness signals and not log sensitive data
   ([observability.md](observability.md)).
-- Rollback and incident response are current gaps tracked in [`../runbooks/README.md`](../runbooks/README.md);
+- A live rollback drill, monitoring, and incident response are current gaps
+  tracked in [`../runbooks/README.md`](../runbooks/README.md);
   a change that adds a new deployable surface should not be considered fully production-ready until
   its operational procedure exists.
 
 ## 4. Current State & Gaps
 
-Verified today: tests run per-package locally; logging excludes sensitive data (tested in the
-identity service). Not yet in place (do not claim these as met): automated CI/coverage gates,
-dependency/secret scanning, backend deployment, rollback, health checks, monitoring, and incident
-response. These are tracked in [`../../.github/workflows/README.md`](../../.github/workflows/README.md)
-and [`../runbooks/README.md`](../runbooks/README.md).
+Verified today: tests run per-package locally; logging excludes sensitive data
+(tested in the identity service); the Coolify backend/Back Office deployment,
+HTTPS boundary, and service health checks are production-verified. Not yet in
+place (do not claim these as met): automated CI/coverage gates,
+dependency/secret scanning, a live rollback drill, external monitoring, and
+incident response. These are tracked in
+[`../../.github/workflows/README.md`](../../.github/workflows/README.md) and
+[`../runbooks/README.md`](../runbooks/README.md).
 
 ---
 

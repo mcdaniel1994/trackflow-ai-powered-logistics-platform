@@ -4,7 +4,6 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
-from tinydb import Query
 
 from identity.email import EmailDeliveryError
 from identity.security import hash_password_reset_token

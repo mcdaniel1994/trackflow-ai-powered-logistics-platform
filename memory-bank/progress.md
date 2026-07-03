@@ -7,6 +7,10 @@
 - Engagement 3 - Talent Pipeline Tracker (`docs/briefs/03-talent-pipeline-tracker.md`): delivered in `apps/talent-pipeline-tracker/`; code retired June 2026, now lives at `uis/backoffice/app/talent/` (see `docs/archive/talent-pipeline-tracker-retirement.md`).
 - Engagement 4 - AI-Driven Engineering Infrastructure (`docs/briefs/04-ai-driven-engineering.md`): delivered in `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, and `services/`.
 - Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`): delivered in `services/central-api/` with FastAPI, SQLModel, Alembic, PostgreSQL inventory movements, Identity token verification, idempotent seed data, and disposable-database tests.
+- Production deployment checkpoint (verified July 2, 2026 America/Chicago):
+  Coolify serves the authenticated Back Office over HTTPS while Identity and
+  Central API remain private; Supabase is migrated through `20260702_0003`,
+  inventory and suppliers are seeded, and production incidents remain empty.
 
 ## Active
 
@@ -39,12 +43,15 @@ _None — Engagement 6 is the next planned engagement._
 - Engagement 8 - AI agents.
 - Engagement 9 - Workflow automation with n8n.
 - Engagement 10 - Real-time dashboards and alerts.
-- Production execution of the prepared Coolify/Supabase deployment, restore
-  drills, and Supplier Directory retirement after its observation window.
+- Production restore drills and Supplier Directory retirement after its
+  observation window.
 
 ## Open Decisions And Known Risks
 
 - Lead-form persistence remains deferred and is not part of Engagement 5.
 - Container image publishing runs in GitHub Actions and GHCR; application
   quality, coverage, and security workflows remain follow-ups.
+- Supabase Free and the Identity volume have no scheduled backups under the
+  accepted disposable-data waiver; meaningful production data requires
+  revisiting backup and restore requirements first.
 - Junecoast tokens are duplicated across `uis/website/` and `uis/backoffice/`; promoting them into a shared package is a follow-up. (The third copy disappeared with the June 2026 retirement of `apps/talent-pipeline-tracker/`.)

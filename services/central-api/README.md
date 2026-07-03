@@ -11,8 +11,11 @@ seeds, security and failure paths, aggregate queries, lifecycle transitions, and
 concurrent inventory/incident protection. The current baseline is 50 passing tests
 with 92% source coverage.
 
-Supabase has not been migrated or seeded. Production execution and restore
-drills remain approval-gated; prepared procedures live in `docs/runbooks/`.
+The portfolio Supabase production project is migrated through Alembic revision
+`20260702_0003`. Runtime-role CRUD, Central API health, approved inventory and
+supplier seeds, and authenticated Back Office access are verified; production
+incidents remain empty. Future production changes and restore drills remain
+approval-gated through `docs/runbooks/`.
 
 ## Ownership and boundaries
 
@@ -65,9 +68,8 @@ uv run --project services/central-api pytest -c services/central-api/pyproject.t
 ```
 
 Migration, seed, integration, and concurrency tests target the disposable PostgreSQL
-database from `compose.yml`. Do not run migrations or seeds against Supabase until the
-target is confirmed as disposable development infrastructure and explicit approval is
-given.
+database from `compose.yml`. Never run future migrations or seeds against Supabase
+without confirming the target, recovery posture, and explicit approval.
 
 ## Configuration
 

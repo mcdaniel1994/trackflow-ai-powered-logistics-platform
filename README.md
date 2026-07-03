@@ -4,6 +4,8 @@ An AI-powered platform for last-mile delivery and warehouse management.
 
 🌐 **Live demo:** [trackflow-ai-powered-logistics-plat.vercel.app](https://trackflow-ai-powered-logistics-plat.vercel.app/)
 
+🔐 **Production Back Office:** [backoffice.forgehub.cloud](https://backoffice.forgehub.cloud/) *(authentication required)*
+
 TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza, serving e-commerce brands across the United States and Spain. This repository is the engineering platform that powers the company — a growing monorepo of websites, APIs, AI agents, and data pipelines built to replace manual operations with reliable, automated systems.
 
 ---
@@ -24,8 +26,9 @@ Back Office `/incidents` route provides registration, filtering, status updates,
 and leadership summaries.
 
 Separate local and Coolify Compose paths now package Identity, Central API, and
-Back Office. Production execution remains approval-gated and is documented in
-`docs/runbooks/`.
+Back Office. The production stack is verified on Coolify at
+`backoffice.forgehub.cloud`; deployment, rollback, and remaining operational
+gaps are documented in `docs/runbooks/`.
 
 ---
 
@@ -154,7 +157,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚢 Dockerization & Deployment Architecture *(prepared subproject)*
+### 🚢 Dockerization & Deployment Architecture *(deployed subproject)*
 
 - Local Docker Compose stack for Identity, Central API, Back Office, and disposable PostgreSQL
 - Separate Coolify Compose stack with private backends and explicit migration/seed profiles
@@ -162,10 +165,12 @@ TrackFlow reflects real-world logistics challenges:
   so the VPS only pulls and runs containers
 - Supplier Directory folded into Central API with a privacy-preserving importer
 - Backup, restore, migration, deployment, and rollback runbooks
+- Production verification covers HTTPS, private backend networking, authentication,
+  CSRF, password reset, PostgreSQL access, and approved inventory/supplier seeds
 
 📁 Locations: `docker/`, `compose.yaml`, `compose.coolify.yaml`, and `docs/runbooks/`
 
-External production execution and the final Supplier Directory retirement remain approval-gated.
+Future production changes and the final Supplier Directory retirement remain approval-gated.
 
 ---
 
