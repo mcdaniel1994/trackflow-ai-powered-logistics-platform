@@ -24,8 +24,8 @@ become verifiable — do not document procedures that do not exist.
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
 | [backend-coolify-deployment.md](backend-coolify-deployment.md) | Prepared; production unverified | Coolify order, verification, and rollback |
-| [supabase-migrations.md](supabase-migrations.md) | Prepared; approval-gated | Database roles, backup, migration, and recovery |
-| [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Prepared; drill pending | Identity backup, isolated restore, revocation, and key rotation |
+| [supabase-migrations.md](supabase-migrations.md) | Prepared; approval-gated | Database roles, disposable-data waiver, migration, and recovery |
+| [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 
 ## Current Deployment Process (summary)
 
@@ -46,7 +46,8 @@ become verifiable — do not document procedures that do not exist.
 - External uptime monitoring and centralized log shipping.
 - Incident response (who responds, escalation, comms).
 - Environment/secrets management procedure.
-- Execution and evidence for the documented Identity and Supabase restore drills.
+- Scheduled backups and restore drills are waived for the current disposable
+  portfolio deployment; revisit before storing meaningful production data.
 
 ## Relationship to CI and Standards
 

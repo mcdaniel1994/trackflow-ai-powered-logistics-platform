@@ -158,6 +158,8 @@ TrackFlow reflects real-world logistics challenges:
 
 - Local Docker Compose stack for Identity, Central API, Back Office, and disposable PostgreSQL
 - Separate Coolify Compose stack with private backends and explicit migration/seed profiles
+- GitHub Actions builds Linux AMD64 images and publishes commit-pinned GHCR tags
+  so the VPS only pulls and runs containers
 - Supplier Directory folded into Central API with a privacy-preserving importer
 - Backup, restore, migration, deployment, and rollback runbooks
 

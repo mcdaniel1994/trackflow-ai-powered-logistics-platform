@@ -21,8 +21,16 @@ TrackFlow's public site (`uis/website/`) ships on Vercel, but **[FACT]** the bac
 5. **Supplier Directory is folded into Central API** as a Postgres-backed `suppliers` domain — an explicit, *documented* waiver of the `services/README.md` boundary (see §4/§11).
 6. **Coolify deploy unit = one Compose stack** (separate from local dev compose; rollback is stack-level — accepted, §9).
 7. **Incident Report Processor subproject fully retired** — the FastAPI service, the `analyze.py` CLI, and the importable `incident_processor` package all go (see §4). Prod incidents **start empty**; `seed-incidents` stays a dev-only tool (no CSV enters any image).
+8. **Container builds run in GitHub Actions** and publish to GHCR; the VPS pulls
+   commit-pinned images instead of compiling them.
+9. **Portfolio durability waiver:** Supabase Free and Identity TinyDB have no
+   scheduled backups for now. Their data is explicitly disposable and recovery
+   is recreation, migration, and reseeding; this is not production-grade
+   durability.
 
-> **Build-time is the real VPS constraint** **[FACT/REC]**: 2 vCPU/8 GB handles this runtime at modest traffic; the risk is memory-hungry Next 16/React 19 image builds. Coolify warns same-server builds can make small servers unresponsive → **serialize builds, cap concurrency, set memory limits, plan to move builds to CI/registry** if they bite.
+> **Build-time is the real VPS constraint** **[FACT/DECISION]**: 2 vCPU/8 GB
+> handles this runtime at modest traffic, but memory-hungry Next 16/React 19
+> builds now run on GitHub-hosted Actions runners and publish to GHCR.
 
 ---
 
@@ -208,7 +216,11 @@ Central API is a **persistent server holding a SQLAlchemy/psycopg2 pool — not 
 
 **Firewall (currently MISSING) — Coolify-safe:** use **Hostinger's network firewall** (Docker bypasses host UFW). Keep Coolify's **8000, 6001, 6002** reachable **until the Coolify dashboard has its own domain + HTTPS**, then close. Allow `443` (+`80` ACME), `22` restricted; deny all else.
 
-**Backups (currently DISABLED) — exist + restore-tested BEFORE the first production account:**
+**Portfolio waiver (owner-confirmed July 2026):** the following remains the
+production-grade target, but scheduled backups and restore drills are deferred
+while all deployed data is treated as disposable.
+
+**Production-grade backup target:**
 - **Identity TinyDB:** consistency-safe capture (quiesce the single writer / snapshot the volume, not a naive live-file copy), validate JSON, restore into an **isolated** env to prove it, store **off-box** (Coolify's own backup excludes volume data). **Post-restore security step (define it, doesn't exist yet):** an `identity revoke-sessions` CLI (clears the `refresh_sessions` + `password_resets` TinyDB tables) **plus RS256 signing-key rotation** (new keypair → update `IDENTITY_JWT_PRIVATE_KEY` on identity + `IDENTITY_JWT_PUBLIC_KEY` on central-api), which also invalidates outstanding access tokens. Restoring an old auth DB otherwise resurrects revoked sessions/used reset tokens/disabled users.
 - **Supabase:** enable the **actual purchased tier** (daily and/or PITR); keep an off-site `pg_dump` before risky DDL; document RPO/RTO. Whole-project restore = downtime + omits custom-role passwords → **last resort**.
 - **VPS** backups on; Coolify config backed up off-site.
@@ -221,7 +233,8 @@ Central API is a **persistent server holding a SQLAlchemy/psycopg2 pool — not 
 
 **Order — Identity/admin before any inventory seed (`seed-inventory` needs an existing Identity UUID):**
 1. Supabase project + runtime(DML) & migration(DDL) roles; secrets → Coolify; verify TLS.
-2. **Prove backup/restore** (Identity volume + Supabase) on a disposable target.
+2. Acknowledge the portfolio durability waiver; revisit backup/restore before
+   storing meaningful production data.
 3. **Run migrations** (`central-api-migrate`, DDL role) — explicit one-off; `pg_dump` first; approval-gated.
 4. Deploy **identity** (volume, `AUTH_COOKIE_SECURE=true`) → `/health` green.
 5. **Bootstrap the production admin** (`create-admin`), **capture the stable Identity UUID**.
@@ -236,12 +249,20 @@ Central API is a **persistent server holding a SQLAlchemy/psycopg2 pool — not 
 
 ## 10. Phased implementation plan with verification gates  **[REC]** (12-step order)
 
-1. **Infra decisions + safety baseline.** VPS IPv4/IPv6, Supabase tier/region, RPO/RTO, Resend prod sender, Coolify dashboard domain, build location, backup destinations. Attach Hostinger firewall (Coolify ports open), VPS backups on. *Gate:* `git ls-files | rg '\.env$'` empty; firewall on without locking out Coolify.
+1. **Infra decisions + safety baseline.** Supabase Free/us-east-2 via IPv4
+   Session pooler, disposable-data waiver, `coolify.forgehub.cloud`, and
+   GitHub Actions/GHCR builds are confirmed. Resend sender and Supplier TinyDB
+   authority remain open. Attach the Hostinger firewall only after separate
+   approval. *Gate:* `git ls-files | rg '\.env$'` empty; firewall on without
+   locking out Coolify.
 2. **Incident Processor dependency extraction + retirement** (per §4). *Gate:* fixture moved; `rg incident_processor` → only archived docs; central-api tests green.
 3. **Local Docker images + local Compose verify.** Dockerfiles (non-root, healthchecks), backoffice `standalone`+tracing+`app/api/health` (test 200), root `compose.yaml` `profiles:[setup]`, root `.dockerignore`. *Gate:* `docker compose up` healthy; `--profile setup run migrate` applies head; login + inventory + incidents work locally.
 4. **Supplier domain + migration verification** (the boundary-waiver brief). `suppliers` domain + `0003` migration (invariants) + `seed-suppliers`; idempotent TinyDB→Postgres importer (preserve UUIDs/`rate_updated_at`/nulls/ordering/filters/error contracts + `has_contact_email`); re-point BFF `/api/suppliers`→`CENTRAL_API_URL`; define write-freeze (or dual-write) for cutover. *Gate:* backoffice supplier regression green; importer count+field verification matches; original `suppliers.json` untouched.
 5. **Production Compose + runbooks.** `compose.coolify.yaml` (no host ports/custom net; migrate/seed inactive profile), resource limits, log rotation, secrets matrix; write the 3 runbooks incl. the revocation procedure.
-6. **Supabase roles/bootstrap + staging migration test.** Create runtime/migration roles + default-privilege grants; test migration on a disposable/staging target; **prove backup/restore**. *Gate:* restore drills pass (Identity + Supabase); staging migration succeeds.
+6. **Supabase roles/bootstrap + staging migration test.** Create
+   runtime/migration roles + default-privilege grants; test migration on a
+   disposable/staging target. Restore drills are waived for the disposable
+   portfolio deployment. *Gate:* staging migration succeeds.
 7. **Production schema migration** (explicit one-off, `pg_dump` first, approval-gated).
 8. **Deploy Identity + admin bootstrap** (`AUTH_COOKIE_SECURE=true`); capture UUID. *Gate:* `/health` green; admin can authenticate.
 9. **Explicit inventory + supplier seeds** (DML role). *Gate:* row counts verified; **no incident seed**.
@@ -260,9 +281,12 @@ Central API is a **persistent server holding a SQLAlchemy/psycopg2 pool — not 
 - **[RISK] First Supabase migration/seed** destructive-capable + approval-gated; `pg_dump` first.
 - **[ASSUMPTION] VPS IPv4/IPv6** decides direct-vs-session.
 - **[GOVERNANCE] Public Back Office link** changes delivered public behavior → visibility standard applies (owner requested it).
-- **[OPEN] New-code placement** (`docker/`, `compose*.yaml`, new briefs) needs sign-off per CLAUDE.md. Reconcile central-api README `--port 8002` to `:8000`. **No CI** — recommend a secret-scan gate before prod secrets land.
+- **[OPEN]** Quality/security CI remains incomplete even though container image
+  builds now run in GitHub Actions. Add secret scanning before production
+  secrets land.
 
-**Phase-1 owner inputs:** Supabase plan/region/backup tier + IPv4/IPv6; Identity & Postgres RPO/RTO; off-site backup destination; Coolify dashboard domain; build on VPS vs CI; verified Resend prod sender; is existing Supplier TinyDB data authoritative or regenerable.
+**Remaining Phase-1 owner inputs:** verified Resend production sender; whether
+existing Supplier TinyDB data is authoritative or regenerable.
 
 ---
 

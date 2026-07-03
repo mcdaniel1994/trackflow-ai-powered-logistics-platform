@@ -3,7 +3,8 @@
 ## Status
 
 Repository implementation complete; external infrastructure and production
-execution remain approval-gated.
+execution remain approval-gated. Production images are built on GitHub-hosted
+Actions runners and pulled from GHCR so the small VPS stays runtime-focused.
 
 ## Acceptance criteria
 
@@ -17,11 +18,21 @@ execution remain approval-gated.
 - Production incidents start empty.
 - Local and production Compose files stay separate.
 - Backup/restore, rollback, health checks, secrets, and deployment order are
-  documented before any production account is created.
+  documented. For this portfolio deployment, the owner explicitly accepts
+  disposable Supabase and Identity data without scheduled backups.
 
 ## Deferred owner inputs
 
-Confirm Supabase plan/region/backup tier and VPS address mode; Identity and
-Postgres RPO/RTO; off-site backup destination; Coolify dashboard domain; build
-location; verified Resend sender; and whether existing Supplier TinyDB data is
-authoritative. No external operation may infer these values.
+Confirmed owner decisions:
+
+- Supabase Free in `us-east-2`, reached through Supavisor Session mode on IPv4
+  port 5432 with TLS.
+- Supabase and Identity data are disposable portfolio data; recovery is
+  redeploy, recreate users, migrate, and reseed. This is not production-grade
+  durability.
+- Build the three production images in GitHub Actions and publish them to GHCR.
+- Use `coolify.forgehub.cloud` for the Coolify dashboard.
+
+Still required: verified Resend sender and a decision on whether the existing
+Supplier TinyDB data is authoritative. No external operation may infer these
+values.

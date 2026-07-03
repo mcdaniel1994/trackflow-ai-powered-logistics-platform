@@ -3,7 +3,12 @@
 ## Safety boundary
 
 Do not execute this runbook against production without explicit approval that
-names the target, confirms the backup, and accepts the recovery path.
+names the target and confirms either a backup or the disposable-data waiver,
+then accepts the recovery path.
+
+For the current Supabase Free portfolio deployment, the owner accepts no
+managed backup and disposable data. Before later risky migrations on meaningful
+data, take an off-site logical dump or stop and revisit this waiver.
 
 ## Role bootstrap template
 

@@ -28,8 +28,8 @@ count while retaining Identity as a separate security boundary.
    file while it is being written.
 3. Run migrations and the importer against staging, then compare every field,
    count, list order, and `has_contact_email`.
-4. Repeat against production only after explicit approval and a database
-   backup.
+4. Repeat against production only after explicit approval and either a database
+   backup or the documented disposable-data waiver.
 5. Point Back Office at Central API and observe through the agreed rollback
    window.
 6. Retire `services/supplier-directory/` only after the owner closes that
