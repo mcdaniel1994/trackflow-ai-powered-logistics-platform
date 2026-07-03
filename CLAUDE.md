@@ -41,6 +41,7 @@ Then read the active engagement brief and the README for every folder being modi
 | Workflow automations | `workflows/` |
 | Product agent capabilities | `skills/` |
 | Repo-wide scripts and utilities | `scripts/` |
+| Container and deployment definitions | `docker/`, `compose.yaml`, `compose.coolify.yaml` |
 
 ## Where New Engagement Code Goes
 
@@ -57,9 +58,11 @@ Then read the active engagement brief and the README for every folder being modi
   Built.
 
 - **Engagement 5** - `services/central-api/`
-  Built. Inventory and the Centralized Incident Manager use separate domains in
-  this service. See `docs/briefs/05-backend-inventory-management.md` and
-  `docs/planning/centralized-incident-manager.md`.
+  Built. Inventory, the Centralized Incident Manager, and the boundary-waived
+  Supplier Directory use separate domains in this service. See
+  `docs/briefs/05-backend-inventory-management.md`,
+  `docs/planning/centralized-incident-manager.md`, and
+  `docs/planning/supplier-directory-postgres-migration.md`.
 
 - **Engagement 6+** - TBD per engagement.
   Confirm with Cory before placing new code.

@@ -42,7 +42,9 @@ def engine(database_url: str) -> Engine:
 def clean_database(engine: Engine) -> Generator[None, None, None]:
     """Give every test deterministic tables without bypassing Alembic schema ownership."""
     with engine.begin() as connection:
-        connection.execute(text("TRUNCATE incidents, stock_exits, stock_entries, skus RESTART IDENTITY CASCADE"))
+        connection.execute(
+            text("TRUNCATE suppliers, incidents, stock_exits, stock_entries, skus RESTART IDENTITY CASCADE")
+        )
     yield
 
 
@@ -55,10 +57,14 @@ def signing_keys() -> tuple[str, str]:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode()
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
     return private_pem, public_pem
 
 

@@ -60,6 +60,13 @@ uv run --project services/identity python -m identity.cli create-admin
 
 The command prompts for the admin name, email, and password, refuses duplicate email addresses, stores only an Argon2id hash, and never prints the password.
 
+After restoring a TinyDB backup, clear restored session/reset state before the
+required RS256 key rotation:
+
+```bash
+uv run --project services/identity python -m identity.cli revoke-sessions
+```
+
 ## RS256 Keys
 
 Generate a local keypair for development:

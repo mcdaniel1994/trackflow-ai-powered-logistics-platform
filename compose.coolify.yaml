@@ -1,0 +1,93 @@
+name: trackflow-production
+x-runtime: &runtime
+  restart: unless-stopped
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: ["ALL"]
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "5"}
+
+services:
+  identity:
+    <<: *runtime
+    build: {context: ., dockerfile: docker/identity.Dockerfile}
+    expose: ["8000"]
+    environment:
+      IDENTITY_DB_PATH: /app/services/identity/data/identity.json
+      IDENTITY_JWT_PRIVATE_KEY: ${IDENTITY_JWT_PRIVATE_KEY:?required}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+      AUTH_COOKIE_SECURE: "true"
+      FRONTEND_BASE_URL: https://backoffice.forgehub.cloud
+      IDENTITY_CORS_ORIGINS: https://backoffice.forgehub.cloud
+      RESEND_API_KEY: ${RESEND_API_KEY:?required}
+      EMAIL_SENDER: ${EMAIL_SENDER:?required}
+    volumes: [identity-data:/app/services/identity/data]
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 768M}
+
+  central-api:
+    <<: *runtime
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    expose: ["8000"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      CENTRAL_API_CORS_ORIGINS: https://backoffice.forgehub.cloud
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+      DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
+      DATABASE_STATEMENT_TIMEOUT_MS: "15000"
+      DATABASE_LOCK_TIMEOUT_MS: "5000"
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "0.75", memory: 1G}
+
+  backoffice:
+    <<: *runtime
+    build: {context: ., dockerfile: docker/backoffice.Dockerfile}
+    expose: ["3000"]
+    environment:
+      IDENTITY_API_URL: http://identity:8000
+      CENTRAL_API_URL: http://central-api:8000
+      TALENT_API_URL: ${TALENT_API_URL:?required}
+      AUTH_COOKIE_SECURE: "true"
+    depends_on:
+      identity: {condition: service_healthy}
+      central-api: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "1.00", memory: 2G}
+
+  central-api-migrate:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["setup"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      MIGRATION_DATABASE_URL: ${MIGRATION_DATABASE_URL:?required}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+    command: [".venv/bin/alembic", "upgrade", "head"]
+
+  seed-inventory:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["setup"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+      SEED_USER_UUID: ${SEED_USER_UUID:?required}
+    command: [".venv/bin/seed-inventory"]
+
+  seed-suppliers:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["setup"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+    command: [".venv/bin/seed-suppliers"]
+
+volumes:
+  identity-data:

@@ -23,6 +23,10 @@ persists incidents and their lifecycle in PostgreSQL, while the authenticated
 Back Office `/incidents` route provides registration, filtering, status updates,
 and leadership summaries.
 
+Separate local and Coolify Compose paths now package Identity, Central API, and
+Back Office. Production execution remains approval-gated and is documented in
+`docs/runbooks/`.
+
 ---
 
 ## ❗ The Problem
@@ -150,6 +154,19 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### 🚢 Dockerization & Deployment Architecture *(prepared subproject)*
+
+- Local Docker Compose stack for Identity, Central API, Back Office, and disposable PostgreSQL
+- Separate Coolify Compose stack with private backends and explicit migration/seed profiles
+- Supplier Directory folded into Central API with a privacy-preserving importer
+- Backup, restore, migration, deployment, and rollback runbooks
+
+📁 Locations: `docker/`, `compose.yaml`, `compose.coolify.yaml`, and `docs/runbooks/`
+
+External production execution and the final Supplier Directory retirement remain approval-gated.
+
+---
+
 ## 🗺️ Roadmap
 
 | Engagement | Focus | Status |
@@ -194,7 +211,7 @@ trackflow/
 ├── services/                      # APIs and backend services
 │   ├── identity/                  # Python/FastAPI identity service
 │   ├── central-api/               # PostgreSQL inventory + incident domains
-│   └── incident-processor/        # Historical Python/FastAPI incident analysis tooling
+│   └── supplier-directory/        # Temporary rollback copy pending cutover observation
 │
 ├── packages/                      # Shared code libraries
 │   ├── shared/                    # @repo/shared-types: types + utilities (Engagement 2)

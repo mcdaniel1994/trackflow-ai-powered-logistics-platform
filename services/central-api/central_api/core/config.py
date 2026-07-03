@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=SERVICE_ROOT / ".env", extra="ignore", validate_default=True)
 
     database_url: str = ""
+    migration_database_url: str | None = None
+    database_connect_timeout_seconds: int = 10
+    database_statement_timeout_ms: int = 15_000
+    database_lock_timeout_ms: int = 5_000
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     identity_jwt_public_key: str = ""
     identity_jwt_algorithm: str = "RS256"
@@ -30,6 +34,11 @@ class Settings(BaseSettings):
         if not value.strip():
             raise ValueError("DATABASE_URL is required")
         return value.strip()
+
+    @property
+    def alembic_database_url(self) -> str:
+        """Use the dedicated DDL role when configured; local dev falls back safely."""
+        return (self.migration_database_url or self.database_url).strip()
 
     @field_validator("identity_jwt_algorithm")
     @classmethod

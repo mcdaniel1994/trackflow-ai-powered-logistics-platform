@@ -17,6 +17,15 @@ def get_engine() -> Engine:
         settings.database_url,
         pool_pre_ping=True,
         pool_recycle=300,
+        pool_size=5,
+        max_overflow=2,
+        connect_args={
+            "connect_timeout": settings.database_connect_timeout_seconds,
+            "options": (
+                f"-c statement_timeout={settings.database_statement_timeout_ms} "
+                f"-c lock_timeout={settings.database_lock_timeout_ms}"
+            ),
+        },
     )
 
 

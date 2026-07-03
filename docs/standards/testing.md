@@ -75,7 +75,6 @@ Python services (each is an isolated `uv` project; `testpaths = ["tests"]` per `
 
 ```
 uv run --project services/identity --extra dev pytest
-uv run --project services/incident-processor --extra dev pytest
 uv run --project services/supplier-directory --extra dev pytest
 ```
 

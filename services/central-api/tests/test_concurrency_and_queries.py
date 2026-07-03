@@ -126,7 +126,9 @@ def test_concurrent_incident_transitions_serialize_from_open(
 
     with ThreadPoolExecutor(max_workers=2) as executor:
         outcomes = sorted(
-            executor.map(attempt, (IncidentStatus.IN_PROGRESS, IncidentStatus.DISCARDED))
+            # OPEN->RESOLVED is always invalid while OPEN->DISCARDED is valid,
+            # so the assertion does not depend on which locked worker wins.
+            executor.map(attempt, (IncidentStatus.RESOLVED, IncidentStatus.DISCARDED))
         )
 
     assert outcomes == [200, 400]

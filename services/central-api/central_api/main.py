@@ -22,6 +22,8 @@ from .domains.incidents.service import IncidentError
 from .domains.inventory.router import router as inventory_router
 from .domains.inventory.schemas import HealthRead
 from .domains.inventory.service import InventoryError
+from .domains.suppliers.router import router as suppliers_router
+from .domains.suppliers.service import SupplierError
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,12 @@ def create_app() -> FastAPI:
             content={"error": {"code": exc.code, "message": exc.message, "fields": fields}},
         )
 
+    @app.exception_handler(SupplierError)
+    async def supplier_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, SupplierError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
     @app.exception_handler(SQLAlchemyError)
     async def database_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         """Catch unexpected driver failures while keeping URLs and SQL out of logs."""
@@ -107,6 +115,7 @@ def create_app() -> FastAPI:
 
     app.include_router(inventory_router)
     app.include_router(incidents_router)
+    app.include_router(suppliers_router)
     return app
 
 

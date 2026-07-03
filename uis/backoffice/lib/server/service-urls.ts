@@ -5,11 +5,7 @@ export function identityAPIURL() {
 }
 
 export function supplierDirectoryAPIURL() {
-  return (process.env.SUPPLIER_DIRECTORY_API_URL ?? "http://localhost:8001").replace(/\/$/, "");
-}
-
-export function incidentProcessorAPIURL() {
-  return (process.env.INCIDENT_PROCESSOR_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+  return centralAPIURL();
 }
 
 export function talentAPIURL() {

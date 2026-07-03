@@ -17,8 +17,7 @@ describe("BFF route handlers", () => {
     vi.restoreAllMocks();
     delete process.env.AUTH_COOKIE_SECURE;
     delete process.env.IDENTITY_API_URL;
-    delete process.env.INCIDENT_PROCESSOR_API_URL;
-    delete process.env.SUPPLIER_DIRECTORY_API_URL;
+    delete process.env.CENTRAL_API_URL;
     delete process.env.TALENT_API_URL;
   });
 
@@ -110,7 +109,7 @@ describe("BFF route handlers", () => {
   });
 
   it("forwards cookies and CSRF to supplier mutations", async () => {
-    process.env.SUPPLIER_DIRECTORY_API_URL = "http://supplier.test";
+    process.env.CENTRAL_API_URL = "http://supplier.test";
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('{"id":"s1"}', {
         status: 200,
@@ -200,7 +199,7 @@ describe("BFF route handlers", () => {
   });
 
   it("returns JSON 503 when an upstream service is unavailable", async () => {
-    process.env.SUPPLIER_DIRECTORY_API_URL = "http://supplier.test";
+    process.env.CENTRAL_API_URL = "http://supplier.test";
     const fetchMock = vi.fn().mockRejectedValue(new Error("ECONNREFUSED secret-token"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -219,7 +218,7 @@ describe("BFF route handlers", () => {
   });
 
   it("keeps non-error upstream rejections generic", async () => {
-    process.env.SUPPLIER_DIRECTORY_API_URL = "http://supplier.test";
+    process.env.CENTRAL_API_URL = "http://supplier.test";
     const fetchMock = vi.fn().mockRejectedValue("raw-secret-rejection");
     vi.stubGlobal("fetch", fetchMock);
 
@@ -235,7 +234,7 @@ describe("BFF route handlers", () => {
   });
 
   it("returns JSON 504 when an upstream service times out", async () => {
-    process.env.SUPPLIER_DIRECTORY_API_URL = "http://supplier.test";
+    process.env.CENTRAL_API_URL = "http://supplier.test";
     const timeout = Object.assign(new Error("hung request reset-link-secret"), { name: "TimeoutError" });
     const fetchMock = vi.fn().mockRejectedValue(timeout);
     vi.stubGlobal("fetch", fetchMock);
