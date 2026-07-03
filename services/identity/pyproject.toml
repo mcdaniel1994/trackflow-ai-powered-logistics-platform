@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 create-admin = "identity.cli:entrypoint"
+revoke-sessions = "identity.cli:revoke_entrypoint"
 
 [tool.uv.sources]
 trackflow-auth = { path = "../../packages/trackflow_auth", editable = true }

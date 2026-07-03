@@ -23,14 +23,14 @@ TinyDB file.
 Current deployable peers:
 
 - `services/identity/` - FastAPI + TinyDB identity service for Auth 1 backend authentication and API route protection. It is not Engagement 5.
-- `services/incident-processor/` - FastAPI service for the Incident Report Processor subproject. It is not Engagement 5.
-- `services/supplier-directory/` - FastAPI + TinyDB service for the Supplier Directory subproject. It is not Engagement 5.
+- `services/supplier-directory/` - legacy TinyDB rollback copy retained only
+  through the PostgreSQL supplier cutover observation window.
 - `services/central-api/` - Engagement 5 FastAPI modular monolith for closely related
-  core logistics domains, beginning with PostgreSQL-backed inventory.
+  core logistics domains: PostgreSQL-backed inventory, incidents, and suppliers.
 
-The Central API is a modular monolith inside its own deployable boundary, not a merger
-of the peer services above. New closely related logistics domains may later join its
-domain-oriented structure when an engagement explicitly scopes them.
+The Supplier Directory migration brief explicitly waives the default service
+boundary for suppliers. Identity remains separate and Central API never opens
+its TinyDB.
 
 Python services are independent `uv` projects, not npm workspaces. Use each service's
 `pyproject.toml`, lockfile, README commands, and environment configuration.

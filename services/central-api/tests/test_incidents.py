@@ -10,9 +10,7 @@ from central_api.domains.incidents.models import Incident
 from central_api.domains.incidents.seed import main as seed_main
 from central_api.domains.incidents.seed import seed_incidents
 
-FIXTURE = (
-    Path(__file__).parents[2] / "incident-processor" / "tests" / "fixtures" / "sample-incidents.csv"
-)
+FIXTURE = Path(__file__).parent / "fixtures" / "sample-incidents.csv"
 
 
 def create_incident(

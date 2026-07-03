@@ -21,6 +21,21 @@ def create_admin(*, name: str, email: str, password: str) -> str:
         store.close()
 
 
+def revoke_sessions() -> tuple[int, int]:
+    """Clear restored session state before the required signing-key rotation."""
+    store = TinyDBIdentityStore(get_db_path())
+    try:
+        with store.lock:
+            sessions = store.db.table("refresh_sessions")
+            resets = store.db.table("password_resets")
+            counts = (len(sessions), len(resets))
+            sessions.truncate()
+            resets.truncate()
+            return counts
+    finally:
+        store.close()
+
+
 # Parses the admin bootstrap command without exposing passwords.
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m identity.cli")
@@ -28,10 +43,13 @@ def main(argv: list[str] | None = None) -> int:
     create_parser = subparsers.add_parser("create-admin")
     create_parser.add_argument("--name")
     create_parser.add_argument("--email")
+    subparsers.add_parser("revoke-sessions")
 
     args = parser.parse_args(argv)
-    if args.command != "create-admin":
-        parser.error("Unsupported command")
+    if args.command == "revoke-sessions":
+        sessions, resets = revoke_sessions()
+        print(f"Revoked {sessions} refresh sessions and {resets} password reset records.")
+        return 0
 
     name = args.name or input("Admin name: ").strip()
     email = args.email or input("Admin email: ").strip()
@@ -54,6 +72,12 @@ def main(argv: list[str] | None = None) -> int:
 # Exposes the script entrypoint used by pyproject metadata.
 def entrypoint() -> None:
     raise SystemExit(main())
+
+
+def revoke_entrypoint() -> None:
+    """Expose a dedicated server-side executable without interactive parsing."""
+    sessions, resets = revoke_sessions()
+    print(f"Revoked {sessions} refresh sessions and {resets} password reset records.")
 
 
 if __name__ == "__main__":

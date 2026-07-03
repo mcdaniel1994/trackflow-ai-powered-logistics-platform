@@ -1,0 +1,75 @@
+name: trackflow-local
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trackflow_inventory}
+      POSTGRES_USER: ${POSTGRES_USER:-trackflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trackflow_local_only}
+    ports: ["55432:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  identity:
+    build: {context: ., dockerfile: docker/identity.Dockerfile}
+    environment:
+      IDENTITY_DB_PATH: /app/services/identity/data/identity.json
+      IDENTITY_JWT_PRIVATE_KEY: ${IDENTITY_JWT_PRIVATE_KEY}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
+      AUTH_COOKIE_SECURE: "false"
+      FRONTEND_BASE_URL: http://localhost:3000
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_SENDER: ${EMAIL_SENDER:-no-reply@trackflow.example}
+    volumes: [identity-data:/app/services/identity/data]
+    ports: ["8002:8000"]
+
+  migrate:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["setup"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      MIGRATION_DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [".venv/bin/alembic", "upgrade", "head"]
+
+  seed:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["setup"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
+      SEED_USER_UUID: ${SEED_USER_UUID:-}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: ["/bin/sh", "-c", ".venv/bin/seed-inventory && .venv/bin/seed-suppliers"]
+
+  central-api:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      CENTRAL_API_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports: ["8003:8000"]
+
+  backoffice:
+    build: {context: ., dockerfile: docker/backoffice.Dockerfile}
+    environment:
+      IDENTITY_API_URL: http://identity:8000
+      CENTRAL_API_URL: http://central-api:8000
+      TALENT_API_URL: ${TALENT_API_URL:-https://playground.4geeks.com/tracker/api/v1}
+      AUTH_COOKIE_SECURE: "false"
+    depends_on:
+      identity: {condition: service_healthy}
+      central-api: {condition: service_healthy}
+    ports: ["3000:3000"]
+
+volumes:
+  identity-data:

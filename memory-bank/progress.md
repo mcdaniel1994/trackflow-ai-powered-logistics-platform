@@ -15,9 +15,15 @@ _None — Engagement 6 is the next planned engagement._
 ## Subprojects
 
 - Centralized Incident Manager (spec: `docs/planning/centralized-incident-manager.md`) — built; remains a subproject rather than a numbered engagement. Persistent PostgreSQL CRUD, lifecycle transitions, summary metrics, and historical seed support live in `services/central-api/`; shared privacy-safe legacy validation lives in `packages/trackflow_incidents/`; and the Back Office manager lives at `/incidents`.
-- Incident Report Processor (spec: `docs/planning/incident-report-processor.md`) — retained as historical analysis tooling in `services/incident-processor/` and `scripts/analyze.py`. It no longer owns the primary Back Office `/incidents` page. The local dataset `scripts/incidents-trackflow.csv` is git-ignored and protected by `.agents/rules/sensitive-local-datasets.md`.
-- Supplier Directory (spec: `docs/planning/supplier-directory.md`) — built; explicitly **not** Engagement 5. Lives in `services/supplier-directory/` (FastAPI + TinyDB + idempotent seed command) and the backoffice supplier routes (`/suppliers`, `/suppliers/new`, `/suppliers/[id]`). The generated TinyDB file `services/supplier-directory/data/suppliers.json` is git-ignored, and default list/detail responses expose only `has_contact_email`; raw contact email is revealed only from the supplier detail page.
-- Auth 1 Backend Authentication and API Route Protection (spec: `docs/planning/auth/plans/auth-1-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `services/identity/` (FastAPI + TinyDB users/refresh sessions) and `packages/trackflow_auth/` (verify-only token/CSRF helpers), and protects Central API plus the supplier-directory and historical incident-processor business endpoints.
+- Incident Report Processor (spec: `docs/planning/incident-report-processor.md`) —
+  retired July 2026 after its fixture and privacy-safe import dependency moved
+  to Central API (`docs/archive/incident-report-processor-retirement.md`).
+- Supplier Directory (spec: `docs/planning/supplier-directory.md`) — folded
+  into Central API as a PostgreSQL domain with an idempotent TinyDB importer;
+  list/detail responses still expose only `has_contact_email`. The standalone
+  service and original TinyDB remain rollback assets until the production
+  observation window closes.
+- Auth 1 Backend Authentication and API Route Protection (spec: `docs/planning/auth/plans/auth-1-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `services/identity/` and `packages/trackflow_auth/`, and protects Central API plus the supplier-directory transition service.
 - Auth 2 Back Office Authentication (spec: `docs/planning/auth/plans/auth-2-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `uis/backoffice/` with a same-origin BFF under `app/api/*`, protected Back Office views, login/logout, profile, change-password, admin user management, temporary-password first-login flow, CSRF forwarding, centralized `401` handling, and frontend tests.
 - Auth 3 Password Reset and Account Recovery (spec: `docs/planning/auth/plans/auth-3-implementation-plan.md`) — built; explicitly **not** Engagement 5. Lives in `services/identity/` with hashed single-use TinyDB reset tokens and Resend email delivery, and in `uis/backoffice/` with public `/forgot-password` and `/reset-password` pages through the same-origin BFF.
 
@@ -33,6 +39,8 @@ _None — Engagement 6 is the next planned engagement._
 - Engagement 8 - AI agents.
 - Engagement 9 - Workflow automation with n8n.
 - Engagement 10 - Real-time dashboards and alerts.
+- Production execution of the prepared Coolify/Supabase deployment, restore
+  drills, and Supplier Directory retirement after its observation window.
 
 ## Open Decisions And Known Risks
 

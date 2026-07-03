@@ -49,8 +49,8 @@ These mirror [`docs/standards/production-readiness.md`](../../docs/standards/pro
   preview build.
 - **Merge to `main` →** `ci.yml` runs on `main`; Vercel promotes the production deployment for the
   public website from `main`. Keep branch protection requiring the CI checks so `main` stays green.
-- **Backend services** have no deploy automation yet — see the gaps in
-  [`docs/runbooks/README.md`](../../docs/runbooks/README.md).
+- **Backend services** deploy through Coolify from `compose.coolify.yaml`.
+  Production migrations and seeds remain explicit one-offs, not Actions jobs.
 
 ## Implementation Checklist (follow-up, out of scope for this docs task)
 

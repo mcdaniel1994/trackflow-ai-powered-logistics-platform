@@ -8,6 +8,7 @@ from sqlmodel import SQLModel
 
 from central_api.core.config import get_settings
 from central_api.domains.inventory import models as inventory_models  # noqa: F401
+from central_api.domains.suppliers import models as supplier_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
@@ -19,7 +20,7 @@ target_metadata = SQLModel.metadata
 
 def database_url() -> str:
     """Escape interpolation markers before passing the secret URL to Alembic config."""
-    return get_settings().database_url.replace("%", "%%")
+    return get_settings().alembic_database_url.replace("%", "%%")
 
 
 def run_migrations_offline() -> None:

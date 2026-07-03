@@ -7,9 +7,13 @@
 - `uis/website/` - public Next.js + TypeScript website (Engagement 4); sole home of the Engagement 1 marketing surface since the static `apps/marketing-site/` was retired in June 2026.
 - `uis/backoffice/` - internal Next.js + TypeScript shell (Engagement 4) that consumes Engagement 2 logic; hosts the Talent Pipeline Tracker at `/talent` (Engagement 3, migrated June 2026) and the Centralized Incident Manager at `/incidents`.
 - `services/identity/` - Python/FastAPI + TinyDB identity service for Auth 1 backend authentication, refresh sessions, and user management.
-- `services/central-api/` - Python/FastAPI modular monolith for Engagement 5 inventory and the Centralized Incident Manager subproject, with SQLModel, Alembic, and PostgreSQL; it verifies Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
-- `services/incident-processor/` - retained Python/FastAPI historical analysis tooling (CLI + API) for CX incident exports.
-- `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe legacy CSV validation, and normalization used by Central API and the historical processor.
+- `services/central-api/` - Python/FastAPI modular monolith for inventory,
+  incidents, and suppliers, with SQLModel, Alembic, and PostgreSQL; it verifies
+  Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
+- `compose.yaml` and `compose.coolify.yaml` define separate local and production
+  paths for Identity, Central API, and Back Office.
+- `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
+  legacy CSV validation, and normalization used by Central API.
 
 ## Repository Architecture
 
@@ -29,7 +33,7 @@ trackflow/
 ├── services/
 │   ├── identity/
 │   ├── central-api/
-│   └── incident-processor/
+│   └── supplier-directory/  # temporary rollback copy pending observation
 ├── agents/
 ├── skills/
 ├── data/

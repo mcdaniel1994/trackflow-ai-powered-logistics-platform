@@ -1,7 +1,7 @@
 # TrackFlow Central API
 
-TrackFlow's independently managed FastAPI service for PostgreSQL-backed inventory
-management and centralized operational incidents.
+TrackFlow's independently managed FastAPI service for PostgreSQL-backed
+inventory, centralized operational incidents, and suppliers.
 
 ## Delivery status
 
@@ -11,10 +11,8 @@ seeds, security and failure paths, aggregate queries, lifecycle transitions, and
 concurrent inventory/incident protection. The current baseline is 50 passing tests
 with 92% source coverage.
 
-Supabase has not been migrated or seeded. That smoke test remains approval-gated until
-the target is confirmed as disposable development infrastructure. Production deployment,
-backup/restore, rollback, monitoring, and a backend runbook remain operational
-follow-ups, so this README does not claim production deployment readiness.
+Supabase has not been migrated or seeded. Production execution and restore
+drills remain approval-gated; prepared procedures live in `docs/runbooks/`.
 
 ## Ownership and boundaries
 
@@ -50,7 +48,7 @@ uv sync --project services/central-api --extra dev
 uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
 uv run --project services/central-api seed-inventory
 uv run --project services/central-api seed-incidents \
-  services/incident-processor/tests/fixtures/sample-incidents.csv
+  services/central-api/tests/fixtures/sample-incidents.csv
 uv run --project services/central-api uvicorn central_api.main:app --reload --port 8002
 ```
 

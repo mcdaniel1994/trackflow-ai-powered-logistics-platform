@@ -23,6 +23,9 @@ become verifiable — do not document procedures that do not exist.
 | Runbook | Status | Scope |
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
+| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Prepared; production unverified | Coolify order, verification, and rollback |
+| [supabase-migrations.md](supabase-migrations.md) | Prepared; approval-gated | Database roles, backup, migration, and recovery |
+| [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Prepared; drill pending | Identity backup, isolated restore, revocation, and key rotation |
 
 ## Current Deployment Process (summary)
 
@@ -34,16 +37,16 @@ become verifiable — do not document procedures that do not exist.
   [frontend-vercel-deployment.md](frontend-vercel-deployment.md).
 - **Back office (`uis/backoffice/`)** deployment is **not confirmed** by anything in this repo
   (no `@vercel/analytics`, no committed deploy config). Do not assume it is deployed until verified.
-- **Backend services (`services/*`)** have **no deployment path yet** — they run locally via `uv`.
+- **Backend services** have a repository-defined Coolify Compose path that has
+  not yet been executed or production-verified.
 
 ## Known Gaps (no runbook yet — do not fabricate)
 
-- Backend service deployment (the three FastAPI services have no hosting/deploy procedure).
-- Rollback procedure for any surface.
-- Health checks / liveness endpoints across services (see `docs/standards/observability.md`).
+- Production verification of the prepared backend deployment and rollback.
+- External uptime monitoring and centralized log shipping.
 - Incident response (who responds, escalation, comms).
 - Environment/secrets management procedure.
-- Database/storage backup and restore (services use TinyDB file storage today).
+- Execution and evidence for the documented Identity and Supabase restore drills.
 
 ## Relationship to CI and Standards
 

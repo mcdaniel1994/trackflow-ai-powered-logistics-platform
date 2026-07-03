@@ -12,24 +12,20 @@ def ignore_tests(path: str) -> None:
     collect_ignore.append(path)
     collect_ignore_glob.append(f"{path}/*")
 
-has_incident_processor = importlib.util.find_spec("incident_processor") is not None
 has_supplier_directory = importlib.util.find_spec("supplier_directory") is not None
 has_identity = importlib.util.find_spec("identity") is not None
+has_central_api = importlib.util.find_spec("central_api") is not None
 
-if has_supplier_directory and not has_incident_processor:
-    ignore_tests("services/incident-processor/tests")
-
-if has_supplier_directory and not has_identity:
+if has_central_api:
     ignore_tests("services/identity/tests")
-
-if has_incident_processor and not has_supplier_directory:
     ignore_tests("services/supplier-directory/tests")
 
-if has_incident_processor and not has_identity:
+if has_supplier_directory and not has_identity and not has_central_api:
     ignore_tests("services/identity/tests")
+    ignore_tests("services/central-api/tests")
+    ignore_tests("packages/trackflow_incidents/tests")
 
-if has_identity and not has_incident_processor:
-    ignore_tests("services/incident-processor/tests")
-
-if has_identity and not has_supplier_directory:
+if has_identity and not has_supplier_directory and not has_central_api:
     ignore_tests("services/supplier-directory/tests")
+    ignore_tests("services/central-api/tests")
+    ignore_tests("packages/trackflow_incidents/tests")

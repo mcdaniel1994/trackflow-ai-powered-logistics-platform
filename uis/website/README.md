@@ -16,7 +16,8 @@ The app runs on `http://localhost:3000` by default.
 
 ## Environment Variables
 
-No environment variables are required for Engagement 4.
+- `NEXT_PUBLIC_BACKOFFICE_URL` - hosted Back Office login origin. Defaults to
+  `https://backoffice.forgehub.cloud`.
 
 ## Lead Form
 
