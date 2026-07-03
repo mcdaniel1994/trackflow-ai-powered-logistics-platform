@@ -24,7 +24,7 @@ become verifiable — do not document procedures that do not exist.
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
 | [backend-coolify-deployment.md](backend-coolify-deployment.md) | Prepared; production unverified | Coolify order, verification, and rollback |
-| [supabase-migrations.md](supabase-migrations.md) | Prepared; approval-gated | Database roles, disposable-data waiver, migration, and recovery |
+| [supabase-migrations.md](supabase-migrations.md) | Role bootstrap verified; migrations approval-gated | Two-role security rationale, verified role setup, disposable-data waiver, migration, and recovery |
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 
 ## Current Deployment Process (summary)
