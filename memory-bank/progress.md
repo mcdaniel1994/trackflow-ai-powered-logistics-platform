@@ -45,5 +45,6 @@ _None — Engagement 6 is the next planned engagement._
 ## Open Decisions And Known Risks
 
 - Lead-form persistence remains deferred and is not part of Engagement 5.
-- No CI workflow exists yet; add one in a follow-up.
+- Container image publishing runs in GitHub Actions and GHCR; application
+  quality, coverage, and security workflows remain follow-ups.
 - Junecoast tokens are duplicated across `uis/website/` and `uis/backoffice/`; promoting them into a shared package is a follow-up. (The third copy disappeared with the June 2026 retirement of `apps/talent-pipeline-tracker/`.)

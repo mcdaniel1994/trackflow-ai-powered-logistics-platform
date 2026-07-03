@@ -1,8 +1,9 @@
 # CI Workflows — Intended Architecture (scaffolding)
 
-**Status:** No executable CI workflows exist yet. This README documents the *intended* GitHub
-Actions architecture so the work has a clear home. **Do not create empty or non-functional
-workflow YAML** — add a `.yml` file only when it contains valid, purposeful behavior.
+**Status:** Container publishing is automated by `container-images.yml`.
+Application quality/security CI remains planned. **Do not create empty or
+non-functional workflow YAML** — add a `.yml` file only when it contains valid,
+purposeful behavior.
 
 This CI design enforces the quality gates defined in
 [`docs/standards/production-readiness.md`](../../docs/standards/production-readiness.md). That
@@ -12,7 +13,9 @@ standard is the source of truth for *what* must pass; the workflows here are *ho
 
 ## Current State (verified)
 
-- No `.github/workflows/*.yml` exist; there is no automated CI in this repository today.
+- `container-images.yml` builds the three production images on GitHub-hosted
+  runners and publishes `main` plus immutable `sha-<commit>` tags to GHCR.
+- No automated application test, coverage, or security workflow exists yet.
 - No pre-commit hooks; no coverage gating is wired.
 - Tests run locally per [`docs/standards/testing.md`](../../docs/standards/testing.md).
 - The public website is deployed via Vercel (see
@@ -25,10 +28,11 @@ Add these only when implemented with real behavior:
 
 | File | Trigger | Purpose |
 |---|---|---|
+| `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Build Linux AMD64 images on PRs; publish `main` and immutable commit tags to GHCR after merge or manual dispatch. |
 | `ci.yml` | PR + push to `main` | Per-package lint, `type-check`, build, and unit/integration tests (Python services via `uv`, UIs/packages via npm workspaces). Enforce the coverage policy from `testing.md`. |
 | `e2e.yml` | PR (paths: `uis/backoffice/**`) | Run the Playwright e2e suite (`uis/backoffice/tests/e2e/`). |
 | `security.yml` | PR + schedule | Dependency vulnerability scan and secret scanning; aligns with the security gate in `production-readiness.md`. |
-| `deploy.yml` | optional | Only if/when deploys move from Vercel-managed to Actions-driven. Until then, deployment stays in Vercel; document in the runbooks, not here. |
+| `deploy.yml` | optional | Future automatic Coolify trigger after images publish. `container-images.yml` deliberately does not deploy. |
 
 ## Required Quality Gates (must pass before merge)
 
@@ -49,12 +53,14 @@ These mirror [`docs/standards/production-readiness.md`](../../docs/standards/pro
   preview build.
 - **Merge to `main` →** `ci.yml` runs on `main`; Vercel promotes the production deployment for the
   public website from `main`. Keep branch protection requiring the CI checks so `main` stays green.
-- **Backend services** deploy through Coolify from `compose.coolify.yaml`.
-  Production migrations and seeds remain explicit one-offs, not Actions jobs.
+- **Backend services** deploy through Coolify from prebuilt GHCR images named
+  in `compose.coolify.yaml`. Production migrations and seeds remain explicit
+  one-offs, not Actions jobs.
 
 ## Implementation Checklist (follow-up, out of scope for this docs task)
 
-- [ ] Decide CI provider config (matrix for `uv` Python projects + npm workspaces).
+- [x] Publish deployable images through GitHub Actions and GHCR.
+- [ ] Decide quality-CI provider config (matrix for `uv` Python projects + npm workspaces).
 - [ ] Add `ci.yml`: lint, type-check, build, test for changed packages.
 - [ ] Wire coverage reporting and the threshold/ratchet from `testing.md`.
 - [ ] Add `e2e.yml` for back-office Playwright.

@@ -10,7 +10,8 @@ x-runtime: &runtime
 services:
   identity:
     <<: *runtime
-    build: {context: ., dockerfile: docker/identity.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-identity:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     expose: ["8000"]
     environment:
       IDENTITY_DB_PATH: /app/services/identity/data/identity.json
@@ -30,7 +31,8 @@ services:
 
   central-api:
     <<: *runtime
-    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     expose: ["8000"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}
@@ -47,7 +49,8 @@ services:
 
   backoffice:
     <<: *runtime
-    build: {context: ., dockerfile: docker/backoffice.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-backoffice:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     expose: ["3000"]
     environment:
       IDENTITY_API_URL: http://identity:8000
@@ -64,7 +67,8 @@ services:
         limits: {cpus: "1.00", memory: 2G}
 
   central-api-migrate:
-    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     profiles: ["setup"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}
@@ -73,7 +77,8 @@ services:
     command: [".venv/bin/alembic", "upgrade", "head"]
 
   seed-inventory:
-    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     profiles: ["setup"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}
@@ -82,7 +87,8 @@ services:
     command: [".venv/bin/seed-inventory"]
 
   seed-suppliers:
-    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
     profiles: ["setup"]
     environment:
       DATABASE_URL: ${DATABASE_URL:?required}

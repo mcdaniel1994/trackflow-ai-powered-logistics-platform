@@ -12,6 +12,9 @@
   Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `compose.yaml` and `compose.coolify.yaml` define separate local and production
   paths for Identity, Central API, and Back Office.
+- `.github/workflows/container-images.yml` builds Linux AMD64 production images
+  on GitHub-hosted runners and publishes commit-pinned tags to GHCR; the
+  production Compose stack pulls rather than builds them on the VPS.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
