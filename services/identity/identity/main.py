@@ -17,7 +17,7 @@ from trackflow_auth import (
 )
 
 from .config import IdentitySettings, get_settings
-from .constants import STATUS_ACTIVE, STATUS_DISABLED, STATUS_SUSPENDED
+from .constants import STATUS_DISABLED, STATUS_SUSPENDED
 from .dependencies import get_current_user, require_admin, require_password_current, require_self_or_admin, verifier_config
 from .email import ResendEmailSender
 from .models import (
@@ -41,7 +41,7 @@ from .repository import (
     TinyDBSessionRepository,
     TinyDBUserRepository,
 )
-from .security import clear_auth_cookies, set_auth_cookies
+from .security import clear_auth_cookies, set_auth_cookies, validate_jwt_signing_keys
 from .service import AuthService, AuthenticationError, NotFoundError, PasswordResetError, UserService
 
 PASSWORD_RESET_MESSAGE = "If that address is registered, you'll receive a link shortly."
@@ -53,6 +53,7 @@ def create_app() -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings = get_settings()
+        validate_jwt_signing_keys(settings)
         store = TinyDBIdentityStore(settings.db_path)
         user_repository = TinyDBUserRepository(store)
         session_repository = TinyDBSessionRepository(store)

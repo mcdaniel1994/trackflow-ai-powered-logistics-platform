@@ -12,6 +12,11 @@
   Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `compose.yaml` and `compose.coolify.yaml` define separate local and production
   paths for Identity, Central API, and Back Office.
+- The production stack is verified on Coolify at
+  `https://backoffice.forgehub.cloud`. Back Office is the only public service;
+  Identity and Central API remain private on the Coolify network. Supabase uses
+  separate runtime and migration roles through the IPv4 Supavisor Session
+  pooler, and the current schema is at Alembic revision `20260702_0003`.
 - `.github/workflows/container-images.yml` builds Linux AMD64 production images
   on GitHub-hosted runners and publishes commit-pinned tags to GHCR; the
   production Compose stack pulls rather than builds them on the VPS.
@@ -61,6 +66,8 @@ trackflow/
 - `uis/` is the sole UI workspace for public and internal Next.js + TypeScript interfaces.
 - `services/` hosts independently managed backend services. Python/FastAPI services are intentionally not npm workspace members. Engagement 5 lives in `services/central-api/`.
 - Auth 1 backend authentication lives in `services/identity/` with reusable verification helpers in `packages/trackflow_auth/`; Central API consumes those helpers while Identity remains the sole TinyDB owner.
+- Identity validates that its RS256 private/public PEM values are complete,
+  parseable, RSA, and matching before opening storage or becoming healthy.
 - npm workspaces are wired for `packages/*` and `uis/*`.
 - `packages/shared` is consumed in this repo as `@repo/shared-types`; `uis/backoffice/` is the first workspace consumer.
 - `packages/shared` exposes TypeScript source directly. Next.js consumers transpile it with `transpilePackages`; future plain Node services may need a build step or service-side transpilation.

@@ -4,9 +4,9 @@ Operational runbooks for deploying, operating, and recovering TrackFlow services
 step-by-step operational procedure — distinct from a **standard** (`docs/standards/`, the rules code
 must follow) and a **brief** (`docs/briefs/`, engagement scope).
 
-**Status:** Early scaffolding. Only the frontend deployment runbook exists today, and it documents a
-partly Vercel-managed process with known gaps (below). Add runbooks as real operational procedures
-become verifiable — do not document procedures that do not exist.
+**Status:** The Vercel frontend procedure is partial, while the Coolify backend
+and Back Office deployment plus Supabase role/migration procedure are
+production-verified. Remaining operational gaps are tracked below.
 
 ---
 
@@ -23,8 +23,8 @@ become verifiable — do not document procedures that do not exist.
 | Runbook | Status | Scope |
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
-| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Prepared; production unverified | Coolify order, verification, and rollback |
-| [supabase-migrations.md](supabase-migrations.md) | Role bootstrap verified; migrations approval-gated | Two-role security rationale, verified role setup, disposable-data waiver, migration, and recovery |
+| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Production verified | Coolify order, verification, troubleshooting, and rollback |
+| [supabase-migrations.md](supabase-migrations.md) | Production migration verified; future changes approval-gated | Two-role security rationale, verified role setup, disposable-data waiver, migration, and recovery |
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 
 ## Current Deployment Process (summary)
@@ -35,14 +35,15 @@ become verifiable — do not document procedures that do not exist.
   (env vars, branch mapping, build config) live in the Vercel dashboard, not in this repo (no
   `vercel.json` is committed). Details and the verified/unverified split are in
   [frontend-vercel-deployment.md](frontend-vercel-deployment.md).
-- **Back office (`uis/backoffice/`)** deployment is **not confirmed** by anything in this repo
-  (no `@vercel/analytics`, no committed deploy config). Do not assume it is deployed until verified.
-- **Backend services** have a repository-defined Coolify Compose path that has
-  not yet been executed or production-verified.
+- **Back office (`uis/backoffice/`)** is production-verified through Coolify at
+  `https://backoffice.forgehub.cloud`.
+- **Identity and Central API** run privately in the same Coolify Compose stack.
+  Neither service has a public domain or host-port mapping.
 
 ## Known Gaps (no runbook yet — do not fabricate)
 
-- Production verification of the prepared backend deployment and rollback.
+- A live rollback drill; the rollback procedure is documented but has not been
+  executed against production.
 - External uptime monitoring and centralized log shipping.
 - Incident response (who responds, escalation, comms).
 - Environment/secrets management procedure.
@@ -57,9 +58,10 @@ become verifiable — do not document procedures that do not exist.
 
 ## Implementation Checklist (follow-up)
 
-- [ ] Verify and document the back-office deployment target (or confirm it is not deployed).
-- [ ] Add a backend service deployment runbook once a hosting target is chosen.
-- [ ] Add rollback steps to each deployment runbook.
-- [ ] Define and document health-check endpoints, then a monitoring runbook.
+- [x] Verify and document the Back Office deployment target.
+- [x] Add and production-verify the backend service deployment runbook.
+- [x] Add rollback steps to the backend deployment runbook.
+- [x] Define and verify Identity, Central API, and Back Office health endpoints.
+- [ ] Add external uptime monitoring and a monitoring runbook.
 - [ ] Write an incident-response runbook.
 - [ ] Document environment/secrets management.

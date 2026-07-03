@@ -5,8 +5,12 @@
 The two-role bootstrap was verified on July 2, 2026 against the portfolio
 Supabase Free project in `us-east-2` through Supavisor Session mode on port
 `5432`. Both roles authenticated over TLS, and the migration role's future
-table and sequence grants were verified. No production migration or seed was
-run during role setup.
+table and sequence grants were verified.
+
+The first production migration was separately approved and completed on July
+3, 2026 UTC through Alembic revision `20260702_0003`. The runtime role's CRUD
+access was verified across all six tables. After separate approval, inventory
+and 15 suppliers were seeded; production incidents remained empty.
 
 ## Safety boundary
 

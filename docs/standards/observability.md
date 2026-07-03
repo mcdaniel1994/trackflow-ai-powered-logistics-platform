@@ -62,13 +62,15 @@ logging must be covered the same way (see [testing.md](testing.md)).
 
 ## 4. Current State & Gaps
 
-Verified today: Python services use the standard `logging` module; sensitive-data exclusion is
-tested. Not yet in place (intentional gaps, not requirements met):
+Verified today: Python services use the standard `logging` module;
+sensitive-data exclusion is tested; Identity, Central API, and Back Office
+expose container health checks that were verified during the Coolify
+production rollout. Not yet in place (intentional gaps, not requirements met):
 
 - No centralized/structured log aggregation or retention.
 - No metrics, tracing, or request-correlation IDs.
 - No alerting or uptime monitoring.
-- No standardized health-check endpoints across services.
+- No external uptime monitor or centralized health dashboard.
 
 These are tracked for the future CI/observability and operations work in
 `../../.github/workflows/README.md` and `../runbooks/README.md`. Until they exist, this standard

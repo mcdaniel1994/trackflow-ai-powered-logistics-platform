@@ -9,6 +9,9 @@ from uuid import uuid4
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
+from cryptography.exceptions import UnsupportedAlgorithm
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 from fastapi import Response
 from jose import jwt
 
@@ -19,6 +22,29 @@ from .constants import TOKEN_TYPE_ACCESS
 
 # Configures Argon2id with the Auth 1 memory-hard parameters.
 PASSWORD_HASHER = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
+JWT_CONFIGURATION_MESSAGE = "Identity RS256 key configuration is invalid."
+
+
+class JWTConfigurationError(RuntimeError):
+    """Raised when Identity cannot safely sign and verify access tokens."""
+
+
+# Rejects incomplete, malformed, non-RSA, or mismatched signing keys at startup.
+def validate_jwt_signing_keys(settings: IdentitySettings) -> None:
+    try:
+        if settings.jwt_algorithm != "RS256":
+            raise ValueError("unsupported JWT algorithm")
+
+        private_key = load_pem_private_key(settings.jwt_private_key.encode("utf-8"), password=None)
+        public_key = load_pem_public_key(settings.jwt_public_key.encode("utf-8"))
+
+        if not isinstance(private_key, rsa.RSAPrivateKey) or not isinstance(public_key, rsa.RSAPublicKey):
+            raise ValueError("JWT keys must be RSA")
+        if private_key.public_key().public_numbers() != public_key.public_numbers():
+            raise ValueError("JWT key pair does not match")
+    except (TypeError, ValueError, UnsupportedAlgorithm):
+        # The outward startup failure stays generic so PEM contents never reach logs.
+        raise JWTConfigurationError(JWT_CONFIGURATION_MESSAGE) from None
 
 
 # Centralizes timezone-aware UTC timestamps for auth records.

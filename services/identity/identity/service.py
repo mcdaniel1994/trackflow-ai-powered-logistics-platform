@@ -9,10 +9,10 @@ from urllib.parse import urlencode
 from uuid import uuid4
 
 from .config import IdentitySettings
-from .constants import ROLE_ADMIN, ROLE_USER, STATUS_ACTIVE, STATUS_DISABLED, STATUS_SUSPENDED
+from .constants import ROLE_ADMIN, ROLE_USER, STATUS_ACTIVE, STATUS_DISABLED
 from .email import EmailDeliveryError, EmailSender
 from .models import UserCreate, UserCreated, UserPublic, UserUpdate, normalize_email, to_public_user
-from .repository import DuplicateEmailError, PasswordResetRepository, SessionRepository, UserRepository
+from .repository import PasswordResetRepository, SessionRepository, UserRepository
 from .security import (
     generate_password_reset_token,
     generate_csrf_token,
