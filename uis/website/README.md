@@ -16,8 +16,8 @@ The app runs on `http://localhost:3000` by default.
 
 ## Environment Variables
 
-- `NEXT_PUBLIC_BACKOFFICE_URL` - hosted Back Office login origin. Defaults to
-  `https://backoffice.forgehub.cloud`.
+- `NEXT_PUBLIC_BACKOFFICE_URL` - hosted Back Office login origin used by both
+  desktop and mobile navigation. Defaults to `https://backoffice.forgehub.cloud`.
 
 ## Lead Form
 

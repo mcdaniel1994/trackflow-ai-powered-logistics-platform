@@ -30,6 +30,28 @@ describe("LoginForm", () => {
 
     expect(screen.queryByText(registrationPattern)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /forgot your password/i })).toHaveAttribute("href", "/forgot-password");
+    expect(screen.getByRole("button", { name: /admin demo/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /employee demo/i })).toBeInTheDocument();
+  });
+
+  it("autofills each demo account while keeping the password masked", async () => {
+    const user = userEvent.setup();
+    render(<LoginForm />);
+
+    const emailInput = screen.getByLabelText(/email/i);
+    const passwordInput = screen.getByLabelText(/password/i);
+
+    await user.click(screen.getByRole("button", { name: /admin demo/i }));
+    expect(emailInput).toHaveValue("corymcdaniel01@gmail.com");
+    expect(passwordInput).toHaveValue("password123");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(screen.getByRole("status")).toHaveTextContent(/admin demo credentials filled in/i);
+
+    await user.click(screen.getByRole("button", { name: /employee demo/i }));
+    expect(emailInput).toHaveValue("employee@trackflow.com");
+    expect(passwordInput).toHaveValue("password123");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(screen.getByRole("status")).toHaveTextContent(/employee demo credentials filled in/i);
   });
 
   it("logs in and honors a safe next path", async () => {
