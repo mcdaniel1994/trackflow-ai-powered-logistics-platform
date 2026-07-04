@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from fastapi import Request
@@ -22,7 +23,7 @@ SAFE_MESSAGE_BY_TYPE = {
 }
 
 
-def safe_validation_errors(errors: list[dict[str, Any]]) -> list[dict[str, object]]:
+def safe_validation_errors(errors: Sequence[Mapping[str, Any]]) -> list[dict[str, object]]:
     safe_errors: list[dict[str, object]] = []
 
     for error in errors:

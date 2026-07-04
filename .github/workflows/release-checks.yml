@@ -1,0 +1,124 @@
+name: Release checks
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: identity
+            label: Identity
+            runtime: python
+            command: |
+              uv run --project services/identity --extra dev ruff check services/identity
+              uv run --project services/identity --extra dev mypy --config-file services/identity/pyproject.toml services/identity/identity
+              uv run --project services/identity --extra dev pytest -c services/identity/pyproject.toml services/identity/tests --cov=identity --cov-report=term-missing
+              uv build --project services/identity
+          - name: central-api
+            label: Central API
+            runtime: python
+            command: |
+              uv run --project services/central-api --extra dev ruff check services/central-api/central_api services/central-api/tests
+              uv run --project services/central-api --extra dev mypy --config-file services/central-api/pyproject.toml services/central-api/central_api
+              uv run --project services/central-api --extra dev pytest -c services/central-api/pyproject.toml services/central-api/tests --cov=central_api --cov-config=services/central-api/pyproject.toml --cov-report=term-missing
+              uv build --project services/central-api
+          - name: trackflow-auth
+            label: trackflow_auth
+            runtime: python
+            command: |
+              uv run --project packages/trackflow_auth --with ruff ruff check packages/trackflow_auth
+              uv run --project packages/trackflow_auth --with mypy mypy packages/trackflow_auth/trackflow_auth
+              uv run --project packages/trackflow_auth --with pytest --with pytest-cov pytest -c packages/trackflow_auth/pyproject.toml packages/trackflow_auth/tests --cov=trackflow_auth --cov-report=term-missing
+              uv build --project packages/trackflow_auth
+          - name: trackflow-incidents
+            label: trackflow_incidents
+            runtime: python
+            command: |
+              uv run --project packages/trackflow_incidents --extra dev ruff check packages/trackflow_incidents
+              uv run --project packages/trackflow_incidents --extra dev mypy --config-file packages/trackflow_incidents/pyproject.toml packages/trackflow_incidents/trackflow_incidents
+              uv run --project packages/trackflow_incidents --extra dev pytest -c packages/trackflow_incidents/pyproject.toml packages/trackflow_incidents/tests
+              uv build --project packages/trackflow_incidents
+          - name: backoffice
+            label: Back Office
+            runtime: node
+            command: |
+              npm run type-check --workspace trackflow-backoffice
+              npm run lint --workspace trackflow-backoffice
+              npm run test --workspace trackflow-backoffice
+              npm run build --workspace trackflow-backoffice
+          - name: shared
+            label: Shared TypeScript
+            runtime: node
+            command: |
+              npm run type-check --workspace @repo/shared-types
+              npm run build --workspace @repo/shared-types
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        if: matrix.runtime == 'python'
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Set up Node.js
+        if: matrix.runtime == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install npm dependencies
+        if: matrix.runtime == 'node'
+        run: npm ci
+
+      - name: Start disposable Central API PostgreSQL
+        if: matrix.name == 'central-api'
+        env:
+          CENTRAL_API_POSTGRES_PORT: "55432"
+          POSTGRES_DB: trackflow_inventory
+          POSTGRES_PASSWORD: trackflow_ci_local_only
+          POSTGRES_USER: trackflow
+        run: |
+          docker compose -f services/central-api/compose.yml up -d
+          for _ in {1..30}; do
+            if docker compose -f services/central-api/compose.yml exec -T postgres \
+              pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Disposable Central API PostgreSQL did not become ready." >&2
+          exit 1
+
+      - name: Apply Central API schema to disposable PostgreSQL
+        if: matrix.name == 'central-api'
+        env:
+          DATABASE_URL: postgresql+psycopg2://trackflow:trackflow_ci_local_only@127.0.0.1:55432/trackflow_inventory
+        run: uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
+
+      - name: Run ${{ matrix.label }} release checks
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/${{ matrix.name }}.coverage
+          DATABASE_URL: postgresql+psycopg2://trackflow:trackflow_ci_local_only@127.0.0.1:55432/trackflow_inventory
+        run: ${{ matrix.command }}
+
+      - name: Stop disposable Central API PostgreSQL
+        if: always() && matrix.name == 'central-api'
+        env:
+          CENTRAL_API_POSTGRES_PORT: "55432"
+          POSTGRES_DB: trackflow_inventory
+          POSTGRES_PASSWORD: trackflow_ci_local_only
+          POSTGRES_USER: trackflow
+        run: docker compose -f services/central-api/compose.yml down --volumes

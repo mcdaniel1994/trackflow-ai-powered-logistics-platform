@@ -4,7 +4,10 @@
 
 Production-verified on July 3, 2026 UTC (July 2 America/Chicago). Future
 production migrations, seeds, DNS, firewall, deployment, and rollback actions
-still require explicit owner approval.
+still require explicit owner approval. The repository-side automated SHA
+deployment workflow is implemented, and its one-time Coolify/GitHub production
+configuration was completed July 3, 2026. It has not yet completed its first
+approved production run or a live rollback drill.
 
 ## Verified production record
 
@@ -26,6 +29,11 @@ still require explicit owner approval.
   inventory/supplier/incident pages, and private backend exposure were verified.
 - Supabase Free and the Identity volume still have no scheduled backups under
   the accepted disposable-data waiver.
+- Coolify `4.1.2` API access is enabled; the production image-tag variable is
+  available at Buildtime and Runtime; native Git auto-deploy is disabled; and
+  the GitHub Production environment has required review, a `main`-only rule,
+  the two deployment secrets, and the two non-secret application coordinates.
+  No token, webhook URL, UUID, or environment value is recorded here.
 
 ## Prerequisites
 
@@ -46,9 +54,58 @@ still require explicit owner approval.
   production variable referenced with `${NAME:?required}` must be available at
   Buildtime and Runtime, even though this stack pulls prebuilt images. Keep both
   JWT values marked Multiline.
-- Keep Coolify automatic deployment disabled initially. A push to `main` can
-  reach Coolify before GitHub Actions finishes publishing all three images;
-  deploy manually only after the workflow is green.
+- Keep Coolify native Git auto-deploy disabled. GitHub Actions publishes and
+  preflights all three images before an approved deployment, and a native
+  Coolify push hook would race that sequence.
+
+## Automated SHA deployment
+
+Normal production releases use `.github/workflows/container-images.yml` and
+`.github/workflows/deploy-production.yml`:
+
+1. Merge an eligible runtime or workflow change to `main`.
+2. Wait for every job in `release-checks.yml` to pass.
+3. Confirm all three GHCR image jobs publish the same immutable
+   `sha-<40-lowercase-hex>` tag.
+4. Review and approve the waiting GitHub `production` Environment deployment.
+5. Let the workflow confirm all three manifests, select the single production
+   (non-preview) `TRACKFLOW_IMAGE_TAG`, require its Buildtime and Runtime flags,
+   preserve its metadata plus every other production/preview record, trigger
+   the Coolify webhook, and poll the returned deployment for about 15 minutes.
+6. Verify Identity, Central API, and Back Office health plus the authenticated
+   inventory, supplier, and incident paths. Confirm the migration and seed
+   profile services remain stopped.
+
+The workflow never runs migrations or seeds and does not automatically roll
+back. A failed deployment reports the attempted SHA. A timeout means GitHub
+stopped polling; the Coolify deployment may still be running, so inspect
+Coolify before approving another deployment or rollback.
+
+Before enabling the first run, create the GitHub `production` Environment with
+required reviewers. Store `COOLIFY_TOKEN` and `COOLIFY_WEBHOOK` as Environment
+secrets, and `COOLIFY_BASE_URL` plus `COOLIFY_APPLICATION_UUID` as Environment
+variables. The Coolify token needs only the permissions required to list
+application environment metadata, update one environment variable, and inspect
+and trigger deployments: current Coolify v4 names those token permissions
+`read`, `write`, and `deploy`. Do not grant `root`; `read:sensitive` is not
+needed by this workflow.
+
+Coolify `4.1.2` returns production and preview environment records together
+from the application env endpoint, even when preview deployments are disabled.
+The workflow distinguishes them with `is_preview` and updates only the
+production record. It also accepts the `deployments[0].deployment_uuid`
+response envelope returned by that version's authenticated deploy webhook.
+
+Rotate either credential by replacing its GitHub Environment secret:
+
+- For `COOLIFY_TOKEN`, create and test a replacement least-privilege token,
+  replace the secret, then revoke the old token.
+- For `COOLIFY_WEBHOOK`, rotate the deploy webhook in Coolify, replace the
+  secret, and invalidate the previous webhook.
+
+Never print either value, paste it into an issue or workflow input, or commit it.
+After rotation, use an approved deployment of a known immutable SHA to verify
+the integration; do not use migrations or seeds as a credential test.
 
 ## Order
 
@@ -100,7 +157,17 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 
 ## Rollback
 
-Set `TRACKFLOW_IMAGE_TAG` to the previous published `sha-<full-commit>` tag and
-redeploy the Compose stack. Never automatically downgrade the schema; use
-expand/contract and forward fixes. With the accepted no-backup waiver, a
-database or Identity-volume loss is recovered by recreation rather than restore.
+1. In GitHub Actions, select **Deploy production** and choose **Run workflow**.
+2. Enter the known-good `sha-<40-lowercase-hex>` image tag.
+3. Approve the waiting `production` Environment deployment.
+4. Wait for manifest preflight and Coolify polling to finish, then perform the
+   health and authenticated-path checks from the automated flow above.
+
+Invalid tags and tags missing any of the three manifests fail before a Coolify
+mutation. A rollback uses the same single-variable update and approval gate as
+a forward deploy. It does not run migrations or seeds and does not
+automatically downgrade the schema; use expand/contract and forward fixes.
+
+No live automated rollback drill has run yet. With the accepted no-backup
+waiver, a database or Identity-volume loss is recovered by recreation rather
+than restore.

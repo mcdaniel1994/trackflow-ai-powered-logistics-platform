@@ -6,7 +6,9 @@ must follow) and a **brief** (`docs/briefs/`, engagement scope).
 
 **Status:** The Vercel frontend procedure is partial, while the Coolify backend
 and Back Office deployment plus Supabase role/migration procedure are
-production-verified. Remaining operational gaps are tracked below.
+production-verified. Repository-side approval-gated SHA deployment and manual
+workflow rollback are implemented; their first live run and rollback drill
+remain outstanding.
 
 ---
 
@@ -23,7 +25,7 @@ production-verified. Remaining operational gaps are tracked below.
 | Runbook | Status | Scope |
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
-| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Production verified | Coolify order, verification, troubleshooting, and rollback |
+| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Production verified; automated workflow awaits first live run | Coolify order, automated SHA deployment, verification, troubleshooting, credential rotation, and rollback |
 | [supabase-migrations.md](supabase-migrations.md) | Production migration verified; future changes approval-gated | Two-role security rationale, verified role setup, disposable-data waiver, migration, and recovery |
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 
@@ -39,6 +41,10 @@ production-verified. Remaining operational gaps are tracked below.
   `https://backoffice.forgehub.cloud`.
 - **Identity and Central API** run privately in the same Coolify Compose stack.
   Neither service has a public domain or host-port mapping.
+- **Eligible Back Office/backend merges to `main`** now pass reusable release
+  checks, publish three immutable GHCR images, wait for GitHub `production`
+  approval, and then deploy the exact SHA through Coolify. Manual dispatch of
+  the same workflow is the rollback path.
 
 ## Known Gaps (no runbook yet — do not fabricate)
 
@@ -62,6 +68,8 @@ production-verified. Remaining operational gaps are tracked below.
 - [x] Add and production-verify the backend service deployment runbook.
 - [x] Add rollback steps to the backend deployment runbook.
 - [x] Define and verify Identity, Central API, and Back Office health endpoints.
+- [x] Add repository-side approval-gated SHA deployment and workflow rollback.
+- [ ] Complete the first approved automated deployment and a separate live rollback drill.
 - [ ] Add external uptime monitoring and a monitoring runbook.
 - [ ] Write an incident-response runbook.
 - [ ] Document environment/secrets management.
