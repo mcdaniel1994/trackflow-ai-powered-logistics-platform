@@ -77,9 +77,11 @@ false` so all report:
   (`is_preview == false`) `TRACKFLOW_IMAGE_TAG`, and update only that record.
   Require Buildtime+Runtime, preserve its accepted metadata explicitly, and
   verify every other production/preview record by UUID remains unchanged.
-  Base URL/UUID come from Environment **variables**; the token comes from an
-  Environment **secret**. Curl uses `--fail-with-body` and Bearer authorization;
-  never print the token or full response bodies that could echo secrets.
+  Base URL, application UUID, token, and webhook all come from Environment
+  **secrets** so GitHub masks every production coordinate before steps begin.
+  Validate the origin and UUID format before any request. Curl uses
+  `--fail-with-body` and Bearer authorization; never print the token or full
+  response bodies that could echo secrets.
 - **Trigger + poll:** call the Coolify deploy webhook, capture the returned
   deployment id (including Coolify 4.1.2's
   `deployments[0].deployment_uuid` envelope), and poll its status until
@@ -160,9 +162,10 @@ Touch only what this change makes true; do not overstate (no live rollback drill
 6. Risks / API-compat questions (below).
 
 ## Manual External Setup (owner-only — codex must NOT do these)
-- **GitHub:** create a `production` Environment with **required reviewers**. Add Environment
-  **secrets** `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`; Environment **variables** `COOLIFY_BASE_URL`,
-  `COOLIFY_APPLICATION_UUID`. Confirm branch protection still passes with new required checks.
+- **GitHub:** create a `production` Environment with **required reviewers**. Add
+  Environment **secrets** `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
+  `COOLIFY_BASE_URL`, and `COOLIFY_APPLICATION_UUID`. Confirm branch protection
+  still passes with new required checks.
 - **Coolify:** create a least-privilege API token (deploy + env-update only), capture the deploy
   webhook URL and application UUID, and **keep native Git auto-deploy disabled** so it can't race
   image publication.
