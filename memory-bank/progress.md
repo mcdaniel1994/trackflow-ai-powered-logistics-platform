@@ -49,8 +49,12 @@ _None — Engagement 6 is the next planned engagement._
 ## Open Decisions And Known Risks
 
 - Lead-form persistence remains deferred and is not part of Engagement 5.
-- Container image publishing runs in GitHub Actions and GHCR; application
-  quality, coverage, and security workflows remain follow-ups.
+- Production-target release checks now gate GHCR image publishing, and eligible
+  `main` builds proceed to an approval-gated, SHA-pinned Coolify deployment.
+  The Coolify `4.1.2` and GitHub Production environment prerequisites are
+  configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
+  follow-ups; the first live automated deployment and rollback drill have not
+  run.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

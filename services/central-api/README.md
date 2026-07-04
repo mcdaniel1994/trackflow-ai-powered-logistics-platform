@@ -8,8 +8,8 @@ inventory, centralized operational incidents, and suppliers.
 Engagement 5 inventory and the Centralized Incident Manager subproject are delivered
 locally. The release suite covers disposable-PostgreSQL migration rollback, repeatable
 seeds, security and failure paths, aggregate queries, lifecycle transitions, and
-concurrent inventory/incident protection. The current baseline is 50 passing tests
-with 92% source coverage.
+concurrent inventory/incident protection. The current baseline is 56 passing tests
+with 91% branch-aware source coverage.
 
 The portfolio Supabase production project is migrated through Alembic revision
 `20260702_0003`. Runtime-role CRUD, Central API health, approved inventory and

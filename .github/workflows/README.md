@@ -1,8 +1,8 @@
-# CI Workflows — Intended Architecture (scaffolding)
+# CI Workflows
 
-**Status:** Container publishing is automated by `container-images.yml`.
-Application quality/security CI remains planned. **Do not create empty or
-non-functional workflow YAML** — add a `.yml` file only when it contains valid,
+**Status:** Release checks, container publishing, and approval-gated production deployment are
+implemented. Broad pull-request CI, browser E2E, and security scanning remain planned. **Do not
+create empty or non-functional workflow YAML** — add a `.yml` file only when it contains valid,
 purposeful behavior.
 
 This CI design enforces the quality gates defined in
@@ -11,60 +11,68 @@ standard is the source of truth for *what* must pass; the workflows here are *ho
 
 ---
 
-## Current State (verified)
+## Implemented workflows
 
-- `container-images.yml` builds the three production images on GitHub-hosted
-  runners and publishes `main` plus immutable `sha-<commit>` tags to GHCR.
-- No automated application test, coverage, or security workflow exists yet.
-- No pre-commit hooks; no coverage gating is wired.
-- Tests run locally per [`docs/standards/testing.md`](../../docs/standards/testing.md).
-- The public website is deployed via Vercel (see
-  [`docs/runbooks/frontend-vercel-deployment.md`](../../docs/runbooks/frontend-vercel-deployment.md)).
-  Vercel builds/deploys are managed in the Vercel platform, separate from these GitHub workflows.
+| File | Trigger | Purpose |
+|---|---|---|
+| `release-checks.yml` | Reusable `workflow_call` | Runs production-target Ruff/mypy/pytest/coverage/build checks and npm type-check/lint/test/build checks with a non-fail-fast matrix. |
+| `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Calls release checks first, builds Linux AMD64 images on PRs, and publishes `main` plus immutable `sha-<commit>` tags only for non-PR runs. |
+| `deploy-production.yml` | Reusable `workflow_call` and manual dispatch | Validates and preflights an immutable SHA tag, waits for `production` approval, updates only Coolify's non-preview `TRACKFLOW_IMAGE_TAG` while protecting preview records, triggers deployment, and polls to success, failure, or timeout. Manual dispatch is the rollback path. |
 
-## Planned Workflow Files
+`container-images.yml` calls `deploy-production.yml` only after all three images publish from
+`main`. Pull requests run release checks and image builds but never publish or deploy. Production
+deployments are serialized and are not cancelled after they start.
+
+The release workflow now machine-enforces:
+
+- Identity and Central API Ruff, mypy, pytest coverage, and package builds. Central API retains its
+  configured 90% coverage floor and tests against an ephemeral local PostgreSQL after applying the
+  existing schema; Identity reports coverage without a hard floor.
+- `trackflow_auth` and `trackflow_incidents` tests, static checks, and package builds.
+- Back Office type-check, lint, unit tests, and production build.
+- Shared TypeScript type-check and build. `packages/shared` has no standalone lint or test scripts;
+  its runtime behavior remains exercised by its consuming Back Office suite.
+
+These checks gate production image publication. They are not yet a broad path-aware `ci.yml`
+required check for every repository change.
+
+## Planned workflow files
 
 Add these only when implemented with real behavior:
 
 | File | Trigger | Purpose |
 |---|---|---|
-| `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Build Linux AMD64 images on PRs; publish `main` and immutable commit tags to GHCR after merge or manual dispatch. |
-| `ci.yml` | PR + push to `main` | Per-package lint, `type-check`, build, and unit/integration tests (Python services via `uv`, UIs/packages via npm workspaces). Enforce the coverage policy from `testing.md`. |
+| `ci.yml` | PR + push to `main` | Broad per-package checks outside the production-image path filters and required-check integration for branch protection. |
 | `e2e.yml` | PR (paths: `uis/backoffice/**`) | Run the Playwright e2e suite (`uis/backoffice/tests/e2e/`). |
 | `security.yml` | PR + schedule | Dependency vulnerability scan and secret scanning; aligns with the security gate in `production-readiness.md`. |
-| `deploy.yml` | optional | Future automatic Coolify trigger after images publish. `container-images.yml` deliberately does not deploy. |
 
-## Required Quality Gates (must pass before merge)
+## How PRs, merges, and deployments interact
 
-These mirror [`docs/standards/production-readiness.md`](../../docs/standards/production-readiness.md):
+- **Pull request →** relevant changes call `release-checks.yml` and build all three images without
+  publishing them. Future `ci.yml`, `e2e.yml`, and `security.yml` workflows should become required
+  status checks when implemented.
+- **Merge to `main` →** relevant changes pass release checks, publish all three immutable images,
+  then wait at the GitHub `production` Environment approval gate.
+- **Production approval →** `deploy-production.yml` confirms all manifests exist, updates the single
+  Coolify image-tag variable, deploys, and polls for about 15 minutes. It never runs migrations or
+  seeds and never automatically rolls back.
+- **Rollback →** manually dispatch `deploy-production.yml` with a known-good immutable tag and
+  approve the same `production` Environment.
+- **Vercel →** the public website remains independently deployed through Vercel; its preview and
+  production builds are separate from these backend/Back Office workflows.
 
-1. Lint + `type-check` clean for every touched package/app.
-2. Build succeeds for every touched package/app.
-3. Unit/integration tests pass; coverage is preserved or improved (no silent regression).
-4. e2e suite passes for back-office changes.
-5. Dependency/secret scan shows no new high-severity findings.
+See
+[`docs/runbooks/backend-coolify-deployment.md`](../../docs/runbooks/backend-coolify-deployment.md)
+for owner setup, normal deployment, rollback, timeout, and credential-rotation procedures.
 
-## How PRs, Merges, and Vercel Deploys Should Interact
-
-- **Pull request →** `ci.yml` (and `e2e.yml`/`security.yml` where paths match) run as required
-  status checks. A PR cannot merge with a failing required check.
-- **Vercel preview →** Vercel builds a preview deployment per PR independently of GitHub Actions.
-  Treat the preview as a review aid; the required gates above are still the CI checks, not the
-  preview build.
-- **Merge to `main` →** `ci.yml` runs on `main`; Vercel promotes the production deployment for the
-  public website from `main`. Keep branch protection requiring the CI checks so `main` stays green.
-- **Backend services** deploy through Coolify from prebuilt GHCR images named
-  in `compose.coolify.yaml`. Production migrations and seeds remain explicit
-  one-offs, not Actions jobs.
-
-## Implementation Checklist (follow-up, out of scope for this docs task)
+## Implementation checklist
 
 - [x] Publish deployable images through GitHub Actions and GHCR.
-- [ ] Decide quality-CI provider config (matrix for `uv` Python projects + npm workspaces).
-- [ ] Add `ci.yml`: lint, type-check, build, test for changed packages.
-- [ ] Wire coverage reporting and the threshold/ratchet from `testing.md`.
-- [ ] Add `e2e.yml` for back-office Playwright.
+- [x] Add reusable production-target release checks.
+- [x] Wire Central API's configured coverage floor and Identity coverage reporting.
+- [x] Add approval-gated, SHA-pinned Coolify deployment and manual rollback dispatch.
+- [ ] Add broad `ci.yml` coverage for repository changes outside image path filters.
+- [ ] Add `e2e.yml` for Back Office Playwright.
 - [ ] Add `security.yml` dependency + secret scanning.
-- [ ] Enable branch protection on `main` requiring the checks above.
+- [ ] Enable/update branch protection to require the intended checks.
 - [ ] Reconcile GitHub checks with Vercel preview/production builds.
-- [ ] Update `production-readiness.md` to mark which gates became automated.

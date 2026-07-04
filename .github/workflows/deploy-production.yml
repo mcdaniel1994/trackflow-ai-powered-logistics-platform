@@ -1,0 +1,356 @@
+name: Deploy production
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: Immutable sha-<40 lowercase hex> image tag
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Known-good immutable sha-<40 lowercase hex> image tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy immutable SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: production
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      COOLIFY_BASE_URL: ${{ vars.COOLIFY_BASE_URL }}
+      COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+      COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+      COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+
+    steps:
+      - name: Validate immutable image tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "image_tag must match sha- followed by exactly 40 lowercase hexadecimal characters." >&2
+            exit 1
+          fi
+
+      - name: Validate and mask Coolify configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${COOLIFY_BASE_URL:?COOLIFY_BASE_URL is required}"
+          : "${COOLIFY_APPLICATION_UUID:?COOLIFY_APPLICATION_UUID is required}"
+          : "${COOLIFY_TOKEN:?COOLIFY_TOKEN is required}"
+          : "${COOLIFY_WEBHOOK:?COOLIFY_WEBHOOK is required}"
+
+          echo "::add-mask::$COOLIFY_TOKEN"
+          echo "::add-mask::$COOLIFY_WEBHOOK"
+
+          api_base="${COOLIFY_BASE_URL%/}/api/v1"
+          echo "COOLIFY_API_BASE=$api_base" >> "$GITHUB_ENV"
+
+      - name: Confirm all immutable image manifests exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in \
+            ghcr.io/mcdaniel1994/trackflow-identity \
+            ghcr.io/mcdaniel1994/trackflow-central-api \
+            ghcr.io/mcdaniel1994/trackflow-backoffice
+          do
+            docker buildx imagetools inspect "$image:$IMAGE_TAG" > /dev/null
+          done
+
+      - name: Update only TRACKFLOW_IMAGE_TAG
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$RUNNER_TEMP/coolify-env-before.json"
+          update_payload="$RUNNER_TEMP/coolify-env-update.json"
+          update_response="$RUNNER_TEMP/coolify-env-update-response.json"
+          after="$RUNNER_TEMP/coolify-env-after.json"
+          env_endpoint="$COOLIFY_API_BASE/applications/$COOLIFY_APPLICATION_UUID/envs"
+
+          curl --silent --show-error --fail-with-body \
+            --output "$before" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$env_endpoint"
+
+          jq -e 'type == "array"' "$before" > /dev/null
+          target_count="$(
+            jq '
+              [
+                .[]
+                | select(
+                    .key == "TRACKFLOW_IMAGE_TAG"
+                    and .is_preview == false
+                  )
+              ]
+              | length
+            ' "$before"
+          )"
+          if [[ "$target_count" != "1" ]]; then
+            echo "Expected exactly one production TRACKFLOW_IMAGE_TAG environment variable; refusing to mutate Coolify." >&2
+            exit 1
+          fi
+
+          target_uuid="$(
+            jq -r '
+              .[]
+              | select(
+                  .key == "TRACKFLOW_IMAGE_TAG"
+                  and .is_preview == false
+                )
+              | .uuid // empty
+            ' "$before"
+          )"
+          if [[ ! "$target_uuid" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "Coolify did not return a usable UUID for the production TRACKFLOW_IMAGE_TAG; refusing to mutate Coolify." >&2
+            exit 1
+          fi
+
+          if ! jq -e \
+            --arg target_uuid "$target_uuid" \
+            '
+              .[]
+              | select(.uuid == $target_uuid)
+              | .is_preview == false
+                and (.is_literal | type == "boolean")
+                and (.is_multiline | type == "boolean")
+                and (.is_shown_once | type == "boolean")
+                and (.is_buildtime | type == "boolean")
+                and (.is_runtime | type == "boolean")
+            ' "$before" > /dev/null
+          then
+            echo "Coolify did not return the expected boolean metadata for the production TRACKFLOW_IMAGE_TAG; refusing to mutate Coolify." >&2
+            exit 1
+          fi
+
+          before_buildtime="$(
+            jq -r --arg target_uuid "$target_uuid" \
+              '.[] | select(.uuid == $target_uuid) | .is_buildtime' "$before"
+          )"
+          before_runtime="$(
+            jq -r --arg target_uuid "$target_uuid" \
+              '.[] | select(.uuid == $target_uuid) | .is_runtime' "$before"
+          )"
+          if [[ "$before_buildtime" != "true" || "$before_runtime" != "true" ]]; then
+            echo "Production TRACKFLOW_IMAGE_TAG must be enabled at both Buildtime and Runtime; refusing to mutate Coolify." >&2
+            exit 1
+          fi
+
+          before_count="$(jq 'length' "$before")"
+          before_others_hash="$(
+            jq -cS \
+              --arg target_uuid "$target_uuid" \
+              '[.[] | select(.uuid != $target_uuid)] | sort_by(.uuid // .key)' \
+              "$before" \
+              | sha256sum \
+              | cut -d ' ' -f 1
+          )"
+          before_target_metadata="$(
+            jq -cS \
+              --arg target_uuid "$target_uuid" \
+              '
+                .[]
+                | select(.uuid == $target_uuid)
+                | {
+                    uuid,
+                    key,
+                    is_preview,
+                    is_literal,
+                    is_multiline,
+                    is_shown_once,
+                    is_buildtime,
+                    is_runtime,
+                    comment
+                  }
+              ' "$before"
+          )"
+
+          jq \
+            --arg target_uuid "$target_uuid" \
+            --arg value "$IMAGE_TAG" \
+            '
+              .[]
+              | select(.uuid == $target_uuid)
+              | {
+                  key,
+                  value: $value,
+                  is_preview,
+                  is_literal,
+                  is_multiline,
+                  is_shown_once,
+                  is_buildtime,
+                  is_runtime,
+                  comment
+                }
+            ' "$before" > "$update_payload"
+
+          curl --silent --show-error --fail-with-body \
+            --request PATCH \
+            --output "$update_response" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$update_payload" \
+            "$env_endpoint"
+
+          curl --silent --show-error --fail-with-body \
+            --output "$after" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$env_endpoint"
+
+          jq -e 'type == "array"' "$after" > /dev/null
+          after_target_count="$(
+            jq '
+              [
+                .[]
+                | select(
+                    .key == "TRACKFLOW_IMAGE_TAG"
+                    and .is_preview == false
+                  )
+              ]
+              | length
+            ' "$after"
+          )"
+          after_count="$(jq 'length' "$after")"
+          after_others_hash="$(
+            jq -cS \
+              --arg target_uuid "$target_uuid" \
+              '[.[] | select(.uuid != $target_uuid)] | sort_by(.uuid // .key)' \
+              "$after" \
+              | sha256sum \
+              | cut -d ' ' -f 1
+          )"
+          after_target_metadata="$(
+            jq -cS \
+              --arg target_uuid "$target_uuid" \
+              '
+                .[]
+                | select(.uuid == $target_uuid)
+                | {
+                    uuid,
+                    key,
+                    is_preview,
+                    is_literal,
+                    is_multiline,
+                    is_shown_once,
+                    is_buildtime,
+                    is_runtime,
+                    comment
+                  }
+              ' "$after"
+          )"
+
+          if [[ "$after_target_count" != "1" ]]; then
+            echo "Coolify no longer has exactly one production TRACKFLOW_IMAGE_TAG; deployment was not triggered." >&2
+            exit 1
+          fi
+          if [[ "$after_count" != "$before_count" || "$after_others_hash" != "$before_others_hash" ]]; then
+            echo "Coolify changed an environment record other than the production TRACKFLOW_IMAGE_TAG; deployment was not triggered." >&2
+            exit 1
+          fi
+          if [[ "$after_target_metadata" != "$before_target_metadata" ]]; then
+            echo "Coolify changed production TRACKFLOW_IMAGE_TAG metadata; deployment was not triggered." >&2
+            exit 1
+          fi
+
+      - name: Trigger Coolify deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/coolify-deploy-response.json"
+
+          curl --silent --show-error --fail-with-body \
+            --request GET \
+            --output "$response" \
+            --header "Authorization: Bearer $COOLIFY_TOKEN" \
+            "$COOLIFY_WEBHOOK"
+
+          deployment_uuid="$(
+            jq -r '
+              if type == "array" then
+                (.[0].deployment_uuid // .[0].uuid // empty)
+              else
+                (
+                  .deployments[0].deployment_uuid
+                  // .deployments[0].uuid
+                  // .deployment_uuid
+                  // .uuid
+                  // .data.deployment_uuid
+                  // .data.uuid
+                  // empty
+                )
+              end
+            ' "$response"
+          )"
+          if [[ ! "$deployment_uuid" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "Coolify did not return a usable deployment identifier; polling cannot continue." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$deployment_uuid"
+          echo "COOLIFY_DEPLOYMENT_UUID=$deployment_uuid" >> "$GITHUB_ENV"
+
+      - name: Poll Coolify deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/coolify-deployment-status.json"
+          status_endpoint="$COOLIFY_API_BASE/deployments/$COOLIFY_DEPLOYMENT_UUID"
+
+          for attempt in {1..45}; do
+            curl --silent --show-error --fail-with-body \
+              --retry 2 \
+              --retry-all-errors \
+              --max-time 20 \
+              --output "$response" \
+              --header "Authorization: Bearer $COOLIFY_TOKEN" \
+              "$status_endpoint"
+
+            status="$(jq -r '.status // .data.status // empty' "$response" | tr '[:upper:]' '[:lower:]')"
+            case "$status" in
+              finished|success|succeeded|completed)
+                echo "Coolify deployment finished successfully."
+                exit 0
+                ;;
+              failed|failure|cancelled|canceled|cancelled-by-user|canceled-by-user|error)
+                echo "Coolify deployment ended with status: $status" >&2
+                exit 1
+                ;;
+              queued|pending|in_progress|in-progress|running|"")
+                ;;
+              *)
+                echo "Coolify returned an unrecognized deployment status: $status" >&2
+                exit 1
+                ;;
+            esac
+
+            if [[ "$attempt" -lt 45 ]]; then
+              sleep 20
+            fi
+          done
+
+          echo "Coolify deployment did not finish within approximately 15 minutes; no rollback was attempted." >&2
+          exit 1
+
+      - name: Write deployment summary
+        if: always()
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          printf "SHA: \`%s\`\n\nStatus: \`%s\`\n" \
+            "${IMAGE_TAG#sha-}" \
+            "$JOB_STATUS" >> "$GITHUB_STEP_SUMMARY"

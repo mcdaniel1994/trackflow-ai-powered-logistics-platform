@@ -16,7 +16,10 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "httpx>=0.27.0",
+  "mypy>=1.16.0",
   "pytest>=8.2.0",
+  "pytest-cov>=6.2.0",
+  "ruff>=0.12.0",
 ]
 
 [project.scripts]
@@ -36,3 +39,14 @@ packages = ["identity"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = [".", "../../packages/trackflow_auth"]
+
+[tool.mypy]
+python_version = "3.11"
+
+[[tool.mypy.overrides]]
+module = ["jose", "jose.*", "trackflow_auth", "trackflow_auth.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["identity.main", "identity.repository", "identity.security"]
+disable_error_code = ["arg-type"]

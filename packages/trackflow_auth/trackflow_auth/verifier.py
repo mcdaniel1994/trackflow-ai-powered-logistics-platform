@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import HTTPException, Request, status
-from jose import JWTError, jwt
+from jose import JWTError, jwt  # type: ignore[import-untyped]
 from pydantic import BaseModel, ConfigDict
 
 # Names the short-lived access-token cookie shared by services.
@@ -99,7 +99,7 @@ def verify_access_token(token: str, config: TokenVerifierConfig) -> dict[str, An
         raise _auth_error() from exc
 
     required = {"sub", "role", "status", "must_change_password", "iss", "aud", "exp", "iat", "jti", "token_type"}
-    if missing := required.difference(claims):
+    if required.difference(claims):
         raise _auth_error()
     if claims.get("token_type") != "access":
         raise _auth_error()

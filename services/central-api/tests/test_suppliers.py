@@ -1,6 +1,10 @@
 """Supplier contract, privacy, validation, and mutation regressions."""
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.engine import Engine
+
+from central_api.domains.suppliers import seed as supplier_seed
 
 
 def payload() -> dict[str, object]:
@@ -49,3 +53,43 @@ def test_cookie_writes_require_csrf(client: TestClient, cookie_auth: object) -> 
     assert callable(authenticate)
     authenticate(csrf=False)
     assert client.post("/suppliers", json=payload()).status_code == 403
+
+
+def test_filters_rate_status_and_delete(client: TestClient, auth_headers: dict[str, str]) -> None:
+    created = client.post("/suppliers", json=payload(), headers=auth_headers).json()
+    supplier_id = created["id"]
+
+    assert client.get("/suppliers?country=Canada", headers=auth_headers).status_code == 400
+    assert client.get("/suppliers?category=unknown", headers=auth_headers).status_code == 400
+
+    updated_rate = client.patch(
+        f"/suppliers/{supplier_id}/rate",
+        json={"rate_per_shipment": 8.25},
+        headers=auth_headers,
+    )
+    assert updated_rate.status_code == 200
+    assert updated_rate.json()["rate_per_shipment"] == 8.25
+
+    updated_status = client.patch(
+        f"/suppliers/{supplier_id}/status",
+        json={"status": "suspended"},
+        headers=auth_headers,
+    )
+    assert updated_status.status_code == 200
+    assert updated_status.json()["status"] == "suspended"
+
+    assert client.delete(f"/suppliers/{supplier_id}", headers=auth_headers).status_code == 204
+    assert client.get(f"/suppliers/{supplier_id}", headers=auth_headers).status_code == 404
+
+
+def test_supplier_seed_is_idempotent(
+    engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(supplier_seed, "get_engine", lambda: engine)
+
+    assert supplier_seed.entrypoint() == 0
+    assert "Inserted 15 suppliers." in capsys.readouterr().out
+    assert supplier_seed.entrypoint() == 0
+    assert "Inserted 0 suppliers." in capsys.readouterr().out

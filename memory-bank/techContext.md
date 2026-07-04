@@ -17,9 +17,15 @@
   Identity and Central API remain private on the Coolify network. Supabase uses
   separate runtime and migration roles through the IPv4 Supavisor Session
   pooler, and the current schema is at Alembic revision `20260702_0003`.
-- `.github/workflows/container-images.yml` builds Linux AMD64 production images
-  on GitHub-hosted runners and publishes commit-pinned tags to GHCR; the
-  production Compose stack pulls rather than builds them on the VPS.
+- `.github/workflows/release-checks.yml` runs production-target lint, typing,
+  tests/coverage, and builds before `.github/workflows/container-images.yml`
+  publishes Linux AMD64 commit-pinned images to GHCR.
+- `.github/workflows/deploy-production.yml` is the reusable and manually
+  dispatchable, GitHub-Environment-gated path that preflights all three
+  immutable images, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, and polls the
+  deployment without running migrations, seeds, or automatic rollback. Coolify
+  `4.1.2` and the GitHub Production environment are configured for this path;
+  its first live approved run and rollback drill remain owner steps.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
