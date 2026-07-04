@@ -9,6 +9,7 @@ export const en: Translation = {
       coverage: "Coverage",
       contact: "Contact",
       apply: "Apply",
+      login: "Login",
     },
     language: {
       next: "ES",

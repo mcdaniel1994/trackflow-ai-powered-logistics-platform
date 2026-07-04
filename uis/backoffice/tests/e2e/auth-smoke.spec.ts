@@ -8,6 +8,33 @@ test("login page excludes public registration and shows recovery", async ({ page
   await expect(page.getByRole("heading", { name: /backoffice sign in/i })).toBeVisible();
   await expect(page.getByRole("link", { name: registrationPattern })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /forgot your password/i })).toBeVisible();
+  await expect(page.getByRole("link", { name: /back to trackflow website/i })).toHaveAttribute(
+    "href",
+    "https://trackflow-ai-powered-logistics-plat.vercel.app",
+  );
+
+  await page.getByRole("button", { name: /admin demo/i }).click();
+  await expect(page.getByLabel(/email/i)).toHaveValue("corymcdaniel01@gmail.com");
+  await expect(page.getByLabel(/password/i)).toHaveValue("password123");
+  await expect(page.getByLabel(/password/i)).toHaveAttribute("type", "password");
+
+  await page.getByRole("button", { name: /employee demo/i }).click();
+  await expect(page.getByLabel(/email/i)).toHaveValue("employee@trackflow.com");
+  await expect(page.getByLabel(/password/i)).toHaveValue("password123");
+});
+
+test("login remains usable without input zoom at a mobile viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+
+  const emailInput = page.getByLabel(/email/i);
+  const passwordInput = page.getByLabel(/password/i);
+
+  await expect(page.getByRole("link", { name: /back to trackflow website/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /admin demo/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /employee demo/i })).toBeVisible();
+  await expect(emailInput).toHaveCSS("font-size", "16px");
+  await expect(passwordInput).toHaveCSS("font-size", "16px");
 });
 
 test("protected routes redirect unauthenticated users to login", async ({ page }) => {

@@ -109,6 +109,7 @@ export interface Translation {
       coverage: string;
       contact: string;
       apply: string;
+      login: string;
     };
     language: {
       next: string;

@@ -64,7 +64,12 @@ Server-only values used by the BFF:
 - `TALENT_API_URL` - talent pipeline backend URL. Defaults to the 4Geeks playground API.
 - `CENTRAL_API_URL` - Central API server URL. Defaults to `http://localhost:8003` to avoid Identity's local port 8002.
 - `AUTH_COOKIE_SECURE` - set `false` only for local HTTP development; hosted deployments require HTTPS and secure cookies.
+- `PUBLIC_WEBSITE_URL` - public TrackFlow website used by the login-page back link. Defaults to the current Vercel demo URL.
 
 Do not expose service URLs or token material through `NEXT_PUBLIC_*` values.
+
+The login page's demo-account controls only autofill the published demo credentials; they do not
+create users or bypass Identity. Create those accounts only in an isolated demo Identity store with
+disposable data, never in production.
 
 No customer emails should be rendered in the backoffice UI. Supplier contact emails are accepted by the create form for the local demo, but the `/suppliers` table must render only "Contact on file" from `has_contact_email`, never the raw email value. The `/suppliers/[id]` detail page may reveal the supplier contact email only through its explicit reveal control.

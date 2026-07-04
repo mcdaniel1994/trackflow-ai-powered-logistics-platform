@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LanguageToggle } from "./LanguageToggle";
 import { useLocale } from "./LocaleProvider";
+import { getBackOfficeURL } from "@/lib/site-urls";
 
 function homeHref(pathname: string, hash: string) {
   return pathname === "/" ? hash : `/${hash}`;
@@ -19,8 +20,7 @@ export function SiteHeader() {
     { href: homeHref(pathname, "#coverage"), label: copy.common.nav.coverage },
     { href: homeHref(pathname, "#contact"), label: copy.common.nav.contact },
   ];
-  const backOfficeURL =
-    process.env.NEXT_PUBLIC_BACKOFFICE_URL ?? "https://backoffice.forgehub.cloud";
+  const backOfficeURL = getBackOfficeURL();
 
   return (
     <header className="sticky top-0 z-50 border-b border-mist bg-white/95 backdrop-blur" role="banner">
@@ -45,9 +45,9 @@ export function SiteHeader() {
           </nav>
           <Link
             href={backOfficeURL}
-            className="hidden rounded-full border border-navy px-4 py-2 text-sm font-bold text-navy transition hover:bg-navy hover:text-white sm:inline-flex"
+            className="hidden rounded-full border border-navy px-4 py-2 text-sm font-bold text-navy transition hover:bg-navy hover:text-white md:inline-flex"
           >
-            Back Office Login
+            {copy.common.nav.login}
           </Link>
           <LanguageToggle />
         </div>
