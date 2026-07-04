@@ -57,8 +57,8 @@ Update `.github/workflows/container-images.yml` to:
 
 - Enable Coolify API access and create a least-privilege deployment/environment-update token.
 - Create GitHub's `production` Environment with approval required.
-- Add environment secrets `COOLIFY_TOKEN` and `COOLIFY_WEBHOOK`.
-- Add environment variables `COOLIFY_BASE_URL` and `COOLIFY_APPLICATION_UUID`.
+- Add environment secrets `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
+  `COOLIFY_BASE_URL`, and `COOLIFY_APPLICATION_UUID`.
 - Keep Coolify's native Git auto-deploy disabled to avoid racing image publication.
 
 Coolify supports API-token/webhook deployment from GitHub Actions and environment updates through

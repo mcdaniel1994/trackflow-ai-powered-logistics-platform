@@ -32,8 +32,8 @@ approved production run or a live rollback drill.
 - Coolify `4.1.2` API access is enabled; the production image-tag variable is
   available at Buildtime and Runtime; native Git auto-deploy is disabled; and
   the GitHub Production environment has required review, a `main`-only rule,
-  the two deployment secrets, and the two non-secret application coordinates.
-  No token, webhook URL, UUID, or environment value is recorded here.
+  and four masked deployment secrets. No token, webhook URL, UUID, environment
+  value, or production coordinate is recorded here.
 
 ## Prerequisites
 
@@ -82,13 +82,13 @@ stopped polling; the Coolify deployment may still be running, so inspect
 Coolify before approving another deployment or rollback.
 
 Before enabling the first run, create the GitHub `production` Environment with
-required reviewers. Store `COOLIFY_TOKEN` and `COOLIFY_WEBHOOK` as Environment
-secrets, and `COOLIFY_BASE_URL` plus `COOLIFY_APPLICATION_UUID` as Environment
-variables. The Coolify token needs only the permissions required to list
-application environment metadata, update one environment variable, and inspect
-and trigger deployments: current Coolify v4 names those token permissions
-`read`, `write`, and `deploy`. Do not grant `root`; `read:sensitive` is not
-needed by this workflow.
+required reviewers. Store `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
+`COOLIFY_BASE_URL`, and `COOLIFY_APPLICATION_UUID` as Environment secrets so
+GitHub masks every production coordinate before the runner starts. The Coolify
+token needs only the permissions required to list application environment
+metadata, update one environment variable, and inspect and trigger deployments:
+current Coolify v4 names those token permissions `read`, `write`, and `deploy`.
+Do not grant `root`; `read:sensitive` is not needed by this workflow.
 
 Coolify `4.1.2` returns production and preview environment records together
 from the application env endpoint, even when preview deployments are disabled.

@@ -30,8 +30,8 @@ jobs:
       name: production
     env:
       IMAGE_TAG: ${{ inputs.image_tag }}
-      COOLIFY_BASE_URL: ${{ vars.COOLIFY_BASE_URL }}
-      COOLIFY_APPLICATION_UUID: ${{ vars.COOLIFY_APPLICATION_UUID }}
+      COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
+      COOLIFY_APPLICATION_UUID: ${{ secrets.COOLIFY_APPLICATION_UUID }}
       COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
       COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
 
@@ -54,10 +54,26 @@ jobs:
           : "${COOLIFY_TOKEN:?COOLIFY_TOKEN is required}"
           : "${COOLIFY_WEBHOOK:?COOLIFY_WEBHOOK is required}"
 
+          if [[ ! "$COOLIFY_BASE_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
+            echo "COOLIFY_BASE_URL must be an HTTPS origin without a path, query, fragment, or trailing slash." >&2
+            exit 1
+          fi
+          if [[ ! "$COOLIFY_APPLICATION_UUID" =~ ^[A-Za-z0-9_-]+$ ]]; then
+            echo "COOLIFY_APPLICATION_UUID must contain only letters, numbers, underscores, or hyphens." >&2
+            exit 1
+          fi
+          if [[ ! "$COOLIFY_WEBHOOK" =~ ^https://[^[:space:]]+$ ]]; then
+            echo "COOLIFY_WEBHOOK must be an HTTPS URL without whitespace." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$COOLIFY_BASE_URL"
+          echo "::add-mask::$COOLIFY_APPLICATION_UUID"
           echo "::add-mask::$COOLIFY_TOKEN"
           echo "::add-mask::$COOLIFY_WEBHOOK"
 
           api_base="${COOLIFY_BASE_URL%/}/api/v1"
+          echo "::add-mask::$api_base"
           echo "COOLIFY_API_BASE=$api_base" >> "$GITHUB_ENV"
 
       - name: Confirm all immutable image manifests exist
