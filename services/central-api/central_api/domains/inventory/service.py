@@ -28,12 +28,24 @@ from .schemas import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class DispatchRejection:
+    """Safe, PII-free metadata for a rejected dispatch, used for best-effort telemetry."""
+
+    warehouse: str
+    reason_code: str
+    quantity: int | None
+
+
 @dataclass
 class InventoryError(Exception):
     """Typed domain failure translated to HTTP only at the application boundary."""
 
     status_code: int
     detail: str
+    # Populated only for rejected DISPATCH attempts so the boundary can emit a
+    # best-effort `inventory.dispatch.rejected` telemetry event after the response.
+    reject_event: DispatchRejection | None = None
 
 
 class InventoryService:
@@ -134,12 +146,33 @@ class InventoryService:
             raise self._persistence_failure("record_inbound", exc) from exc
         return StockEntryRead.model_validate(entry)
 
+    @staticmethod
+    def _dispatch_rejection(payload: StockExitCreate, reason_code: str) -> DispatchRejection | None:
+        """Describe a rejected DISPATCH for best-effort telemetry; None for a loss."""
+        if payload.exit_type != ExitType.DISPATCH:
+            return None
+        return DispatchRejection(
+            warehouse=payload.warehouse.value,
+            reason_code=reason_code,
+            quantity=payload.quantity,
+        )
+
     def record_outbound(self, payload: StockExitCreate, user_uuid: str) -> StockExitRead:
         """Serialize stock calculation and exit creation to prevent negative races."""
         try:
             sku = self.repository.get_sku_for_update(payload.sku_id)
-            self._validate_sku_warehouse(sku, payload.warehouse.value)
-            assert sku is not None
+            if sku is None:
+                raise InventoryError(
+                    status_code=404,
+                    detail="SKU not found",
+                    reject_event=self._dispatch_rejection(payload, "SKU_NOT_FOUND"),
+                )
+            if sku.warehouse != payload.warehouse.value:
+                raise InventoryError(
+                    status_code=400,
+                    detail="Movement warehouse must match SKU warehouse",
+                    reject_event=self._dispatch_rejection(payload, "WAREHOUSE_MISMATCH"),
+                )
             available = self.repository.current_stock(payload.sku_id, payload.warehouse.value)
             if payload.quantity > available:
                 raise InventoryError(
@@ -148,6 +181,7 @@ class InventoryService:
                         f"Insufficient stock for SKU '{sku.sku}'. Available: {available}, "
                         f"requested: {payload.quantity}."
                     ),
+                    reject_event=self._dispatch_rejection(payload, "INSUFFICIENT_STOCK"),
                 )
             stock_exit = StockExit(
                 sku_id=payload.sku_id,

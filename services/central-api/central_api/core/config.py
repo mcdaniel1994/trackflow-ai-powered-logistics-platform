@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     database_statement_timeout_ms: int = 15_000
     database_lock_timeout_ms: int = 5_000
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
+    app_env: str = "local"
+    telemetry_enabled: bool = False
+    telemetry_operational_retention_days: int = 90
+    telemetry_security_retention_days: int = 365
     identity_jwt_public_key: str = ""
     identity_jwt_algorithm: str = "RS256"
     identity_jwt_issuer: str = "trackflow-identity"

@@ -14,7 +14,14 @@
 
 ## Active
 
-_None — Engagement 6 is the next planned engagement._
+- Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
+  in progress. Phase 1 adds a Central API `telemetry` domain with a `telemetry_events` table,
+  exact warehouse metrics read from `StockEntry`/`StockExit`, best-effort post-response
+  rejected-dispatch and `api.access.denied` diagnostics, Identity auth audit logs (logs only),
+  enforced retention, bounded aggregates-only reporting endpoints, and a read-only Back Office
+  Telemetry route (Fulfilment/Security) reusing the inventory navigation pattern. The living
+  signal reference is `docs/runbooks/telemetry-inventory.md`. Browser analytics, a durable event
+  queue, correlation IDs, metrics/tracing backends, and AI telemetry are explicitly deferred.
 
 ## Subprojects
 
@@ -38,7 +45,6 @@ _None — Engagement 6 is the next planned engagement._
 
 ## Planned Next
 
-- Engagement 6 - Data pipelines and telemetry.
 - Engagement 7 - RAG knowledge base and semantic search.
 - Engagement 8 - AI agents.
 - Engagement 9 - Workflow automation with n8n.

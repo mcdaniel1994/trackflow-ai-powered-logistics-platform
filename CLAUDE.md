@@ -23,7 +23,7 @@ Then read the active engagement brief and the README for every folder being modi
 | Current engagement brief when assigned | `docs/briefs/NN-title.md` |
 | All briefs | `docs/briefs/` |
 | Cross-cutting standards and guidance | `docs/` |
-| Engineering quality standards (testing, error handling, observability, production readiness) | `docs/standards/` |
+| Engineering quality and telemetry standards (testing, error handling, observability, telemetry, production readiness) | `docs/standards/` |
 | Operational runbooks (deployment, etc.) | `docs/runbooks/` |
 | Intended CI workflow architecture | `.github/workflows/README.md` |
 | Repo-specific quality remediation/improvement plans | `docs/planning/` |
@@ -64,7 +64,15 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/planning/centralized-incident-manager.md`, and
   `docs/planning/supplier-directory-postgres-migration.md`.
 
-- **Engagement 6+** - TBD per engagement.
+- **Engagement 6** - Data Pipelines & Telemetry
+  In progress. A new `telemetry` domain in `services/central-api/` (table
+  `telemetry_events`, exact metrics from `StockEntry`/`StockExit`, best-effort
+  post-response diagnostics, enforced retention), Identity auth audit logs in
+  `services/identity/`, and a read-only Back Office Telemetry route in
+  `uis/backoffice/`. See `docs/briefs/06-data-pipelines-telemetry.md` and the
+  living signal reference `docs/runbooks/telemetry-inventory.md`.
+
+- **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.
 
 ## Coding-Agent Infrastructure Vs. Product Agents
@@ -77,5 +85,6 @@ For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical tabl
 - Before public-facing UI work, apply `.agents/rules/public-ui-visibility.md` and follow its linked `docs/standards/visibility.md`.
 - Before auth, session, token, cookie, authorization, or AI-agent user-context work, apply `.agents/rules/authentication-security.md` and follow its linked `docs/standards/authentication-security-standard.md`.
 - Before database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`.
+- Before telemetry design or instrumentation (events, metrics, traces, correlation IDs, audit/security telemetry, analytics, retention, or AI telemetry), apply `.agents/rules/telemetry.md` and follow its linked `docs/standards/telemetry-standard.md`.
 - Before adding or changing behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard in `docs/standards/` (testing, error-handling, observability, production-readiness).
 - Empty folders with READMEs are intentional scaffolding for future engagements.

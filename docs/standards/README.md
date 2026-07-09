@@ -17,12 +17,14 @@ See the canonical [Rules and Standards Philosophy](../../AGENTS.md#rules-and-sta
 | [testing.md](testing.md) | Test levels, what to test, coverage policy and ratcheting, local test workflow |
 | [error-handling.md](error-handling.md) | Error patterns, API input validation, safe error responses, database and external-service failures |
 | [observability.md](observability.md) | Logging, audit events, monitoring, and what must never be logged |
+| [telemetry-standard.md](telemetry-standard.md) | Telemetry purpose, event structure, privacy governance, retention, analytics, and AI telemetry |
 | [production-readiness.md](production-readiness.md) | Release/quality gates and general (non-auth) security requirements |
 
 The testing, error-handling, observability, and production-readiness standards form the engineering
 quality framework. Agents are routed to them by [`.agents/rules/testing-error-handling-ci.md`](../../.agents/rules/testing-error-handling-ci.md).
 Related operational and CI material lives in [`../runbooks/`](../runbooks/) and
 [`../../.github/workflows/README.md`](../../.github/workflows/README.md).
+Telemetry-design work is routed by [`.agents/rules/telemetry.md`](../../.agents/rules/telemetry.md).
 
 ## Conventions
 

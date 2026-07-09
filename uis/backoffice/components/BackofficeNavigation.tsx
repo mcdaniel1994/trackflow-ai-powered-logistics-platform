@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Boxes,
   ClipboardList,
   LogOut,
@@ -30,6 +31,12 @@ const navigationItems: NavigationItem[] = [
     activePrefix: "/backoffice/inventory",
   },
   { label: "Incidents", href: "/incidents", icon: ClipboardList },
+  {
+    label: "Telemetry",
+    href: "/backoffice/telemetry/fulfilment",
+    icon: Activity,
+    activePrefix: "/backoffice/telemetry",
+  },
   { label: "Suppliers", href: "/suppliers", icon: Package },
   { label: "Talent Pipeline", href: "/talent", icon: Users },
   { label: "Account", href: "/account/profile", icon: UserCircle },

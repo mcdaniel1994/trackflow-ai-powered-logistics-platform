@@ -4,12 +4,15 @@ import logging
 from typing import Annotated, cast
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.responses import Response
 from trackflow_auth import (  # type: ignore[import-untyped]
     safe_request_validation_exception_handler,
     safe_validation_errors,
@@ -24,6 +27,24 @@ from .domains.inventory.schemas import HealthRead
 from .domains.inventory.service import InventoryError
 from .domains.suppliers.router import router as suppliers_router
 from .domains.suppliers.service import SupplierError
+from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
+from .domains.telemetry.router import router as telemetry_router
+from .domains.telemetry.service import TelemetryError
+
+
+def _access_denied_reason(exc: StarletteHTTPException) -> str | None:
+    """Map only the auth-boundary refusals the verifier actually distinguishes.
+
+    The shared verifier normalizes every token fault to one non-enumerating 401, so no
+    finer token reason is observable here without changing it.
+    """
+    if exc.status_code == 401 and exc.detail == "Not authenticated":
+        return "unauthenticated"
+    if exc.status_code == 403 and exc.detail == "Password change required":
+        return "password_change_required"
+    if exc.status_code == 403 and exc.detail == "CSRF token missing or invalid":
+        return "csrf"
+    return None
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +89,38 @@ def create_app() -> FastAPI:
         """Translate typed domain failures without exposing internal exceptions."""
         if not isinstance(exc, InventoryError):
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        # A rejected dispatch emits a best-effort diagnostic AFTER the response is sent.
+        background = None
+        if exc.reject_event is not None:
+            background = dispatch_rejection_task(
+                warehouse=exc.reject_event.warehouse,
+                reason_code=exc.reject_event.reason_code,
+                quantity=exc.reject_event.quantity,
+            )
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            background=background,
+        )
+
+    @app.exception_handler(TelemetryError)
+    async def telemetry_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, TelemetryError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_with_telemetry(request: Request, exc: Exception) -> Response:
+        """Preserve the standard HTTP error response, attaching best-effort denial telemetry."""
+        if not isinstance(exc, StarletteHTTPException):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        response = await http_exception_handler(request, exc)
+        reason = _access_denied_reason(exc)
+        if reason is not None:
+            task = access_denied_task(reason=reason)
+            if task is not None:
+                response.background = task
+        return response
 
     @app.exception_handler(IncidentError)
     async def incident_error_handler(_request: Request, exc: Exception) -> JSONResponse:
@@ -116,6 +168,7 @@ def create_app() -> FastAPI:
     app.include_router(inventory_router)
     app.include_router(incidents_router)
     app.include_router(suppliers_router)
+    app.include_router(telemetry_router)
     return app
 
 
