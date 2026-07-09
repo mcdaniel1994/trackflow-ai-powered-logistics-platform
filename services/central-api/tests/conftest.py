@@ -43,7 +43,10 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     """Give every test deterministic tables without bypassing Alembic schema ownership."""
     with engine.begin() as connection:
         connection.execute(
-            text("TRUNCATE suppliers, incidents, stock_exits, stock_entries, skus RESTART IDENTITY CASCADE")
+            text(
+                "TRUNCATE telemetry_events, suppliers, incidents, stock_exits, stock_entries, skus "
+                "RESTART IDENTITY CASCADE"
+            )
         )
     yield
 

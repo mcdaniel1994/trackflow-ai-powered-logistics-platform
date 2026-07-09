@@ -9,6 +9,7 @@ from sqlmodel import SQLModel
 from central_api.core.config import get_settings
 from central_api.domains.inventory import models as inventory_models  # noqa: F401
 from central_api.domains.suppliers import models as supplier_models  # noqa: F401
+from central_api.domains.telemetry import models as telemetry_models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

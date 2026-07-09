@@ -171,15 +171,21 @@ class AuthService:
 
     # Verifies credentials and issues a fresh cookie/session set.
     def login(self, *, email: str, password: str, settings: IdentitySettings) -> AuthTokens:
+        # Safe audit: outcome + opaque reason only. Never the email or password, and the
+        # same reason for every failure so log lines cannot enumerate valid accounts.
         user = self.users.get_by_email(email)
         if not user or user.get("status") != STATUS_ACTIVE:
+            LOGGER.warning("auth.login.failed reason=invalid_credentials")
             raise AuthenticationError("Invalid email or password")
         if not verify_password(password, str(user["hashed_password"])):
+            LOGGER.warning("auth.login.failed reason=invalid_credentials")
             raise AuthenticationError("Invalid email or password")
 
         updated = self.users.update_user(str(user["id"]), {"last_login_at": now_iso()})
         if not updated:
+            LOGGER.warning("auth.login.failed reason=invalid_credentials")
             raise AuthenticationError("Invalid email or password")
+        LOGGER.info("auth.login.succeeded user_id=%s", str(updated["id"]))
         return self._issue_tokens(updated, settings)
 
     # Rotates a valid refresh token and revokes reused token families.
@@ -194,6 +200,7 @@ class AuthService:
             raise AuthenticationError("Invalid refresh session")
         if self._is_expired(str(session["expires_at"])):
             self.sessions.revoke_session(str(session["id"]))
+            LOGGER.info("auth.session.expired user_id=%s", str(session["user_id"]))
             raise AuthenticationError("Invalid refresh session")
 
         user = self.users.get_by_id(str(session["user_id"]))

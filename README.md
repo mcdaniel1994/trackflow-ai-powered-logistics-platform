@@ -183,7 +183,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | ⏳ Upcoming |
+| 6 | Data pipelines & telemetry | 🚧 In progress — `services/central-api/` telemetry domain + Back Office Telemetry route |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
 | 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
 | 9 | Workflow automation (n8n) | ⏳ Upcoming |
