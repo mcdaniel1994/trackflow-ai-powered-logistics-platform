@@ -6,13 +6,14 @@ Data engineering assets for the TrackFlow platform.
 |---|---|
 | `raw/` | Source data: exports, dumps, sample files, untransformed datasets |
 | `process/` | Pure, deterministic business-performance transformations |
-| `pipelines/` | Pipeline orchestration package (runner/flows arrive in later approved phases) |
+| `pipelines/` | Durable queue, dispatcher, runner lifecycle, and later ETL orchestration |
 | `eval/` | AI evaluation datasets for testing agent and model outputs |
 
-Engagement 6 Phase 4 establishes an isolated `trackflow-data-pipelines` uv project. The first
-implemented capability is the in-memory weekly warehouse/client KPI transform under
-`process/business_performance/`; it has no database, Prefect server, or external-service dependency
-at runtime.
+Engagement 6 establishes an isolated `trackflow-data-pipelines` uv project. Phase 5 adds a durable
+PostgreSQL queue, America/Chicago dispatcher, lease/CAS state machine, and advisory-lock-protected
+runner lifecycle alongside the pure weekly KPI transforms. The runner entrypoint deliberately
+refuses to consume work until Phase 6 supplies the ETL executor; no Prefect server or external
+service is introduced.
 
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
