@@ -25,6 +25,8 @@ from .domains.incidents.service import IncidentError
 from .domains.inventory.router import router as inventory_router
 from .domains.inventory.schemas import HealthRead
 from .domains.inventory.service import InventoryError
+from .domains.reporting.router import router as reporting_router
+from .domains.reporting.service import ReportingError
 from .domains.suppliers.router import router as suppliers_router
 from .domains.suppliers.service import SupplierError
 from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
@@ -109,6 +111,15 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @app.exception_handler(ReportingError)
+    async def reporting_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, ReportingError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": {"code": exc.error_code, "message": exc.detail, "fields": {}}},
+        )
+
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_with_telemetry(request: Request, exc: Exception) -> Response:
         """Preserve the standard HTTP error response, attaching best-effort denial telemetry."""
@@ -169,6 +180,7 @@ def create_app() -> FastAPI:
     app.include_router(incidents_router)
     app.include_router(suppliers_router)
     app.include_router(telemetry_router)
+    app.include_router(reporting_router)
     return app
 
 

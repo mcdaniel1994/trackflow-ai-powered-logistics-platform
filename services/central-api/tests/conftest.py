@@ -155,8 +155,16 @@ def admin_headers(token_factory: TokenFactory) -> dict[str, str]:
 
 @pytest.fixture
 def cookie_auth(client: TestClient, token_factory: TokenFactory) -> Callable[..., dict[str, str]]:
-    def authenticate(*, csrf: bool = True, must_change_password: bool = False) -> dict[str, str]:
-        client.cookies.set(ACCESS_COOKIE_NAME, token_factory(must_change_password=must_change_password))
+    def authenticate(
+        *,
+        csrf: bool = True,
+        must_change_password: bool = False,
+        role: str = "user",
+    ) -> dict[str, str]:
+        client.cookies.set(
+            ACCESS_COOKIE_NAME,
+            token_factory(must_change_password=must_change_password, role=role),
+        )
         if not csrf:
             return {}
         token = "test-csrf-token"
