@@ -1,6 +1,7 @@
 """Pure weekly warehouse/client business-performance transformations."""
 
 from .weekly_kpis import (
+    Activity,
     TransformError,
     WeeklyPerformanceRow,
     assemble_weekly_rows,
@@ -17,6 +18,7 @@ from .weekly_kpis import (
 )
 
 __all__ = [
+    "Activity",
     "TransformError",
     "WeeklyPerformanceRow",
     "assemble_weekly_rows",

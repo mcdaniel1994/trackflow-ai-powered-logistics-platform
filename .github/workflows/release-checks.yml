@@ -34,6 +34,7 @@ jobs:
             label: Data pipelines
             runtime: python
             command: |
+              uv run --project data python data/pipelines/pipeline.py --week-start 2026-07-13
               uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
               uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process
               uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing

@@ -28,10 +28,8 @@ from pipelines.business_performance.queue import (
 )
 from pipelines.business_performance.runner import (
     PermanentRunError,
-    RunnerNotConfiguredError,
     RunnerStatus,
     TransientRunError,
-    main as runner_main,
     run_once,
 )
 
@@ -267,6 +265,22 @@ def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None
     retryable = run_once(pipeline_engine, transient)
     assert retryable.status == RunnerStatus.RETRYABLE
 
+    enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=1))
+
+    def unexpected(_engine: Engine, _claim: RunClaim) -> RunMetrics:
+        raise RuntimeError("sensitive implementation detail")
+
+    unknown = run_once(pipeline_engine, unexpected)
+    assert unknown.status == RunnerStatus.RETRYABLE
+    unknown_row = _run_row(pipeline_engine, UUID(unknown.run_id or ""))
+    assert unknown_row["error_code"] == "EXTRACT_FAILED"
+    assert "sensitive" not in str(unknown_row["error_summary"])
+
+
+def test_runner_is_idle_when_queue_is_empty(pipeline_engine: Engine) -> None:
+    result = run_once(pipeline_engine, lambda _engine, _claim: RunMetrics(0, 0, 0))
+    assert result.status == RunnerStatus.IDLE
+
 
 def test_scheduled_and_manual_metadata_are_distinct(pipeline_engine: Engine) -> None:
     scheduled = enqueue_scheduled(pipeline_engine, date(2026, 7, 15), now=BASE_TIME)
@@ -283,8 +297,3 @@ def test_scheduled_and_manual_metadata_are_distinct(pipeline_engine: Engine) -> 
     assert scheduled_row["scheduled_business_date"] == date(2026, 7, 15)
     assert manual_row["trigger_type"] == "manual"
     assert manual_row["scheduled_business_date"] is None
-
-
-def test_runner_entrypoint_refuses_to_consume_before_phase_six() -> None:
-    with pytest.raises(RunnerNotConfiguredError, match="Phase 6"):
-        runner_main()

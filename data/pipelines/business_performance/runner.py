@@ -15,13 +15,12 @@ from .queue import (
     RunClaim,
     RunMetrics,
     claim_next,
+    engine_from_environment,
     finalize_failure,
     finalize_success,
     heartbeat,
     release_retryable,
 )
-
-RunExecutor = Callable[[Engine, RunClaim], RunMetrics]
 
 
 class RunnerStatus(StrEnum):
@@ -38,6 +37,14 @@ class RunnerResult:
     run_id: str | None = None
 
 
+@dataclass(frozen=True)
+class FinalizedExecution:
+    status: RunnerStatus
+
+
+RunExecutor = Callable[[Engine, RunClaim], RunMetrics | FinalizedExecution]
+
+
 class TransientRunError(RuntimeError):
     def __init__(self, error_code: ErrorCode) -> None:
         super().__init__(error_code)
@@ -48,10 +55,6 @@ class PermanentRunError(RuntimeError):
     def __init__(self, error_code: ErrorCode) -> None:
         super().__init__(error_code)
         self.error_code = error_code
-
-
-class RunnerNotConfiguredError(RuntimeError):
-    """Raised until the Phase 6 ETL executor is wired to the one-shot runner."""
 
 
 def run_once(
@@ -73,7 +76,10 @@ def run_once(
         if not heartbeat(engine, claim):
             return RunnerResult(RunnerStatus.LEASE_LOST, run_id)
         try:
-            metrics = executor(engine, claim)
+            execution = executor(engine, claim)
+            if isinstance(execution, FinalizedExecution):
+                return RunnerResult(execution.status, run_id)
+            metrics = execution
             if not heartbeat(engine, claim):
                 raise LeaseLostError("pipeline run lease is no longer owned")
         except LeaseLostError:
@@ -95,8 +101,14 @@ def run_once(
 
 
 def main() -> None:
-    """Refuse to consume durable work until the Phase 6 ETL executor exists."""
-    raise RunnerNotConfiguredError("business-performance executor is introduced in Phase 6")
+    """Claim and execute at most one durable request through the Prefect flow."""
+    from .flows import prefect_executor
+
+    engine = engine_from_environment()
+    try:
+        run_once(engine, prefect_executor)
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":

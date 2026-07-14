@@ -1,7 +1,10 @@
 # PIPELINE_DESIGN — TrackFlow Business Performance Data Pipeline
 
 **Deliverable:** Weekly Warehouse & Client Performance Report (Milestone 6, Parts 1–3 consolidated)
-**Status:** Revision 3 — incorporates both review passes. Implementation is blocked on the phase-specific approval gates in [§15](#15-approval-gates); the R2 cache integration mechanism remains pending the executable spike in §9.4/Phase 6.
+**Status:** Revision 3 approved design, with implementation evidence appended. GATE-8a was accepted
+on 2026-07-14 using the application-managed boto3 mechanism documented in
+`business_performance/spikes/R2_CACHE_SPIKE.md`; remaining owner gates are tracked in
+[§15](#15-approval-gates).
 **Authoritative inputs:** `data/context_pipeline_design.md` (business contract) > current repository (implemented behavior) > `data/pipeline_data_intructions.md` (milestone deliverables) > `docs/planning/telemetry/` (historical context only).
 **Date:** 2026-07-14. All repository facts below were re-verified against this checkout on this date.
 
@@ -538,6 +541,7 @@ sha256(
   + pipeline_version      # code version (package version / release identifier)
   + evaluation_version    # explicit constant bumped when KPI/validation semantics change
   + target_weeks + recompute-window parameters
+  + SKU-bearing dimension pairs + last_reset_at  # dense-zero/reset semantics are cache inputs
   + cache_nonce (when force_refresh)
 )
 ```
@@ -826,7 +830,7 @@ Each phase: files → dependencies → tests → acceptance gate → rollback �
 | **GATE-5** | Ledger-reset handling: extend `db_size_guard.reset_ledger` to the full §8.1 procedure — **pre-reset checkpoint run**, transactional TRUNCATE of ledger + event tables with `source_ledger_state.last_reset_at`, and **`incomplete_weeks` marking** (incl. checkpoint-failure fallback); week-boundary runbook procedure for planned resets; 26-week business-event retention; Supabase size budget | **Open — approve.** Required for FK integrity, for preserving facts up to the reset instant, and for honestly labeling any week a reset leaves partial |
 | **GATE-6** | Manual pipeline runs admin-only (server-enforced), incl. `force_refresh` | **Approved direction** (administrator-only trigger mandated in review); implementation per §9.3/§10 |
 | **GATE-7** | **Strengthened:** Technical Telemetry contains *only* technical diagnostics; exact business metrics relocate to `/backoffice/operations/*` (Fulfilment, Stock-loss), components split not duplicated | **Approved:** page placement and component split accepted for Phase 9 |
-| **GATE-8a** | **Cache-mechanism proof:** the §9.4 spike must prove cross-process cache reuse on R2 with no persistent Prefect API/database, or select and document the boto3 application-managed fallback; the transformation task retains `cache_key_fn` and `cache_expiration` either way | **Pending technical execution in Phase 6 — not an owner infrastructure action.** Its recorded result selects the only mechanism allowed into deployment preparation |
+| **GATE-8a** | **Cache-mechanism proof:** the §9.4 spike must prove cross-process cache reuse on R2 with no persistent Prefect API/database, or select and document the boto3 application-managed fallback; the transformation task retains `cache_key_fn` and `cache_expiration` either way | **Accepted 2026-07-14:** application-managed boto3 fallback selected; two fresh processes proved reuse against an emulated private S3/R2 endpoint with `PREFECT_API_URL` empty. Evidence: `business_performance/spikes/R2_CACHE_SPIKE.md` |
 | **GATE-8b** | **Owner-executed R2 provisioning:** after GATE-8a, create the private bucket; issue an API token scoped to Object Read & Write on that bucket only; set the `prefect-results/` 1-day lifecycle rule; inject `REPORTING_R2_*` secrets into the `reporting-runner` Coolify service **only** | **Open — owner approval and infrastructure step before Phase 11.** Absent configuration keeps cache disabled without affecting correctness, but final milestone completion requires the approved one-hour cache behavior |
 | *(Scheduling & caching decisions)* | Daily 07:00 America/Chicago refresh; `*/5` dispatcher; 1-hour Prefect cache on R2 | **Approved in review** — recorded here for traceability, not open |
 

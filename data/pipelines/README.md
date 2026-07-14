@@ -7,8 +7,8 @@ Each subfolder or file under `data/pipelines/` should represent **one pipeline o
 - **Main purpose**: consolidate in one place the data movement and transformation logic that powers the company’s applications and analytics.
 - **Recommendation**: document pipelines as you add them—their goal, data sources and sinks, dependencies, and how to run them in development, testing, and production.
 
-Engagement 6 Phase 5 adds the durable PostgreSQL queue state machine under
-`business_performance/`, including the America/Chicago dispatcher, one-shot runner, leases,
-token-verified transitions, and a dedicated advisory lock. Prefect flows, source extraction,
-publication, and R2 caching remain deliberately sequenced for Phase 6; current KPI business logic
-continues to live in the pure `data/process/` layer.
+Engagement 6 Phase 6 completes the local pipeline execution path under `business_performance/`:
+Prefect-as-library extraction/transform/load/finalization flows, transactional publication, and a
+one-hour application-managed S3-compatible cache selected by the documented GATE-8a spike. The
+durable queue remains PostgreSQL-owned, KPI business logic remains in the pure `data/process/`
+layer, and absent R2 configuration safely disables caching.
