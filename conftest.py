@@ -15,6 +15,17 @@ def ignore_tests(path: str) -> None:
 has_supplier_directory = importlib.util.find_spec("supplier_directory") is not None
 has_identity = importlib.util.find_spec("identity") is not None
 has_central_api = importlib.util.find_spec("central_api") is not None
+has_data_pipelines = (
+    importlib.util.find_spec("process") is not None
+    and importlib.util.find_spec("process.business_performance") is not None
+)
+
+if has_data_pipelines:
+    ignore_tests("services/identity/tests")
+    ignore_tests("services/supplier-directory/tests")
+    ignore_tests("services/central-api/tests")
+    ignore_tests("packages/trackflow_auth/tests")
+    ignore_tests("packages/trackflow_incidents/tests")
 
 if has_central_api:
     ignore_tests("services/identity/tests")
