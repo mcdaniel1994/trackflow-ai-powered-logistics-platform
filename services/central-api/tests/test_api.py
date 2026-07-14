@@ -21,10 +21,15 @@ def test_health_checks_database(client: TestClient) -> None:
     ("method", "path", "payload"),
     [
         ("GET", "/inventory/products", None),
+        ("GET", "/inventory/clients", None),
+        ("POST", "/inventory/clients", {}),
+        ("PATCH", "/inventory/clients/11111111-1111-4111-8111-111111111111", {}),
         ("POST", "/inventory/products", {}),
+        ("PATCH", "/inventory/products/1", {}),
         ("GET", "/inventory/products/1", None),
         ("POST", "/inventory/orders/inbound", {}),
         ("POST", "/inventory/orders/outbound", {}),
+        ("POST", "/inventory/discrepancies", {}),
         ("GET", "/inventory/orders", None),
     ],
 )

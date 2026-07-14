@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from typing import ClassVar
 from uuid import uuid4
 
-from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Float, Index, String, Text, UniqueConstraint
+from sqlalchemy import JSON, CheckConstraint, Column, DateTime, Float, Index, String, Text, UniqueConstraint, text
 from sqlalchemy.sql.schema import SchemaItem
 from sqlmodel import Field, SQLModel
 
@@ -33,6 +33,7 @@ class Supplier(SQLModel, table=True):
             name="ck_suppliers_categories",
         ),
         UniqueConstraint("name", "country", name="uq_suppliers_name_country"),
+        Index("uq_suppliers_name_country_ci", text("lower(name)"), "country", unique=True),
         Index("ix_suppliers_country_name", "country", "name"),
         Index("ix_suppliers_status", "status"),
     )

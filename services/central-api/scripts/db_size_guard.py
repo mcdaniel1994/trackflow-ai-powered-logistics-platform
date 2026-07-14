@@ -63,7 +63,14 @@ def reset_ledger(session: Session, user_uuid: str, settings: Settings) -> None:
     """
     set_feed_enabled(session, enabled=False, note="db_size_guard: hard-limit reset in progress")
     with Session(get_engine()) as work:
-        work.execute(text("TRUNCATE stock_exits, stock_entries RESTART IDENTITY"))
+        # Phase 2 business events reference outbound rows with RESTRICT FKs, so
+        # disposable resets clear dependents and ledger rows as one atomic set.
+        work.execute(
+            text(
+                "TRUNCATE inventory_discrepancies, stockout_events, "
+                "stock_exits, stock_entries RESTART IDENTITY"
+            )
+        )
         work.commit()
         seed_inventory(work, user_uuid)
         backfill_history(work, user_uuid, days=settings.operations_feed_backfill_days)

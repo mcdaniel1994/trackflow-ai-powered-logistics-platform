@@ -38,7 +38,13 @@ from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_engine
 from central_api.domains.inventory.models import StockEntry, StockExit
 from central_api.domains.inventory.repository import InventoryRepository, entry_table, exit_table, sku_table
-from central_api.domains.inventory.schemas import ExitType, StockEntryCreate, StockExitCreate, Warehouse
+from central_api.domains.inventory.schemas import (
+    ExitType,
+    InventoryDiscrepancyCreate,
+    StockEntryCreate,
+    StockExitCreate,
+    Warehouse,
+)
 from central_api.domains.inventory.seed import seed_inventory
 from central_api.domains.inventory.service import InventoryError, InventoryService
 from central_api.domains.operations.control import feed_enabled
@@ -51,6 +57,9 @@ _OVERREQUEST_PROBABILITY = 0.08
 # Relative weights for the kind of movement generated on a live tick.
 _INBOUND_WEIGHT = 0.45
 _LOSS_WEIGHT = 0.05  # remainder is dispatch
+# A discrepancy is rare and attaches only to a successfully-created dispatch,
+# so the database uniqueness rule is naturally respected by the live feed.
+_DISCREPANCY_PROBABILITY = 0.02
 
 
 class FeedRunner:
@@ -191,7 +200,13 @@ def _generate_one(
         warehouse=Warehouse(warehouse),
     )
     try:
-        service.record_outbound(payload, uuid)
+        created = service.record_outbound(payload, uuid)
+        if created.exit_type == ExitType.DISPATCH and random.random() < _DISCREPANCY_PROBABILITY:
+            service.record_discrepancy(
+                InventoryDiscrepancyCreate(stock_exit_id=created.id, quantity_delta=random.choice((-1, 1))),
+                None,
+                source="feed",
+            )
     except InventoryError as exc:
         # A genuinely rejected over-request: emit the same honest best-effort diagnostic
         # the HTTP boundary would, then move on. The business write did not happen.

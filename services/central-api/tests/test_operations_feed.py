@@ -8,10 +8,12 @@ import pytest
 from sqlalchemy import func
 from sqlalchemy import select as sa_select
 from sqlalchemy.engine import Engine
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from central_api.core.config import Settings
+from central_api.domains.inventory.models import InventoryDiscrepancy
 from central_api.domains.inventory.repository import InventoryRepository, entry_table, exit_table, sku_table
+from central_api.domains.inventory.service import InventoryService
 from central_api.domains.operations.control import feed_enabled, set_feed_enabled
 from scripts import db_size_guard, operations_feed
 
@@ -113,6 +115,29 @@ def test_over_request_emits_real_dispatch_rejection(
     assert rows[0].reason_code == "INSUFFICIENT_STOCK"
     # Allowlist holds: no free-text or PII keys ever reach the store.
     assert set(rows[0].properties) <= {"warehouse", "reason_code", "quantity"}
+
+
+def test_successful_feed_dispatch_can_create_one_unique_discrepancy(
+    engine: Engine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with Session(engine) as session:
+        operations_feed.ensure_baseline(session, SERVICE_UUID)
+        repo = InventoryRepository(session)
+        sku_id, warehouse = next(
+            pair for pair in operations_feed._list_skus(session) if repo.current_stock(*pair) > 0
+        )
+        rolls = iter((0.5, 0.5, 0.0))  # dispatch, no over-request, discrepancy emitted
+        monkeypatch.setattr(operations_feed.random, "random", lambda: next(rolls))
+        monkeypatch.setattr(operations_feed.random, "randint", lambda _low, _high: 1)
+        monkeypatch.setattr(operations_feed.random, "choice", lambda values: values[0])
+        monkeypatch.setattr(operations_feed, "_tracking_number", lambda: "FEED-DISCREPANCY")
+        operations_feed._generate_one(InventoryService(session), repo, sku_id, warehouse, SERVICE_UUID)
+
+    with Session(engine) as session:
+        rows = list(session.exec(select(InventoryDiscrepancy)).all())
+        assert len(rows) == 1
+        assert rows[0].source == "feed"
+        assert rows[0].created_by_user_uuid is None
 
 
 def test_feed_logs_carry_no_pii(engine: Engine, settings: Settings, caplog: pytest.LogCaptureFixture) -> None:

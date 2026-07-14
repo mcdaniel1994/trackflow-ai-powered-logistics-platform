@@ -31,7 +31,10 @@ def upgrade() -> None:
         sa.Column("notes", sa.Text(), nullable=True),
         sa.CheckConstraint("country IN ('USA', 'Spain')", name="ck_suppliers_country"),
         sa.CheckConstraint("currency IN ('USD', 'EUR')", name="ck_suppliers_currency"),
-        sa.CheckConstraint("(country = 'USA' AND currency = 'USD') OR (country = 'Spain' AND currency = 'EUR')", name="ck_suppliers_country_currency"),
+        sa.CheckConstraint(
+            "(country = 'USA' AND currency = 'USD') OR (country = 'Spain' AND currency = 'EUR')",
+            name="ck_suppliers_country_currency",
+        ),
         sa.CheckConstraint("status IN ('active', 'suspended')", name="ck_suppliers_status"),
         sa.CheckConstraint("rate_per_shipment > 0", name="ck_suppliers_positive_rate"),
         sa.CheckConstraint(

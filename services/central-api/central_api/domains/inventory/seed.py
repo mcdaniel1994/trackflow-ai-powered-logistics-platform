@@ -11,8 +11,8 @@ from sqlmodel import Session
 
 from ...core.config import get_settings
 from ...db.session import get_engine
-from .models import SKU, StockEntry, StockExit
-from .repository import entry_table, exit_table, sku_table
+from .models import SKU, Client, StockEntry, StockExit
+from .repository import client_table, entry_table, exit_table, sku_table
 
 logger = logging.getLogger(__name__)
 
@@ -115,15 +115,31 @@ def _sku_id(sku: SKU) -> int:
     return sku.id
 
 
-def _ensure_skus(session: Session) -> dict[tuple[str, str], SKU]:
+def _ensure_clients(session: Session) -> dict[str, Client]:
+    """Create each display name once and reuse its generated opaque identifier."""
+    result: dict[str, Client] = {}
+    for display_name in sorted({item.client_name for item in SKU_SEEDS}):
+        existing = session.execute(
+            select(Client).where(client_table.c.display_name == display_name)
+        ).scalar_one_or_none()
+        if existing is None:
+            existing = Client(display_name=display_name)
+            session.add(existing)
+            session.flush()
+        result[display_name] = existing
+    return result
+
+
+def _ensure_skus(session: Session, clients: dict[str, Client]) -> dict[tuple[str, str], SKU]:
     """Insert missing SKUs and refuse to overwrite a conflicting existing row."""
     result: dict[tuple[str, str], SKU] = {}
     for item in SKU_SEEDS:
         existing = _find_sku(session, item.sku, item.warehouse)
         expected = {
             "name": item.name,
-            "client_name": item.client_name,
+            "client_id": clients[item.client_name].id,
             "category": item.category,
+            "min_stock_threshold": 0,
         }
         if existing is not None:
             actual = {key: getattr(existing, key) for key in expected}
@@ -134,7 +150,7 @@ def _ensure_skus(session: Session) -> dict[tuple[str, str], SKU]:
         created = SKU(
             name=item.name,
             sku=item.sku,
-            client_name=item.client_name,
+            client_id=clients[item.client_name].id,
             category=item.category,
             warehouse=item.warehouse,
         )
@@ -228,7 +244,8 @@ def _ensure_exits(session: Session, skus: dict[tuple[str, str], SKU], user_uuid:
 def seed_inventory(session: Session, user_uuid: str) -> None:
     """Seed the complete fixture atomically so retries never leave partial data."""
     try:
-        skus = _ensure_skus(session)
+        clients = _ensure_clients(session)
+        skus = _ensure_skus(session, clients)
         _ensure_entries(session, skus, user_uuid)
         _ensure_exits(session, skus, user_uuid)
         session.commit()

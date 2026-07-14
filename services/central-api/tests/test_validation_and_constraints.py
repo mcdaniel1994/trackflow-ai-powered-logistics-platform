@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session
 
 from central_api.domains.incidents.models import Incident
-from central_api.domains.inventory.models import SKU, StockEntry, StockExit
+from central_api.domains.inventory.models import SKU, Client, StockEntry, StockExit
 
 
 @pytest.mark.parametrize(
@@ -56,11 +56,11 @@ def test_schema_has_no_stored_stock_or_user_table(engine: Engine) -> None:
     assert "current_stock" not in {column["name"] for column in inspector.get_columns("skus")}
 
 
-def _base_sku() -> SKU:
+def _base_sku(client: Client) -> SKU:
     return SKU(
         name="Constraint Test",
         sku="CONSTRAINT-1",
-        client_name="TrackFlow Test",
+        client_id=client.id,
         category="fashion",
         warehouse="LA",
     )
@@ -68,7 +68,10 @@ def _base_sku() -> SKU:
 
 def test_database_enforces_quantity_tracking_and_foreign_keys(engine: Engine) -> None:
     with Session(engine) as session:
-        sku = _base_sku()
+        client = Client(display_name="TrackFlow Test")
+        session.add(client)
+        session.flush()
+        sku = _base_sku(client)
         session.add(sku)
         session.commit()
         session.refresh(sku)
@@ -114,9 +117,12 @@ def test_database_enforces_quantity_tracking_and_foreign_keys(engine: Engine) ->
 
 def test_database_enforces_unique_sku_warehouse(engine: Engine) -> None:
     with Session(engine) as session:
-        session.add(_base_sku())
+        client = Client(display_name="TrackFlow Test")
+        session.add(client)
+        session.flush()
+        session.add(_base_sku(client))
         session.commit()
-        session.add(_base_sku())
+        session.add(_base_sku(client))
         with pytest.raises(IntegrityError):
             session.commit()
 
@@ -139,7 +145,10 @@ def test_database_enforces_incident_enums(engine: Engine) -> None:
 
 def test_database_accepts_valid_loss_and_dispatch_constraints(engine: Engine) -> None:
     with Session(engine) as session:
-        sku = _base_sku()
+        client = Client(display_name="TrackFlow Test")
+        session.add(client)
+        session.flush()
+        sku = _base_sku(client)
         session.add(sku)
         session.commit()
         session.refresh(sku)

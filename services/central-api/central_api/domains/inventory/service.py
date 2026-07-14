@@ -3,21 +3,28 @@
 import logging
 from dataclasses import dataclass
 from typing import Literal, cast
+from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlmodel import Session
 
-from .models import SKU, StockEntry, StockExit
+from .models import SKU, Client, InventoryDiscrepancy, StockEntry, StockExit, StockoutEvent, utc_now
 from .repository import InventoryRepository, MovementRecord
 from .schemas import (
     Category,
+    ClientCreate,
+    ClientRead,
+    ClientUpdate,
     ExitType,
+    InventoryDiscrepancyCreate,
+    InventoryDiscrepancyRead,
     MovementPage,
     MovementRead,
     ProductPage,
     SKUCreate,
     SKURead,
     SKUSummary,
+    SKUUpdate,
     StockEntryCreate,
     StockEntryRead,
     StockExitCreate,
@@ -56,18 +63,29 @@ class InventoryService:
         self.repository = InventoryRepository(session)
 
     @staticmethod
-    def _product_response(sku: SKU, current_stock: int) -> SKURead:
+    def _product_response(sku: SKU, client_name: str, current_stock: int) -> SKURead:
         if sku.id is None:
             raise RuntimeError("Persisted SKU is missing its primary key")
         return SKURead(
             id=sku.id,
             name=sku.name,
             sku=sku.sku,
-            client_name=sku.client_name,
+            client_id=sku.client_id,
+            client_name=client_name,
             category=Category(sku.category),
             warehouse=Warehouse(sku.warehouse),
+            min_stock_threshold=sku.min_stock_threshold,
             current_stock=current_stock,
         )
+
+    @staticmethod
+    def _client_response(client: Client) -> ClientRead:
+        return ClientRead(client_id=client.id, client_name=client.display_name)
+
+    @staticmethod
+    def _require_admin(role: str) -> None:
+        if role != "admin":
+            raise InventoryError(status_code=403, detail="Administrator role required")
 
     @staticmethod
     def _constraint_name(exc: IntegrityError) -> str | None:
@@ -90,7 +108,7 @@ class InventoryService:
         except SQLAlchemyError as exc:
             raise self._persistence_failure("list_products", exc) from exc
         return ProductPage(
-            items=[self._product_response(sku, stock) for sku, stock in rows],
+            items=[self._product_response(sku, client_name, stock) for sku, client_name, stock in rows],
             total=total,
             limit=limit,
             offset=offset,
@@ -98,7 +116,9 @@ class InventoryService:
 
     def create_sku(self, payload: SKUCreate) -> SKURead:
         """Create a zero-stock SKU while mapping its composite duplicate cleanly."""
-        sku = SKU(**payload.model_dump(mode="json"))
+        if self.repository.get_client(payload.client_id) is None:
+            raise InventoryError(status_code=422, detail="Client not found")
+        sku = SKU(**payload.model_dump())
         try:
             self.repository.add_sku(sku)
             self.session.commit()
@@ -110,10 +130,15 @@ class InventoryService:
                     status_code=409,
                     detail=f"SKU '{payload.sku}' already exists in warehouse '{payload.warehouse.value}'",
                 ) from exc
+            if self._constraint_name(exc) == "skus_client_id_fkey":
+                raise InventoryError(status_code=422, detail="Client not found") from exc
             raise self._persistence_failure("create_sku", exc) from exc
         except SQLAlchemyError as exc:
             raise self._persistence_failure("create_sku", exc) from exc
-        return self._product_response(sku, 0)
+        client = self.repository.get_client(payload.client_id)
+        if client is None:
+            raise RuntimeError("Persisted SKU client is missing")
+        return self._product_response(sku, client.display_name, 0)
 
     def get_product(self, sku_id: int) -> SKURead:
         try:
@@ -123,6 +148,76 @@ class InventoryService:
         if product is None:
             raise InventoryError(status_code=404, detail="SKU not found")
         return self._product_response(*product)
+
+    def update_sku(self, sku_id: int, payload: SKUUpdate) -> SKURead:
+        """Update only the threshold; UUID ownership stays immutable for historical attribution."""
+        try:
+            sku = self.repository.get_sku_for_update(sku_id)
+            if sku is None:
+                raise InventoryError(status_code=404, detail="SKU not found")
+            if payload.client_id is not None and payload.client_id != sku.client_id:
+                raise InventoryError(status_code=409, detail="CLIENT_ID_IMMUTABLE")
+            if payload.min_stock_threshold is not None:
+                sku.min_stock_threshold = payload.min_stock_threshold
+            self.session.add(sku)
+            self.session.commit()
+            self.session.refresh(sku)
+            client = self.repository.get_client(sku.client_id)
+            if client is None:
+                raise RuntimeError("Persisted SKU client is missing")
+            current_stock = self.repository.current_stock(sku_id, sku.warehouse)
+        except InventoryError:
+            self.session.rollback()
+            raise
+        except SQLAlchemyError as exc:
+            raise self._persistence_failure("update_sku", exc) from exc
+        return self._product_response(sku, client.display_name, current_stock)
+
+    def list_clients(self) -> list[ClientRead]:
+        try:
+            clients = self.repository.list_clients()
+        except SQLAlchemyError as exc:
+            raise self._persistence_failure("list_clients", exc) from exc
+        return [self._client_response(client) for client in clients]
+
+    def create_client(self, payload: ClientCreate, role: str) -> ClientRead:
+        self._require_admin(role)
+        client = Client(display_name=payload.display_name)
+        try:
+            self.repository.add_client(client)
+            self.session.commit()
+            self.session.refresh(client)
+        except IntegrityError as exc:
+            self.session.rollback()
+            if self._constraint_name(exc) == "uq_clients_display_name":
+                raise InventoryError(status_code=409, detail="CLIENT_NAME_EXISTS") from exc
+            raise self._persistence_failure("create_client", exc) from exc
+        except SQLAlchemyError as exc:
+            raise self._persistence_failure("create_client", exc) from exc
+        return self._client_response(client)
+
+    def rename_client(self, client_id: UUID, payload: ClientUpdate, role: str) -> ClientRead:
+        self._require_admin(role)
+        try:
+            client = self.repository.get_client(client_id)
+            if client is None:
+                raise InventoryError(status_code=404, detail="Client not found")
+            client.display_name = payload.display_name
+            client.updated_at = utc_now()
+            self.session.add(client)
+            self.session.commit()
+            self.session.refresh(client)
+        except InventoryError:
+            self.session.rollback()
+            raise
+        except IntegrityError as exc:
+            self.session.rollback()
+            if self._constraint_name(exc) == "uq_clients_display_name":
+                raise InventoryError(status_code=409, detail="CLIENT_NAME_EXISTS") from exc
+            raise self._persistence_failure("rename_client", exc) from exc
+        except SQLAlchemyError as exc:
+            raise self._persistence_failure("rename_client", exc) from exc
+        return self._client_response(client)
 
     def record_inbound(self, payload: StockEntryCreate, user_uuid: str) -> StockEntryRead:
         """Lock the SKU and commit the receipt as one indivisible unit."""
@@ -192,6 +287,24 @@ class InventoryService:
                 user_uuid=user_uuid,
             )
             self.repository.add_exit(stock_exit)
+            self.session.flush()
+            after = available - payload.quantity
+            # The locked before/after values and event share one commit, so the
+            # threshold history can never disagree with its triggering movement.
+            if sku.min_stock_threshold > 0 and available > sku.min_stock_threshold >= after:
+                if stock_exit.id is None:
+                    raise RuntimeError("Persisted stock exit is missing its primary key")
+                self.repository.add_stockout_event(
+                    StockoutEvent(
+                        sku_id=payload.sku_id,
+                        warehouse=payload.warehouse.value,
+                        client_id=sku.client_id,
+                        threshold_at_event=sku.min_stock_threshold,
+                        stock_after=after,
+                        stock_exit_id=stock_exit.id,
+                        occurred_at=stock_exit.created_at,
+                    )
+                )
             self.session.commit()
             self.session.refresh(stock_exit)
         except InventoryError:
@@ -200,6 +313,49 @@ class InventoryService:
         except SQLAlchemyError as exc:
             raise self._persistence_failure("record_outbound", exc) from exc
         return StockExitRead.model_validate(stock_exit)
+
+    def record_discrepancy(
+        self,
+        payload: InventoryDiscrepancyCreate,
+        user_uuid: str | None,
+        *,
+        source: Literal["manual", "feed"] = "manual",
+    ) -> InventoryDiscrepancyRead:
+        """Validate and store one discrepancy occurrence for a dispatch order."""
+        try:
+            stock_exit = self.repository.get_exit(payload.stock_exit_id)
+            if stock_exit is None:
+                raise InventoryError(status_code=404, detail="Stock exit not found")
+            if stock_exit.exit_type != ExitType.DISPATCH.value:
+                raise InventoryError(status_code=422, detail="Discrepancy requires a dispatch stock exit")
+            if self.repository.discrepancy_exists(payload.stock_exit_id):
+                raise InventoryError(status_code=409, detail="DISCREPANCY_EXISTS")
+            sku = self.repository.get_sku_for_update(stock_exit.sku_id)
+            if sku is None or sku.warehouse != stock_exit.warehouse:
+                raise InventoryError(status_code=422, detail="Stock exit SKU ownership is invalid")
+            discrepancy = InventoryDiscrepancy(
+                stock_exit_id=payload.stock_exit_id,
+                sku_id=stock_exit.sku_id,
+                warehouse=stock_exit.warehouse,
+                client_id=sku.client_id,
+                quantity_delta=payload.quantity_delta,
+                source=source,
+                created_by_user_uuid=user_uuid,
+            )
+            self.repository.add_discrepancy(discrepancy)
+            self.session.commit()
+            self.session.refresh(discrepancy)
+        except InventoryError:
+            self.session.rollback()
+            raise
+        except IntegrityError as exc:
+            self.session.rollback()
+            if self._constraint_name(exc) == "uq_inventory_discrepancies_stock_exit_id":
+                raise InventoryError(status_code=409, detail="DISCREPANCY_EXISTS") from exc
+            raise self._persistence_failure("record_discrepancy", exc) from exc
+        except SQLAlchemyError as exc:
+            raise self._persistence_failure("record_discrepancy", exc) from exc
+        return InventoryDiscrepancyRead.model_validate(discrepancy)
 
     def list_movements(self, *, limit: int, offset: int) -> MovementPage:
         try:
@@ -236,5 +392,14 @@ class InventoryService:
             warehouse=Warehouse(record.warehouse),
             created_at=record.created_at,
             user_uuid=record.user_uuid,
-            sku=SKUSummary.model_validate(record.sku),
+            sku=SKUSummary(
+                id=record.sku.id,
+                name=record.sku.name,
+                sku=record.sku.sku,
+                client_id=record.sku.client_id,
+                client_name=record.client_name,
+                category=Category(record.sku.category),
+                warehouse=Warehouse(record.sku.warehouse),
+                min_stock_threshold=record.sku.min_stock_threshold,
+            ),
         )
