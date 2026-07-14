@@ -15,9 +15,16 @@ Phase 1)** from **deferred/future**, and never claims a planned signal is live.
 > dashboard surface changes. A telemetry change is not complete until this file and the relevant
 > tests/runbooks reflect it. Reviewers should reject telemetry changes that do not update this file.
 
-Status legend: ✅ Implemented today · 🧭 Engagement 6 Phase 1 — implemented in code and verified
-locally; **production collection is gated** on a scheduled retention prune before
-`TELEMETRY_ENABLED=true` · ⏳ Deferred/future.
+Status legend: ✅ Implemented today · 🧭 Engagement 6 — implemented and, in the portfolio-production
+environment, **collection is enabled** (`TELEMETRY_ENABLED=true`) with a 7-day retention prune wired
+to a scheduled runner and a database-size guard · ⏳ Deferred/future.
+
+> **Portfolio-production data note.** The environment at `backoffice.forgehub.cloud` runs a **live
+> operations feed** (`services/central-api/scripts/operations_feed.py`) that writes *real* inventory
+> movements through the real domain rules, so the exact metrics below are genuine and reconcilable —
+> the data is **synthetic-but-canonical**, not a separate demo set, and is disposable under the
+> Supabase Free waiver. See [operations-feed.md](operations-feed.md). No **security** events are
+> fabricated; `api.access.denied` still reflects only real refusals.
 
 ---
 
@@ -61,8 +68,8 @@ path) and **may be lost on crash/restart**. No exact KPI is built on best-effort
 
 | Signal | Owner / trigger | Purpose & stakeholder question | Category | Safe fields (allowlist) / exclusions | Storage | Retention | Access | Reporting surface | Evidence | Status |
 |---|---|---|---|---|---|---|---|---|---|---|
-| `inventory.dispatch.rejected` | Central API inventory error path; post-response `BackgroundTask` | "How often, and why, do dispatch attempts fail per warehouse?" (Ana Whitfield) — diagnostic, best-effort | Operational (diagnostic) | Allowlist `{warehouse, reason_code, quantity?}`; `reason_code` ∈ `INSUFFICIENT_STOCK`/`SKU_NOT_FOUND`/`WAREHOUSE_MISMATCH`. **Excludes** actor, SKU codes beyond id, tokens, free text | `telemetry_events` (PostgreSQL) | 90 days (operational) | Authenticated users (aggregates only) | Fulfilment (labeled "diagnostic — may undercount") | Plan B3/B5 | 🧭 |
-| `api.access.denied` | Central API `core/dependencies.py`; post-response `BackgroundTask` | "Are protected APIs being refused / probed?" (Andrés Kim) — best-effort | Security (diagnostic) | Allowlist `{reason}`; `reason` ∈ `unauthenticated`/`csrf`/`password_change_required` **only** (the verifier normalizes all token faults to one 401 — finer reasons are **not** observable without a reviewed verifier change). **Excludes** path, token, actor, email | `telemetry_events` | 365 days (security) | Authenticated users (aggregates only) | Security | Plan B4/B5 | 🧭 |
+| `inventory.dispatch.rejected` | Central API inventory error path (post-response `BackgroundTask`); **also** the live operations feed via a direct `record_dispatch_rejection` off the request path | "How often, and why, do dispatch attempts fail per warehouse?" (Ana Whitfield) — diagnostic, best-effort | Operational (diagnostic) | Allowlist `{warehouse, reason_code, quantity?}`; `reason_code` ∈ `INSUFFICIENT_STOCK`/`SKU_NOT_FOUND`/`WAREHOUSE_MISMATCH`. **Excludes** actor, SKU codes beyond id, tokens, free text | `telemetry_events` (PostgreSQL) | 7 days (operational, portfolio) | Authenticated users (aggregates only) | Fulfilment (labeled "diagnostic — may undercount") | Plan B3/B5; `test_operations_feed.py` | 🧭 |
+| `api.access.denied` | Central API `core/dependencies.py`; post-response `BackgroundTask` | "Are protected APIs being refused / probed?" (Andrés Kim) — best-effort | Security (diagnostic) | Allowlist `{reason}`; `reason` ∈ `unauthenticated`/`csrf`/`password_change_required` **only** (the verifier normalizes all token faults to one 401 — finer reasons are **not** observable without a reviewed verifier change). **Excludes** path, token, actor, email | `telemetry_events` | 7 days (security, portfolio — see 2.4) | Authenticated users (aggregates only) | Security | Plan B4/B5 | 🧭 |
 
 ### 2.3 Identity auth audit — logs only in Phase 1 (no `telemetry_events`, no dashboard)
 
@@ -74,9 +81,20 @@ path) and **may be lost on crash/restart**. No exact KPI is built on best-effort
 
 - **Store:** single table `telemetry_events` in the existing Central API (Supabase) PostgreSQL — holds **only** the best-effort diagnostics in 2.2. Exact metrics (2.1) are not duplicated into it.
 - **Access control:** reporting endpoints require an authenticated Back Office session (`current_principal`) and return **aggregates only** — no endpoint exposes raw event rows; no PII is stored or returned.
-- **Retention enforcement:** `services/central-api/scripts/prune_telemetry_events.py` deletes rows past each category window (operational 90d, security 365d). **Gate:** it must be wired to a scheduled runner **before `TELEMETRY_ENABLED=true` in production**. If scheduling is not ready at cutover, a time-bounded exception is recorded here — **owner: Andrés Kim (CTO); deadline: 30 days after Phase 1 production enablement** — and closed by wiring the schedule. *(No exception is active — production collection is not yet
-enabled; `prune_telemetry_events` exists and is unit-tested but is not yet scheduled.)*
-- **Environment separation:** every row carries `env`; non-production events must not reach the production store; tests use disposable databases.
+- **Retention enforcement:** `services/central-api/scripts/prune_telemetry_events.py` deletes rows
+  past each category window. In the portfolio-production environment both windows are **7 days**
+  (`TELEMETRY_OPERATIONAL_RETENTION_DAYS=7`, `TELEMETRY_SECURITY_RETENTION_DAYS=7`). The prune is wired
+  to a **daily** scheduled runner and `scripts/db_size_guard.py` (~every 15 min) also prunes at the
+  400 MB soft limit, so the enablement gate is **closed** (no exception active). A 7-day **security**
+  window is a deliberate portfolio deviation from the standard's risk-based security retention,
+  accepted because the data is synthetic and the store is disposable.
+- **Storage bounding:** the live operations feed grows the ledger, so `db_size_guard.py` keeps the
+  database under the Supabase Free 500 MB cap — pruning telemetry at 400 MB and, at 450 MB, pausing
+  the feed (via `operations_feed_control`) and running a ledger-safe reset/reseed. See
+  [operations-feed.md](operations-feed.md).
+- **Environment separation:** every row carries `env`; non-production (local/CI) events must not
+  reach the production store; tests use disposable databases. Portfolio-production rows are `env`
+  ≈ production and are the intended canonical content of that environment.
 
 ---
 

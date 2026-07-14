@@ -15,13 +15,22 @@
 ## Active
 
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
-  in progress. Phase 1 adds a Central API `telemetry` domain with a `telemetry_events` table,
+  in progress. Phase 1 added a Central API `telemetry` domain with a `telemetry_events` table,
   exact warehouse metrics read from `StockEntry`/`StockExit`, best-effort post-response
   rejected-dispatch and `api.access.denied` diagnostics, Identity auth audit logs (logs only),
   enforced retention, bounded aggregates-only reporting endpoints, and a read-only Back Office
-  Telemetry route (Fulfilment/Security) reusing the inventory navigation pattern. The living
-  signal reference is `docs/runbooks/telemetry-inventory.md`. Browser analytics, a durable event
-  queue, correlation IDs, metrics/tracing backends, and AI telemetry are explicitly deferred.
+  Telemetry route (Fulfilment/Security). A follow-on **live operations feed** slice makes the
+  portfolio-production Back Office feel live: a single-writer worker
+  (`scripts/operations_feed.py`, pg advisory lock + `operations_feed_control` kill switch) writes
+  real synthetic-but-canonical inventory movements ~every 5s so exact metrics stay live and
+  reconcilable; dashboards auto-refresh ~5s without flicker (`lib/hooks/useAutoRefresh.ts`) and a
+  new live **Operations Overview** replaces the static "Inventory + Carriers" landing (the
+  Engagement-2 scoring demo moved to `/backoffice/carrier-scoring`). Production telemetry is now
+  enabled with 7-day retention, a daily prune, and a `scripts/db_size_guard.py` size guard
+  (400 MB soft / 450 MB hard, ledger-safe reset) that keeps Supabase Free bounded. Runbook:
+  `docs/runbooks/operations-feed.md`; signal reference: `docs/runbooks/telemetry-inventory.md`.
+  Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
+  carriers tables, and AI telemetry remain explicitly deferred.
 
 ## Subprojects
 

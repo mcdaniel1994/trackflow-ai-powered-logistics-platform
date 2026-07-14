@@ -25,6 +25,17 @@ class Settings(BaseSettings):
     telemetry_enabled: bool = False
     telemetry_operational_retention_days: int = 90
     telemetry_security_retention_days: int = 365
+    # Live operations feed (portfolio synthetic-but-canonical data generation).
+    operations_feed_enabled: bool = False
+    operations_feed_interval_seconds: float = 5.0
+    operations_feed_batch_min: int = 1
+    operations_feed_batch_max: int = 4
+    operations_feed_backfill_days: int = 10
+    operations_feed_user_uuid: str | None = None
+    operations_feed_lock_key: int = 4306160006  # constant pg advisory-lock key for single-writer
+    # Automatic database-size guardrails for the Supabase Free tier (500 MB cap).
+    db_size_soft_limit_mb: int = 400
+    db_size_hard_limit_mb: int = 450
     identity_jwt_public_key: str = ""
     identity_jwt_algorithm: str = "RS256"
     identity_jwt_issuer: str = "trackflow-identity"

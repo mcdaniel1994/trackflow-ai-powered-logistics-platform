@@ -157,14 +157,19 @@ This appendix applies the portable core to this repository. It is not part of th
   identity-service tests assert that sensitive data is absent from logs (including the Engagement 6
   `auth.login.*` / `auth.session.expired` audit lines); Identity, Central API, and Back Office expose
   health checks.
-- Engagement 6 Phase 1 (implemented in code, verified locally; production collection gated on a
-  scheduled retention prune before `TELEMETRY_ENABLED=true`): Central API owns a single
-  `telemetry_events` table holding only best-effort diagnostics (`inventory.dispatch.rejected`,
-  `api.access.denied`) emitted after the response via a background task, with allowlisted PII-free
-  fields, `operational`/`security` category retention, and a `prune_telemetry_events` command. Exact
-  warehouse metrics (dispatch/receiving/loss) are read directly from `StockEntry`/`StockExit`. The
-  Back Office `/backoffice/telemetry` route exposes bounded, aggregates-only reporting. The living
-  per-signal reference is [`../runbooks/telemetry-inventory.md`](../runbooks/telemetry-inventory.md).
+- Engagement 6 (implemented; **collection enabled in the portfolio-production environment**): Central
+  API owns a single `telemetry_events` table holding only best-effort diagnostics
+  (`inventory.dispatch.rejected`, `api.access.denied`) emitted after the response via a background task
+  (and, for the live operations feed, via a direct off-request-path emit), with allowlisted PII-free
+  fields and category retention pruned by a scheduled `prune_telemetry_events` runner. Exact warehouse
+  metrics (dispatch/receiving/loss) are read directly from `StockEntry`/`StockExit`. A **live
+  operations feed** writes real, synthetic-but-canonical movements so those metrics are live and
+  reconcilable, and a **database-size guard** keeps Supabase Free bounded. Retention in that
+  environment is 7 days for both categories; the 7-day **security** window is a documented portfolio
+  deviation from this standard's risk-based guidance (§5), accepted because the data is synthetic and
+  the store disposable. No security events are fabricated. The Back Office `/backoffice/telemetry`
+  route and the live Operations Overview expose bounded, aggregates-only reporting that auto-refreshes.
+  The living per-signal reference is [`../runbooks/telemetry-inventory.md`](../runbooks/telemetry-inventory.md).
 - Not yet implemented: metrics, distributed tracing, platform-wide correlation IDs, alerting or
   uptime monitoring, a browser product-analytics/ingest pipeline, a durable telemetry event queue,
   and production product AI agents. This standard therefore governs design and code-level discipline;

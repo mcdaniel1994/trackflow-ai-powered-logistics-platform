@@ -1,5 +1,5 @@
-import { InventoryCarrierView } from "@/components/InventoryCarrierView";
+import { OperationsOverview } from "@/components/OperationsOverview";
 
 export default function Page() {
-  return <InventoryCarrierView />;
+  return <OperationsOverview />;
 }

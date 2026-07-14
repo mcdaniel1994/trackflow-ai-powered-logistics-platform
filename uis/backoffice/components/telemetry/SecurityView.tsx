@@ -1,10 +1,12 @@
 "use client";
 
 import { PackageMinus, ShieldAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { LiveIndicator } from "./LiveIndicator";
 import { RangeControls } from "./RangeControls";
 import { TelemetryPageHeader } from "./TelemetryPageHeader";
 import { StatCard } from "@/components/StatCard";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { defaultRange, getAccessDenialMetrics, getStockLossMetrics, telemetryError } from "@/lib/telemetry/api";
 import type { AccessDenialMetrics, DateRange, StockLossMetrics } from "@/lib/telemetry/types";
 
@@ -16,29 +18,23 @@ const REASON_LABELS: Record<string, string> = {
 
 export function SecurityView() {
   const [range, setRange] = useState<DateRange>(defaultRange);
-  const [denials, setDenials] = useState<AccessDenialMetrics | null>(null);
-  const [loss, setLoss] = useState<StockLossMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, error, loading, lastUpdated } = useAutoRefresh<{
+    denials: AccessDenialMetrics;
+    loss: StockLossMetrics;
+  }>(
+    () =>
+      Promise.all([getAccessDenialMetrics(range), getStockLossMetrics(range)]).then(([denials, loss]) => ({
+        denials,
+        loss,
+      })),
+    [range],
+    { mapError: (caught) => telemetryError(caught).message },
+  );
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([getAccessDenialMetrics(range), getStockLossMetrics(range)])
-      .then(([denialResult, lossResult]) => {
-        if (!active) return;
-        setDenials(denialResult);
-        setLoss(lossResult);
-      })
-      .catch((caught) => active && setError(telemetryError(caught).message))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [range]);
+  const denials = data?.denials ?? null;
+  const loss = data?.loss ?? null;
 
   function applyRange(next: DateRange) {
-    setLoading(true);
-    setError("");
     setRange(next);
   }
 
@@ -52,7 +48,10 @@ export function SecurityView() {
         title="Security"
         description="API access denials (best-effort) and confirmed stock loss per warehouse (exact). Login auditing is kept in Identity's safe logs in Phase 1 and is not shown here."
       />
-      <RangeControls value={range} onApply={applyRange} />
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <RangeControls value={range} onApply={applyRange} />
+        <LiveIndicator lastUpdated={lastUpdated} />
+      </div>
 
       {error ? (
         <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">

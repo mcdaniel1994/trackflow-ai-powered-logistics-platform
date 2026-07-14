@@ -106,7 +106,8 @@ describe("Back Office responsive layout", () => {
     const drawerList = drawerNavigation.getByRole("list");
     expect(drawerList).toHaveClass("space-y-2");
     expect(drawerList).not.toHaveClass("overflow-x-auto");
-    expect(drawerNavigation.getByRole("link", { name: /inventory \+ carriers/i })).toBeInTheDocument();
+    expect(drawerNavigation.getByRole("link", { name: /operations overview/i })).toBeInTheDocument();
+    expect(drawerNavigation.getByRole("link", { name: /carrier scoring/i })).toBeInTheDocument();
     expect(drawerNavigation.getByRole("link", { name: /user management/i })).toBeInTheDocument();
 
     const accountLink = drawerNavigation.getByRole("link", { name: /account/i });

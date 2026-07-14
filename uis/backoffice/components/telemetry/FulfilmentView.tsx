@@ -1,38 +1,34 @@
 "use client";
 
 import { BarChart3, PackagePlus, TriangleAlert } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { LiveIndicator } from "./LiveIndicator";
 import { RangeControls } from "./RangeControls";
 import { TelemetryPageHeader } from "./TelemetryPageHeader";
 import { StatCard } from "@/components/StatCard";
+import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
 import { defaultRange, getDispatchMetrics, getReceivingMetrics, telemetryError } from "@/lib/telemetry/api";
 import type { DateRange, DispatchMetrics, ReceivingMetrics } from "@/lib/telemetry/types";
 
 export function FulfilmentView() {
   const [range, setRange] = useState<DateRange>(defaultRange);
-  const [dispatch, setDispatch] = useState<DispatchMetrics | null>(null);
-  const [receiving, setReceiving] = useState<ReceivingMetrics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { data, error, loading, lastUpdated } = useAutoRefresh<{
+    dispatch: DispatchMetrics;
+    receiving: ReceivingMetrics;
+  }>(
+    () =>
+      Promise.all([getDispatchMetrics(range), getReceivingMetrics(range)]).then(([dispatch, receiving]) => ({
+        dispatch,
+        receiving,
+      })),
+    [range],
+    { mapError: (caught) => telemetryError(caught).message },
+  );
 
-  useEffect(() => {
-    let active = true;
-    Promise.all([getDispatchMetrics(range), getReceivingMetrics(range)])
-      .then(([dispatchResult, receivingResult]) => {
-        if (!active) return;
-        setDispatch(dispatchResult);
-        setReceiving(receivingResult);
-      })
-      .catch((caught) => active && setError(telemetryError(caught).message))
-      .finally(() => active && setLoading(false));
-    return () => {
-      active = false;
-    };
-  }, [range]);
+  const dispatch = data?.dispatch ?? null;
+  const receiving = data?.receiving ?? null;
 
   function applyRange(next: DateRange) {
-    setLoading(true);
-    setError("");
     setRange(next);
   }
 
@@ -47,7 +43,10 @@ export function FulfilmentView() {
         title="Fulfilment"
         description="Exact dispatch and receiving volume per warehouse (LA / ZGZ), from the inventory system of record. Rejected-dispatch counts are best-effort diagnostics and may undercount."
       />
-      <RangeControls value={range} onApply={applyRange} />
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <RangeControls value={range} onApply={applyRange} />
+        <LiveIndicator lastUpdated={lastUpdated} />
+      </div>
 
       {error ? (
         <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">

@@ -6,6 +6,7 @@ import {
   Activity,
   Boxes,
   ClipboardList,
+  LayoutDashboard,
   LogOut,
   Package,
   ShieldCheck,
@@ -23,20 +24,26 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  { label: "Inventory + Carriers", href: "/", icon: Boxes },
+  { label: "Operations Overview", href: "/", icon: LayoutDashboard },
   {
     label: "Inventory Management",
     href: "/backoffice/inventory/products",
     icon: Package,
     activePrefix: "/backoffice/inventory",
   },
-  { label: "Incidents", href: "/incidents", icon: ClipboardList },
   {
     label: "Telemetry",
     href: "/backoffice/telemetry/fulfilment",
     icon: Activity,
     activePrefix: "/backoffice/telemetry",
   },
+  {
+    label: "Carrier Scoring",
+    href: "/backoffice/carrier-scoring",
+    icon: Boxes,
+    activePrefix: "/backoffice/carrier-scoring",
+  },
+  { label: "Incidents", href: "/incidents", icon: ClipboardList },
   { label: "Suppliers", href: "/suppliers", icon: Package },
   { label: "Talent Pipeline", href: "/talent", icon: Users },
   { label: "Account", href: "/account/profile", icon: UserCircle },

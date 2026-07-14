@@ -65,12 +65,19 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/planning/supplier-directory-postgres-migration.md`.
 
 - **Engagement 6** - Data Pipelines & Telemetry
-  In progress. A new `telemetry` domain in `services/central-api/` (table
+  In progress. A `telemetry` domain in `services/central-api/` (table
   `telemetry_events`, exact metrics from `StockEntry`/`StockExit`, best-effort
   post-response diagnostics, enforced retention), Identity auth audit logs in
-  `services/identity/`, and a read-only Back Office Telemetry route in
-  `uis/backoffice/`. See `docs/briefs/06-data-pipelines-telemetry.md` and the
-  living signal reference `docs/runbooks/telemetry-inventory.md`.
+  `services/identity/`, and a Back Office Telemetry route in `uis/backoffice/`.
+  A follow-on **live operations feed** makes the portfolio-production deployment
+  feel live: `services/central-api/central_api/domains/operations/` (the
+  `operations_feed_control` kill switch), `services/central-api/scripts/operations_feed.py`
+  (single-writer worker) and `scripts/db_size_guard.py` (Supabase-Free bounding),
+  plus `uis/backoffice/lib/hooks/useAutoRefresh.ts`, `components/OperationsOverview.tsx`
+  (the new live landing), and the Engagement-2 scoring demo relocated to
+  `/backoffice/carrier-scoring`. See `docs/briefs/06-data-pipelines-telemetry.md`,
+  `docs/runbooks/operations-feed.md`, and the living signal reference
+  `docs/runbooks/telemetry-inventory.md`.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

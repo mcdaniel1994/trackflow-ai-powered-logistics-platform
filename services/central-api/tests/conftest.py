@@ -44,8 +44,15 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE telemetry_events, suppliers, incidents, stock_exits, stock_entries, skus "
-                "RESTART IDENTITY CASCADE"
+                "TRUNCATE telemetry_events, suppliers, incidents, stock_exits, stock_entries, skus, "
+                "operations_feed_control RESTART IDENTITY CASCADE"
+            )
+        )
+        # Restore the singleton control row so the feed's kill switch has consistent state.
+        connection.execute(
+            text(
+                "INSERT INTO operations_feed_control (id, enabled, note, updated_at) "
+                "VALUES (1, true, 'test-reset', now()) ON CONFLICT (id) DO NOTHING"
             )
         )
     yield

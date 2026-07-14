@@ -19,6 +19,17 @@ existing inventory tables, best-effort operational/security diagnostics, and a B
 dashboard. It is not a full observability platform — metrics/tracing backends, correlation
 IDs, browser analytics, durable event queues, and AI telemetry are explicitly deferred.
 
+**Update (live operations feed):** to make the portfolio-production Back Office feel like a
+real operations platform, a follow-on slice enables production telemetry collection
+(`TELEMETRY_ENABLED=true`, 7-day retention with a scheduled prune) and adds a **live operations
+feed** worker (`scripts/operations_feed.py`) that writes real, **synthetic-but-canonical**
+inventory movements ~every 5s — so the exact metrics stay live and reconcilable — guarded by a
+single-writer advisory lock, an `operations_feed_control` runtime kill switch, and a
+`scripts/db_size_guard.py` size guard (400/450 MB, ledger-safe reset) that keeps Supabase Free
+bounded. Dashboards auto-refresh ~5s without flicker and a live **Operations Overview** replaces
+the static "Inventory + Carriers" landing. No security events are fabricated; real carriers
+tables remain a future engagement. See `docs/runbooks/operations-feed.md`.
+
 ## Background
 
 TrackFlow runs warehouses in Los Angeles and Zaragoza. Engagement 5 delivered the Central

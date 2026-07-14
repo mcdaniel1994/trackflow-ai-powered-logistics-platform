@@ -71,5 +71,21 @@ services:
       central-api: {condition: service_healthy}
     ports: ["3000:3000"]
 
+  # Live operations feed — synthetic-but-canonical warehouse activity generator.
+  # Off unless OPERATIONS_FEED_ENABLED=true; single-writer via a pg advisory lock.
+  operations-feed:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      OPERATIONS_FEED_ENABLED: ${OPERATIONS_FEED_ENABLED:-false}
+      OPERATIONS_FEED_INTERVAL_SECONDS: ${OPERATIONS_FEED_INTERVAL_SECONDS:-5}
+      OPERATIONS_FEED_USER_UUID: ${OPERATIONS_FEED_USER_UUID:-${SEED_USER_UUID:-}}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
+      TELEMETRY_OPERATIONAL_RETENTION_DAYS: ${TELEMETRY_OPERATIONAL_RETENTION_DAYS:-7}
+      TELEMETRY_SECURITY_RETENTION_DAYS: ${TELEMETRY_SECURITY_RETENTION_DAYS:-7}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [".venv/bin/python", "-m", "scripts.operations_feed"]
+
 volumes:
   identity-data:
