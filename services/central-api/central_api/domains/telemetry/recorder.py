@@ -81,6 +81,29 @@ def dispatch_rejection_task(
     )
 
 
+def record_dispatch_rejection(*, warehouse: str, reason_code: str, quantity: int | None) -> None:
+    """Emit a real rejected-dispatch diagnostic synchronously (used off the HTTP path).
+
+    The live operations feed calls this directly after catching an ``InventoryError``
+    with a ``reject_event``, so genuinely rejected over-requests populate the same
+    ``telemetry_events`` diagnostics the HTTP boundary produces. Honours ``TELEMETRY_ENABLED``
+    and the reason-code allowlist, and never raises (``_record`` swallows all failures).
+    """
+    if not _enabled() or reason_code not in events.DISPATCH_REJECT_REASONS:
+        return
+    properties: dict[str, object] = {"warehouse": warehouse, "reason_code": reason_code}
+    if quantity is not None:
+        properties["quantity"] = quantity
+    _record(
+        event=events.DISPATCH_REJECTED,
+        severity="warning",
+        warehouse=warehouse,
+        reason_code=reason_code,
+        value=quantity,
+        properties=properties,
+    )
+
+
 def access_denied_task(*, reason: str) -> BackgroundTask | None:
     """Build a background task for an API access denial, or None when disabled/invalid."""
     if not _enabled() or reason not in events.ACCESS_DENIED_REASONS:
