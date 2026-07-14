@@ -43,6 +43,24 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
             inspect(engine).get_table_names()
         )
         assert {"clients", "stockout_events", "inventory_discrepancies"}.issubset(inspect(engine).get_table_names())
+        assert set(inspect(engine).get_table_names(schema="reporting")) == {
+            "incomplete_weeks",
+            "pipeline_runs",
+            "source_ledger_state",
+            "weekly_warehouse_client_performance",
+        }
+        pipeline_indexes = {
+            index["name"] for index in inspect(engine).get_indexes("pipeline_runs", schema="reporting")
+        }
+        assert {
+            "uq_pipeline_runs_scheduled_date",
+            "uq_pipeline_runs_single_active",
+            "uq_pipeline_runs_pending_manual",
+            "ix_pipeline_runs_claim",
+            "ix_pipeline_runs_latest",
+        }.issubset(pipeline_indexes)
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT count(*) FROM reporting.source_ledger_state")) == 1
         sku_columns = {column["name"] for column in inspect(engine).get_columns("skus")}
         assert "client_id" in sku_columns
         assert "client_name" not in sku_columns
@@ -58,6 +76,13 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
         assert {row[1] for row in rows} == {"Legacy Client"}
         incident_indexes = {index["name"] for index in inspect(engine).get_indexes("incidents")}
         assert "ix_incidents_created_at_id" in incident_indexes
+
+        command.downgrade(config, "20260714_0007")
+        assert inspect(engine).get_table_names(schema="reporting") == []
+        assert "clients" in inspect(engine).get_table_names()
+
+        command.upgrade(config, "head")
+        assert "pipeline_runs" in inspect(engine).get_table_names(schema="reporting")
 
         command.downgrade(config, "20260713_0005")
         sku_columns = {column["name"] for column in inspect(engine).get_columns("skus")}

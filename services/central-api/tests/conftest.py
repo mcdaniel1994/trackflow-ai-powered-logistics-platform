@@ -47,7 +47,9 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
             text(
                 "TRUNCATE telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
-                "operations_feed_control RESTART IDENTITY CASCADE"
+                "operations_feed_control, reporting.weekly_warehouse_client_performance, "
+                "reporting.pipeline_runs, reporting.incomplete_weeks, reporting.source_ledger_state "
+                "RESTART IDENTITY CASCADE"
             )
         )
         # Restore the singleton control row so the feed's kill switch has consistent state.
@@ -55,6 +57,12 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
             text(
                 "INSERT INTO operations_feed_control (id, enabled, note, updated_at) "
                 "VALUES (1, true, 'test-reset', now()) ON CONFLICT (id) DO NOTHING"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reporting.source_ledger_state (id, updated_at) "
+                "VALUES (1, now()) ON CONFLICT (id) DO NOTHING"
             )
         )
     yield
