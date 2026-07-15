@@ -12,6 +12,12 @@ R2_VARIABLES = (
     "REPORTING_R2_ACCESS_KEY_ID",
     "REPORTING_R2_SECRET_ACCESS_KEY",
 )
+BACKUP_R2_VARIABLES = (
+    "PREFECT_BACKUP_R2_BUCKET",
+    "PREFECT_BACKUP_R2_ENDPOINT",
+    "PREFECT_BACKUP_R2_ACCESS_KEY_ID",
+    "PREFECT_BACKUP_R2_SECRET_ACCESS_KEY",
+)
 PREFECT_IMAGE_DIGEST = "sha256:d4d142f1426ed0e8d7f48b3cc730f7b0469dcbcaf720959bb678f4cec3e5c3cc"
 
 
@@ -32,6 +38,25 @@ def test_r2_secrets_are_scoped_to_reporting_worker_only() -> None:
 
 def test_central_api_settings_have_no_r2_fields() -> None:
     assert not any(name.startswith("reporting_r2_") for name in Settings.model_fields)
+
+
+def test_backup_credentials_are_scoped_to_the_backup_service() -> None:
+    for filename in ("compose.yaml", "compose.coolify.yaml"):
+        compose_text = (REPO_ROOT / filename).read_text()
+        backup = _service_block(compose_text, "prefect-db-backup")
+        reporting = _service_block(compose_text, "reporting-worker")
+        maintenance = _service_block(compose_text, "maintenance-worker")
+        for variable in BACKUP_R2_VARIABLES:
+            assert compose_text.count(variable) == 2
+            assert backup.count(variable) == 2
+            assert variable not in reporting
+            assert variable not in maintenance
+        assert "PGUSER: prefect_backup" in backup
+        assert "\n      PGUSER: prefect\n" not in backup
+
+    dockerfile = (REPO_ROOT / "docker/prefect-db-backup.Dockerfile").read_text()
+    assert dockerfile.startswith("FROM postgres:16@sha256:")
+    assert "boto3==" in dockerfile
 
 
 def test_central_api_image_includes_the_data_project() -> None:

@@ -58,6 +58,8 @@ uv run --project services/central-api uvicorn central_api.main:app --reload --po
 Local liveness: `http://127.0.0.1:8002/health/live`. Readiness is
 `/health/ready`; `/health` retains the original compatibility response. Readiness verifies the
 database, image schema floor, inventory columns, reporting grants, and worker heartbeat.
+The maintenance image also runs API-only Prefect terminal-run retention; the separate
+`prefect-db-backup` image owns `pg_dump` and backup R2 access so Central API never receives either.
 
 ## Quality gates
 
@@ -87,6 +89,8 @@ without confirming the target, recovery posture, and explicit approval.
 | `IDENTITY_JWT_ISSUER` | Expected access-token issuer |
 | `IDENTITY_JWT_AUDIENCE` | Expected access-token audience |
 | `SEED_USER_UUID` | Existing local Identity user's UUID for seeded movements |
+| `PREFECT_API_URL` | Internal Prefect API used by maintenance retention; no Prefect DB credential |
+| `PREFECT_RUN_RETENTION_DAYS` | Terminal Prefect history retention, default 30 days |
 
 Stock is computed from movements per SKU row and warehouse. It is never stored or
 accepted from clients.

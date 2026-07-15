@@ -83,7 +83,8 @@ Then read the active engagement brief and the README for every folder being modi
   files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation now has
   private Prefect Server/PostgreSQL wiring, a SQLite-fallback guard, independent claim renewal,
   token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
-  and a hard run watchdog verified locally; recovery, operator, and external acceptance phases remain.
+  a hard run watchdog, optional R2 recovery results, API-only retention, and an isolated read-only
+  database backup service verified locally; operator and external acceptance phases remain.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

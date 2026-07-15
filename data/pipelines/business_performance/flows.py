@@ -37,6 +37,7 @@ from .cache import (
     CacheConfigurationError,
     CacheParameters,
     cache_store_from_environment,
+    prefect_result_storage_from_environment,
     prefect_transformation_cache_key,
     transform_with_cache,
 )
@@ -422,7 +423,14 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
 
     _begin_stage(claim, "transform", enforce=flow_run_id is not None)
     try:
-        transformed = transform_weekly_performance(
+        transform_flow = transform_weekly_performance
+        recovery_storage = prefect_result_storage_from_environment()
+        if recovery_storage is not None:
+            transform_flow = transform_flow.with_options(
+                persist_result=True,
+                result_storage=recovery_storage,
+            )
+        transformed = transform_flow(
             extracted,
             claim,
             last_reset_at=_last_reset_at(),

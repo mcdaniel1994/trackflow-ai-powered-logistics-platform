@@ -7,22 +7,26 @@ rotation, the GitHub Production migration secret, the first approved hardened de
 rollback drill remain owner actions. Do not bypass the GitHub Production reviewer gate. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
-The weekly report in PostgreSQL is the business system of record. Cloudflare R2 is a private,
-disposable transformation cache only; a missing or unavailable cache must not change report
-correctness.
+The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
+system of record. The private Prefect Server and its dedicated PostgreSQL database retain only
+orchestration history/recovery state. Cloudflare R2 recovery results, cache objects, and Prefect
+database backups must never become business-work authority; missing R2 cannot change correctness.
 
 ## Runtime topology and schedule
 
 | Service | Command | Internal schedule | Secrets |
 |---|---|---|---|
 | `reporting-worker` | `python -m pipelines.business_performance.worker` | queue 5s; heartbeat 10s; dispatcher 60s | runtime `DATABASE_URL`; optional `REPORTING_R2_*` |
-| `maintenance-worker` | `python -m scripts.maintenance_worker` | size guard 15m; prune 02:15 America/Chicago | runtime `DATABASE_URL` and feed/retention configuration |
+| `maintenance-worker` | `python -m scripts.maintenance_worker` | size guard 15m; prune 02:15 America/Chicago | runtime `DATABASE_URL`; Prefect API URL only |
+| `prefect-server` | `prefect server start` | always on | dedicated Prefect DB owner credential only |
+| `prefect-postgres` | PostgreSQL 16 | always on | Prefect owner credential; creates read-only backup role |
+| `prefect-db-backup` | `python /app/prefect_db_backup.py` | immediately, then every 24 h | read-only Prefect DB role; distinct `PREFECT_BACKUP_R2_*` token |
 
 The dispatcher checks America/Chicago time and creates at most one scheduled request after 07:00
 for each Dallas business date. Missed ticks recover on the next minute check. The PostgreSQL
-queue and its lease/claim-token transitions remain authoritative; no Prefect server, Prefect Cloud,
-or permanent Prefect database exists. Both workers are normal one-replica Compose services; do not
-create duplicate Coolify scheduled jobs.
+queue and its lease/claim-token transitions remain authoritative. The private Prefect Server has no
+ports, work pool, or dispatch authority and uses its own persistent PostgreSQL volume. Do not create
+duplicate Coolify scheduled jobs.
 
 ## Local dry run
 
@@ -61,7 +65,7 @@ Monitor `GET /reporting/pipeline-runs/latest`. A running row is healthy while it
 the lease. Only an expired lease is reclaimed. A stale worker whose claim token no longer matches
 cannot publish or finalize.
 
-## R2 provisioning — Phase 11 owner action
+## R2 provisioning — owner action
 
 GATE-8b remains open. When explicitly approved:
 
@@ -74,8 +78,46 @@ GATE-8b remains open. When explicitly approved:
 5. Confirm those variables are absent from Central API, maintenance worker, Back Office, Identity,
    public website, and operations feed.
 
+For Prefect database backups, create a second least-privilege token limited to the same private
+bucket and the `prefect-backups/` prefix where provider policy supports prefix scoping. Inject only
+`PREFECT_BACKUP_R2_BUCKET`, `PREFECT_BACKUP_R2_ENDPOINT`,
+`PREFECT_BACKUP_R2_ACCESS_KEY_ID`, and `PREFECT_BACKUP_R2_SECRET_ACCESS_KEY` into
+`prefect-db-backup`. Never reuse the reporting-worker token. Set `PREFECT_BACKUP_DB_PASSWORD` to a
+distinct random value; the database initializer grants that role read-only access. Backups use
+custom `pg_dump` format, run daily, retain seven days, and emit only fixed-token status logs. With
+all backup R2 variables absent, the service logs `prefect_backups_disabled` and reporting continues.
+
 If any value is missing, leave all four unset. Partial configuration fails closed; fully absent
 configuration runs correctly with caching disabled.
+
+## Prefect retention and restore verification
+
+The maintenance worker deletes only terminal Prefect flow runs older than
+`PREFECT_RUN_RETENTION_DAYS` (default 30) through the Prefect REST API. It has no Prefect database
+credential. An API outage logs `maintenance_operation_failed operation=prefect_retention` and does
+not repeat or block TrackFlow database retention.
+
+Before production acceptance, perform one owner-approved restore drill without touching the live
+volume:
+
+1. Download one `prefect-backups/*.dump` object through a secure operator session into a temporary,
+   access-restricted path. Do not print its URL, token, or contents.
+2. Start a scratch PostgreSQL 16 container on an isolated network with a disposable credential and
+   no host port.
+3. Run
+   `pg_restore --exit-on-error --clean --if-exists --no-owner --no-acl --dbname=<scratch-url> <dump>`
+   from the pinned backup image. `--no-acl` keeps live role grants out of the isolated scratch DB.
+4. Probe the scratch database with
+   `SELECT 1 FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'`; require one row and
+   record only the backup timestamp, image digest, table probe, and pass/fail.
+5. Destroy the scratch container, volume, downloaded dump, and disposable credential. Never point
+   `PREFECT_API_DATABASE_CONNECTION_URL` at the scratch database during the drill.
+
+If the dedicated Prefect database is actually lost, stop `reporting-worker`, `maintenance-worker`,
+and `prefect-server`; restore the newest verified dump into a new dedicated volume; run the same
+table/extension probe; then start Prefect Server before clients. The TrackFlow queue remains intact,
+so reconcile any `running` audit row through the normal stale-lease/orphan procedure rather than
+creating work from Prefect history.
 
 ## Migration and runtime grants
 
@@ -119,7 +161,8 @@ After the approved production deployment, verify:
 - runner reaches `succeeded`, with a recent heartbeat while running;
 - `/reporting/weekly-warehouse-client-performance` and the Back Office show the same week;
 - incomplete weeks are prominently badged;
-- only `reporting-worker` has R2 variables;
+- only `reporting-worker` has `REPORTING_R2_*`; only `prefect-db-backup` has
+  `PREFECT_BACKUP_R2_*` and the read-only Prefect DB credential;
 - the daily prune and size guard complete without sensitive output.
 
 If worker behavior is unsafe, scale the relevant Compose worker to zero. Previous successful
@@ -129,6 +172,8 @@ database. R2 objects are disposable and may be deleted without a database rollba
 
 ## Known gaps
 
-- GATE-8b R2 infrastructure is not provisioned.
+- Reporting-result and backup R2 credentials are not provisioned; the verified absent-R2 path is
+  non-blocking.
+- The production Prefect restore drill is not executed.
 - The rotated `MIGRATION_DATABASE_URL` is not yet stored in GitHub Production.
 - The first hardened production run and rollback drill are not executed.

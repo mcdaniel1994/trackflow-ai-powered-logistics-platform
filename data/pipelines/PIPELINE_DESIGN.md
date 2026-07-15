@@ -295,6 +295,15 @@ Readiness treats fresh leases and real stage progress separately, so a hung stag
 healthy merely because its renewal thread is alive. Alembic revision `20260716_0010` adds only
 backward-compatible nullable/defaulted fields and the two fixed error codes.
 
+**Recovery and durability amendment (Phase 3):** when the reporting-only R2 configuration is
+complete, the transform subflow also persists Prefect recovery output beneath
+`prefect-results/recovery`; the application-managed cache remains the only cache correctness path.
+The maintenance worker deletes old terminal flow runs through the Prefect API and receives no
+Prefect database credential. A separate pinned PostgreSQL-based backup image uses the read-only
+`prefect_backup` role and distinct `PREFECT_BACKUP_R2_*` credentials to upload daily custom-format
+dumps beneath `prefect-backups/`, retain seven days, and sample database size. Fully absent R2 logs
+a fixed disabled notice and never blocks reporting.
+
 ### 5.1 `data/` packaging
 
 - **New uv project `data/pyproject.toml`** — `trackflow-data-pipelines`, `requires-python = ">=3.11"`, hatchling `packages = ["pipelines", "process"]`; ruff (line-length 120, E/F/I/UP/B/SIM/RUF), mypy `strict = true`, pytest `testpaths = ["../tests/pipelines"]`, coverage `fail_under = 90`.

@@ -20,9 +20,11 @@ services:
       POSTGRES_DB: prefect
       POSTGRES_USER: prefect
       POSTGRES_PASSWORD: ${PREFECT_DB_PASSWORD:-prefect_local_only}
+      PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:-prefect_backup_local_only}
     volumes:
       - prefect-db:/var/lib/postgresql/data
       - ./docker/prefect-postgres-init.sql:/docker-entrypoint-initdb.d/10-pg-trgm.sql:ro
+      - ./docker/prefect-postgres-backup-role.sh:/docker-entrypoint-initdb.d/20-backup-role.sh:ro
     read_only: true
     tmpfs: ["/tmp", "/var/run/postgresql"]
     healthcheck:
@@ -70,6 +72,30 @@ services:
         "-ec",
         "test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'\")\" = 1 && test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_extension WHERE extname='pg_trgm'\")\" = 1",
       ]
+
+  # Daily read-only Prefect database dump; disabled safely when backup R2 is absent.
+  prefect-db-backup:
+    build: {context: ., dockerfile: docker/prefect-db-backup.Dockerfile}
+    restart: on-failure
+    environment:
+      PGHOST: prefect-postgres
+      PGPORT: "5432"
+      PGDATABASE: prefect
+      PGUSER: prefect_backup
+      PGPASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:-prefect_backup_local_only}
+      PREFECT_BACKUP_R2_BUCKET: ${PREFECT_BACKUP_R2_BUCKET:-}
+      PREFECT_BACKUP_R2_ENDPOINT: ${PREFECT_BACKUP_R2_ENDPOINT:-}
+      PREFECT_BACKUP_R2_ACCESS_KEY_ID: ${PREFECT_BACKUP_R2_ACCESS_KEY_ID:-}
+      PREFECT_BACKUP_R2_SECRET_ACCESS_KEY: ${PREFECT_BACKUP_R2_SECRET_ACCESS_KEY:-}
+      PREFECT_BACKUP_RETENTION_DAYS: ${PREFECT_BACKUP_RETENTION_DAYS:-7}
+      PREFECT_DB_DISK_WARNING_MB: ${PREFECT_DB_DISK_WARNING_MB:-1024}
+    depends_on:
+      prefect-postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "0.15", memory: 128M}
 
   identity:
     build: {context: ., dockerfile: docker/identity.Dockerfile}
@@ -204,6 +230,7 @@ services:
       PREFECT_HOME: /tmp/trackflow/prefect
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
+      PREFECT_RUN_RETENTION_DAYS: ${PREFECT_RUN_RETENTION_DAYS:-30}
       DATABASE_CONNECT_TIMEOUT_SECONDS: ${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}
       DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-15000}
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
