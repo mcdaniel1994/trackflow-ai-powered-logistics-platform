@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import os
 import signal
+import urllib.request
 from collections.abc import Callable
 from threading import Event, Thread
 from types import FrameType
@@ -11,14 +13,16 @@ from types import FrameType
 from sqlalchemy import Engine
 
 from .dispatcher import dispatch_tick
-from .queue import engine_from_environment, record_worker_heartbeat
-from .runner import RunExecutor, run_once
+from .queue import claim_next, engine_from_environment, record_worker_heartbeat, utc_now
+from .runner import RunExecutor, execute_claim_with_renewal, finalize_claim
 
 logger = logging.getLogger(__name__)
 
 POLL_INTERVAL_SECONDS = 5.0
 HEARTBEAT_INTERVAL_SECONDS = 10.0
 DISPATCH_INTERVAL_SECONDS = 60.0
+PREFECT_HEALTH_TIMEOUT_SECONDS = 5.0
+DEFAULT_RUN_TIMEOUT_SECONDS = 1800.0
 
 
 def _safe_failure(operation: str, exc: Exception) -> None:
@@ -40,6 +44,26 @@ def _periodic(
         except Exception as exc:
             _safe_failure(operation_name, exc)
         stop.wait(interval_seconds)
+
+
+def prefect_is_healthy() -> bool:
+    api_url = os.environ.get("PREFECT_API_URL", "").rstrip("/")
+    if not api_url:
+        return False
+    try:
+        with urllib.request.urlopen(f"{api_url}/health", timeout=PREFECT_HEALTH_TIMEOUT_SECONDS) as response:
+            return bool(response.status == 200)
+    except (OSError, ValueError):
+        return False
+
+
+def _run_watchdog(done: Event, timeout_seconds: float) -> None:
+    if done.wait(timeout_seconds):
+        return
+    logger.critical("reporting_run_watchdog_expired")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+    os._exit(1)
 
 
 def run_worker(
@@ -77,12 +101,44 @@ def run_worker(
     for thread in background:
         thread.start()
 
+    from .flows import reconcile_orphaned_flow_runs
+
+    try:
+        reconcile_orphaned_flow_runs(engine)
+    except Exception as exc:
+        _safe_failure("orphan_reconciliation", exc)
     logger.info("reporting_worker_started")
     try:
         while not stop.is_set():
             try:
-                result = run_once(engine, executor)
-                if result.run_id is not None:
+                healthy = prefect_is_healthy()
+                record_worker_heartbeat(
+                    engine,
+                    last_progress_at=utc_now(),
+                    orchestrator_healthy=healthy,
+                )
+                if not healthy:
+                    stop.wait(poll_interval_seconds)
+                    continue
+                claim = claim_next(engine)
+                if claim is not None:
+                    done = Event()
+                    timeout_seconds = float(
+                        os.environ.get("REPORTING_RUN_TIMEOUT_SECONDS", DEFAULT_RUN_TIMEOUT_SECONDS)
+                    )
+                    watchdog = Thread(
+                        target=_run_watchdog,
+                        args=(done, timeout_seconds),
+                        name="reporting-run-watchdog",
+                        daemon=True,
+                    )
+                    watchdog.start()
+                    try:
+                        outcome = execute_claim_with_renewal(engine, executor, claim)
+                        result = finalize_claim(engine, claim, outcome)
+                    finally:
+                        done.set()
+                        watchdog.join(timeout=1)
                     logger.info("reporting_worker_run_complete run_id=%s status=%s", result.run_id, result.status)
             except Exception as exc:
                 _safe_failure("poll", exc)

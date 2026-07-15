@@ -29,11 +29,13 @@
   enabled with 7-day retention, a daily prune, and a `scripts/db_size_guard.py` size guard
   (400 MB soft / 450 MB hard, ledger-safe reset) that keeps Supabase Free bounded. Runbook:
   `docs/runbooks/operations-feed.md`; signal reference: `docs/runbooks/telemetry-inventory.md`.
-  The dedicated-Prefect remediation has completed Phase 1 locally: a private digest-pinned Prefect
+  The dedicated-Prefect remediation has completed Phases 1-2 locally: a private digest-pinned Prefect
   3.7.8 Server stores orchestration state in its own PostgreSQL 16 volume, both reporting clients
   target it, and a release guard proves Prefect tables live in PostgreSQL rather than fallback
-  SQLite. `reporting.pipeline_runs` remains the sole dispatch authority. Execution hardening,
-  recovery persistence/backups, operator UX, and external acceptance measurements remain.
+  SQLite. The worker now renews claims independently, records token-guarded Prefect run IDs and
+  stages, fails closed on orchestrator health, reconciles orphaned runs, and has a hard execution
+  watchdog with truthful readiness signals. `reporting.pipeline_runs` remains the sole dispatch
+  authority. Recovery persistence/backups, operator UX, and external acceptance measurements remain.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and

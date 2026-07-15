@@ -17,7 +17,9 @@ adds a private Prefect Server backed by dedicated PostgreSQL for stable orchestr
 adding work-pool dispatch; absent cache configuration preserves full correctness.
 Production hardening adds the always-on `business_performance.worker`: it polls every five
 seconds, heartbeats every ten seconds, checks the Dallas schedule every minute, and continues to
-use PostgreSQL leases, claim tokens, idempotency, and advisory locking.
+use PostgreSQL leases, claim tokens, idempotency, and advisory locking. The second remediation
+phase adds independent continuous lease renewal, token-CAS flow-run/stage correlation, fail-closed
+Prefect health, startup orphan reconciliation, bounded I/O timeouts, and a hard run watchdog.
 
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines

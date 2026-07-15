@@ -15,6 +15,7 @@ from typing import Any, Final, Protocol, cast
 from uuid import UUID
 
 import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
 
 from process.business_performance import WeeklyPerformanceRow
@@ -166,6 +167,7 @@ class S3CacheStore:
             aws_access_key_id=config.access_key_id,
             aws_secret_access_key=config.secret_access_key,
             region_name=config.region,
+            config=Config(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2, "mode": "standard"}),
         )
 
     def object_key(self, cache_key: str) -> str:

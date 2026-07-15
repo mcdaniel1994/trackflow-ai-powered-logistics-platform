@@ -81,8 +81,9 @@ Then read the active engagement brief and the README for every folder being modi
   Production hardening lives in `data/pipelines/business_performance/worker.py`,
   `services/central-api/scripts/{maintenance_worker,production_migrate}.py`, the root Compose
   files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation now has
-  private Prefect Server/PostgreSQL wiring and a SQLite-fallback guard verified locally; later
-  execution, recovery, operator, and external acceptance phases remain.
+  private Prefect Server/PostgreSQL wiring, a SQLite-fallback guard, independent claim renewal,
+  token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
+  and a hard run watchdog verified locally; recovery, operator, and external acceptance phases remain.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

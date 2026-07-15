@@ -30,10 +30,11 @@ Back Office. The production stack is verified on Coolify at
 `backoffice.forgehub.cloud`; deployment, rollback, and remaining operational
 gaps are documented in `docs/runbooks/`.
 
-**Engagement 6** is in production-remediation implementation. The first dedicated-Prefect phase
-adds a private, digest-pinned Prefect Server backed by its own PostgreSQL database while preserving
-`reporting.pipeline_runs` as the sole dispatch authority. Execution hardening, recovery state,
-operator UX, and external acceptance measurements remain in progress.
+**Engagement 6** is in production-remediation implementation. The first two dedicated-Prefect
+phases add a private, digest-pinned Prefect Server backed by its own PostgreSQL database plus
+continuous claim renewal, token-guarded Prefect correlation, stage progress, fail-closed
+orchestrator health, and a hard run watchdog. `reporting.pipeline_runs` remains the sole dispatch
+authority. Recovery persistence/backups, operator UX, and external acceptance measurements remain.
 It adds trustworthy telemetry, live inventory operations, durable weekly business reporting,
 always-on reporting and maintenance workers, approval-gated migrations, dependency-aware
 readiness, and automatic immutable-image rollback.

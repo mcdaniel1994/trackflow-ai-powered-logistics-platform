@@ -17,9 +17,11 @@ def _heartbeat(engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
-                "VALUES ('reporting', now()) ON CONFLICT (worker_name) "
-                "DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at"
+                "INSERT INTO reporting.worker_heartbeats "
+                "(worker_name, heartbeat_at, last_progress_at, orchestrator_healthy) "
+                "VALUES ('reporting', now(), now(), true) ON CONFLICT (worker_name) "
+                "DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at, "
+                "last_progress_at = EXCLUDED.last_progress_at, orchestrator_healthy = true"
             )
         )
 
@@ -81,3 +83,36 @@ def test_readiness_rejects_role_without_reporting_grants(app: FastAPI, engine: E
         app.dependency_overrides.pop(get_session, None)
         with engine.begin() as connection:
             connection.execute(text("DROP ROLE IF EXISTS readiness_no_access"))
+
+
+def test_readiness_rejects_unhealthy_orchestrator_and_stale_poll_progress(
+    client: TestClient,
+    engine: Engine,
+) -> None:
+    _heartbeat(engine)
+    with engine.begin() as connection:
+        connection.execute(text("UPDATE reporting.worker_heartbeats SET orchestrator_healthy = false"))
+    assert client.get("/health/ready").status_code == 503
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE reporting.worker_heartbeats SET orchestrator_healthy = true, "
+                "last_progress_at = now() - interval '121 seconds'"
+            )
+        )
+    assert client.get("/health/ready").status_code == 503
+
+
+def test_readiness_uses_stage_deadline_not_renewed_lease(client: TestClient, engine: Engine) -> None:
+    _heartbeat(engine)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.pipeline_runs "
+                "(pipeline_name, trigger_type, requested_by, status, attempt, current_stage, "
+                "stage_started_at, heartbeat_at, lease_expires_at) "
+                "VALUES ('business_performance', 'cli', 'cli', 'running', 1, 'extract', "
+                "now() - interval '301 seconds', now(), now() + interval '10 minutes')"
+            )
+        )
+    assert client.get("/health/ready").status_code == 503

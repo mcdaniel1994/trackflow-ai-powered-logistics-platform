@@ -20,6 +20,8 @@ DEFAULT_RECOMPUTE_WEEKS: Final = 3
 DEFAULT_LEASE_SECONDS: Final = 600
 DEFAULT_MAX_ATTEMPTS: Final = 5
 DEFAULT_BACKOFF_SECONDS: Final = 60
+DEFAULT_CONNECT_TIMEOUT_SECONDS: Final = 10
+DEFAULT_STATEMENT_TIMEOUT_MS: Final = 15_000
 
 TriggerType = Literal["scheduled", "manual", "cli"]
 ErrorCode = Literal[
@@ -30,6 +32,8 @@ ErrorCode = Literal[
     "LOCK_UNAVAILABLE",
     "STALE_ABANDONED",
     "MAX_ATTEMPTS_EXCEEDED",
+    "ORCHESTRATION_FAILED",
+    "INTERNAL_FAILED",
 ]
 
 _SAFE_ERROR_SUMMARIES: Final[dict[str, str]] = {
@@ -40,6 +44,8 @@ _SAFE_ERROR_SUMMARIES: Final[dict[str, str]] = {
     "LOCK_UNAVAILABLE": "Reporting pipeline is already locked",
     "STALE_ABANDONED": "Worker lease expired",
     "MAX_ATTEMPTS_EXCEEDED": "Maximum attempts exceeded",
+    "ORCHESTRATION_FAILED": "Orchestration service unavailable",
+    "INTERNAL_FAILED": "Internal reporting execution failed",
 }
 
 
@@ -77,17 +83,32 @@ def utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def record_worker_heartbeat(engine: Engine, *, now: datetime | None = None) -> None:
+def record_worker_heartbeat(
+    engine: Engine,
+    *,
+    now: datetime | None = None,
+    last_progress_at: datetime | None = None,
+    orchestrator_healthy: bool | None = None,
+) -> None:
     """Upsert the singleton worker heartbeat without storing host or process identifiers."""
     heartbeat_at = now or utc_now()
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
-                "VALUES (:worker_name, :heartbeat_at) "
-                "ON CONFLICT (worker_name) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at"
+                "INSERT INTO reporting.worker_heartbeats "
+                "(worker_name, heartbeat_at, last_progress_at, orchestrator_healthy) "
+                "VALUES (:worker_name, :heartbeat_at, :last_progress_at, :orchestrator_healthy) "
+                "ON CONFLICT (worker_name) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at, "
+                "last_progress_at = COALESCE(EXCLUDED.last_progress_at, reporting.worker_heartbeats.last_progress_at), "
+                "orchestrator_healthy = COALESCE(EXCLUDED.orchestrator_healthy, "
+                "reporting.worker_heartbeats.orchestrator_healthy)"
             ),
-            {"worker_name": REPORTING_WORKER_NAME, "heartbeat_at": heartbeat_at},
+            {
+                "worker_name": REPORTING_WORKER_NAME,
+                "heartbeat_at": heartbeat_at,
+                "last_progress_at": last_progress_at,
+                "orchestrator_healthy": orchestrator_healthy,
+            },
         )
 
 
@@ -98,7 +119,56 @@ def engine_from_environment() -> Engine:
         raise QueueConfigurationError("DATABASE_URL is required")
     if database_url.startswith("postgresql+psycopg2://"):
         database_url = database_url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
-    return create_engine(database_url, pool_pre_ping=True)
+    connect_timeout = int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", DEFAULT_CONNECT_TIMEOUT_SECONDS))
+    statement_timeout = int(os.environ.get("DATABASE_STATEMENT_TIMEOUT_MS", DEFAULT_STATEMENT_TIMEOUT_MS))
+    return create_engine(
+        database_url,
+        pool_pre_ping=True,
+        connect_args={
+            "connect_timeout": connect_timeout,
+            "options": f"-c statement_timeout={statement_timeout}",
+        },
+    )
+
+
+def record_prefect_flow_run(engine: Engine, claim: RunClaim, flow_run_id: UUID) -> bool:
+    """Correlate Prefect state through the same claim-token CAS as every worker write."""
+    with engine.begin() as connection:
+        result = connection.execute(
+            text(
+                "UPDATE reporting.pipeline_runs SET prefect_flow_run_id = :flow_run_id "
+                "WHERE id = :id AND claim_token = :token AND status = 'running'"
+            ),
+            {"flow_run_id": flow_run_id, "id": claim.run_id, "token": claim.claim_token},
+        )
+    return result.rowcount == 1
+
+
+def record_stage(engine: Engine, claim: RunClaim, stage: str, *, now: datetime | None = None) -> bool:
+    if stage not in {"extract", "transform", "load"}:
+        raise QueueValidationError("unknown reporting stage")
+    with engine.begin() as connection:
+        result = connection.execute(
+            text(
+                "UPDATE reporting.pipeline_runs SET current_stage = :stage, stage_started_at = :started_at "
+                "WHERE id = :id AND claim_token = :token AND status = 'running'"
+            ),
+            {"stage": stage, "started_at": now or utc_now(), "id": claim.run_id, "token": claim.claim_token},
+        )
+    return result.rowcount == 1
+
+
+def claim_is_owned(engine: Engine, claim: RunClaim) -> bool:
+    with engine.connect() as connection:
+        return bool(
+            connection.scalar(
+                text(
+                    "SELECT EXISTS (SELECT 1 FROM reporting.pipeline_runs "
+                    "WHERE id = :id AND claim_token = :token AND status = 'running')"
+                ),
+                {"id": claim.run_id, "token": claim.claim_token},
+            )
+        )
 
 
 def _monday(value: date) -> date:

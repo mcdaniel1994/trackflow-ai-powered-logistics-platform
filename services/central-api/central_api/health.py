@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -15,6 +16,7 @@ from .core.config import Settings
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 WORKER_STALE_SECONDS = 30
+REPORTING_PROGRESS_STALE_SECONDS = 120
 REQUIRED_SKU_COLUMNS = {
     "id",
     "name",
@@ -93,15 +95,44 @@ def _check_runtime_reporting_access(session: Session, settings: Settings) -> Non
 
 
 def _check_reporting_worker(session: Session) -> None:
-    healthy = session.scalar(
+    worker = session.execute(
         text(
-            "SELECT heartbeat_at >= now() - make_interval(secs => :stale_seconds) "
+            "SELECT heartbeat_at, last_progress_at, orchestrator_healthy "
             "FROM reporting.worker_heartbeats WHERE worker_name = 'reporting'"
-        ),
-        {"stale_seconds": WORKER_STALE_SECONDS},
-    )
-    if healthy is not True:
+        )
+    ).mappings().one_or_none()
+    if worker is None or session.scalar(
+        text("SELECT :heartbeat >= now() - make_interval(secs => :seconds)"),
+        {"heartbeat": worker["heartbeat_at"], "seconds": WORKER_STALE_SECONDS},
+    ) is not True:
         raise ReadinessFailure("reporting_worker")
+    if worker["orchestrator_healthy"] is not True:
+        raise ReadinessFailure("reporting_orchestrator")
+
+    running = session.execute(
+        text(
+            "SELECT current_stage, stage_started_at FROM reporting.pipeline_runs "
+            "WHERE pipeline_name = 'business_performance' AND status = 'running' "
+            "ORDER BY started_at LIMIT 1"
+        )
+    ).mappings().one_or_none()
+    if running is None:
+        progress_fresh = session.scalar(
+            text("SELECT :progress >= now() - make_interval(secs => :seconds)"),
+            {"progress": worker["last_progress_at"], "seconds": REPORTING_PROGRESS_STALE_SECONDS},
+        )
+        if progress_fresh is not True:
+            raise ReadinessFailure("reporting_progress")
+        return
+
+    stage = str(running["current_stage"] or "")
+    deadline = int(os.environ.get(f"REPORTING_STAGE_TIMEOUT_{stage.upper()}_SECONDS", "300"))
+    within_deadline = session.scalar(
+        text("SELECT :started >= now() - make_interval(secs => :seconds)"),
+        {"started": running["stage_started_at"], "seconds": deadline},
+    )
+    if within_deadline is not True:
+        raise ReadinessFailure("reporting_stage_stuck")
 
 
 def check_readiness(session: Session, settings: Settings) -> None:

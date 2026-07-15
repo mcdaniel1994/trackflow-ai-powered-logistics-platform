@@ -285,6 +285,16 @@ sole business-work queue and dispatch authority**; Prefect state provides task-l
 history only. The dedicated Prefect database never shares TrackFlow/Supabase credentials or
 storage. R2 remains optional and cannot be a correctness dependency (§9.4).
 
+**Execution-hardening amendment (Phase 2):** each claimed row is executed through explicit
+claim/execute/finalize steps. A daemon renewal thread extends only the PostgreSQL lease while the
+flow runs; every correlation, stage, publication, and final transition remains claim-token CAS
+guarded. The worker probes the dedicated Prefect API before claiming, records
+`prefect_flow_run_id`, deterministic run name, `current_stage`, and truthful progress, reconciles
+orphaned non-terminal Prefect runs at startup, and terminates the process on a bounded run watchdog.
+Readiness treats fresh leases and real stage progress separately, so a hung stage cannot report
+healthy merely because its renewal thread is alive. Alembic revision `20260716_0010` adds only
+backward-compatible nullable/defaulted fields and the two fixed error codes.
+
 ### 5.1 `data/` packaging
 
 - **New uv project `data/pyproject.toml`** — `trackflow-data-pipelines`, `requires-python = ">=3.11"`, hatchling `packages = ["pipelines", "process"]`; ruff (line-length 120, E/F/I/UP/B/SIM/RUF), mypy `strict = true`, pytest `testpaths = ["../tests/pipelines"]`, coverage `fail_under = 90`.
