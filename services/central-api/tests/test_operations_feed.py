@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy import select as sa_select
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
@@ -175,6 +176,12 @@ def test_guard_at_hard_limit_resets_and_reenables(
     feed_settings = _feed_settings(settings, operations_feed_user_uuid=SERVICE_UUID)
     monkeypatch.setattr(db_size_guard, "get_settings", lambda: feed_settings)
     monkeypatch.setattr(db_size_guard, "database_size_mb", lambda _session: 460.0)
+    checkpoint_called = {"value": False}
+    monkeypatch.setattr(
+        db_size_guard,
+        "run_reporting_checkpoint",
+        lambda: checkpoint_called.__setitem__("value", True) or True,
+    )
     with Session(engine) as session:
         set_feed_enabled(session, enabled=True, note="pre-test")
 
@@ -186,3 +193,41 @@ def test_guard_at_hard_limit_resets_and_reenables(
         assert int(session.scalar(sa_select(func.count()).select_from(sku_table)) or 0) > 0
         assert int(session.scalar(sa_select(func.count()).select_from(entry_table)) or 0) > 0
         assert _all_stock_nonnegative(session)
+        assert checkpoint_called["value"] is True
+        incomplete = session.execute(
+            text("SELECT week_start, reason FROM reporting.incomplete_weeks")
+        ).all()
+        assert len(incomplete) == 1
+        assert incomplete[0].reason == "ledger_reset"
+
+
+def test_reset_marks_full_window_when_checkpoint_fails(
+    engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feed_settings = _feed_settings(settings, operations_feed_user_uuid=SERVICE_UUID)
+    reset_at = datetime(2026, 7, 15, 14, 30, tzinfo=UTC)
+    def failed_checkpoint() -> bool:
+        raise RuntimeError("injected checkpoint failure")
+
+    monkeypatch.setattr(db_size_guard, "run_reporting_checkpoint", failed_checkpoint)
+    with Session(engine) as session:
+        set_feed_enabled(session, enabled=True, note="pre-test")
+        db_size_guard.reset_ledger(session, SERVICE_UUID, feed_settings, reset_at=reset_at)
+
+    with Session(engine) as session:
+        assert feed_enabled(session) is True
+        assert session.execute(
+            text("SELECT last_reset_at FROM reporting.source_ledger_state WHERE id = 1")
+        ).scalar_one() == reset_at
+        incomplete = dict(
+            session.execute(
+                text(
+                    "SELECT week_start, reason FROM reporting.incomplete_weeks ORDER BY week_start"
+                )
+            ).all()
+        )
+        expected_weeks = {
+            reset_at.date() - timedelta(days=reset_at.weekday(), weeks=offset)
+            for offset in range(db_size_guard.DEFAULT_RECOMPUTE_WEEKS)
+        }
+        assert incomplete == {week: "reset_checkpoint_failed" for week in expected_weeks}

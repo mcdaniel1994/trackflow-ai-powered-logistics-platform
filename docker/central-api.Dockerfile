@@ -5,6 +5,7 @@ COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY packages/trackflow_auth packages/trackflow_auth
 COPY packages/trackflow_incidents packages/trackflow_incidents
+COPY data data
 COPY services/central-api services/central-api
 WORKDIR /app/services/central-api
 RUN uv sync --frozen --no-dev && useradd --system --uid 10001 --create-home trackflow && chown -R trackflow:trackflow /app

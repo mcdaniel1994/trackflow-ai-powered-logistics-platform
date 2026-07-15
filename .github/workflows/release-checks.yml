@@ -26,6 +26,9 @@ jobs:
             label: Central API
             runtime: python
             command: |
+              docker compose -f compose.yaml config --no-interpolate >/dev/null
+              docker compose -f compose.coolify.yaml config --no-interpolate >/dev/null
+              uv run --project services/central-api alembic -c services/central-api/alembic.ini check
               uv run --project services/central-api --extra dev ruff check services/central-api/central_api services/central-api/tests services/central-api/scripts services/central-api/migrations
               uv run --project services/central-api --extra dev mypy --config-file services/central-api/pyproject.toml services/central-api/central_api
               uv run --project services/central-api --extra dev pytest -c services/central-api/pyproject.toml services/central-api/tests --cov=central_api --cov-config=services/central-api/pyproject.toml --cov-report=term-missing

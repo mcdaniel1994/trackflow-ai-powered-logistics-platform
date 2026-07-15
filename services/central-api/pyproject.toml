@@ -64,7 +64,16 @@ plugins = ["pydantic.mypy"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["jose", "jose.*", "pipelines", "pipelines.*", "trackflow_auth", "trackflow_auth.*"]
+module = [
+  "jose",
+  "jose.*",
+  "pipelines",
+  "pipelines.*",
+  "process",
+  "process.*",
+  "trackflow_auth",
+  "trackflow_auth.*",
+]
 ignore_missing_imports = true
 
 [tool.coverage.run]

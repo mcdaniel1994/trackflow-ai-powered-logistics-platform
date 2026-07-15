@@ -723,7 +723,7 @@ uv build --project services/central-api
 # migration compatibility/schema-drift job
 uv run --project services/central-api alembic -c services/central-api/alembic.ini downgrade 20260713_0005
 uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
-uv run --project services/central-api python services/central-api/scripts/check_alembic_schema_drift.py
+uv run --project services/central-api alembic -c services/central-api/alembic.ini check
 
 # backoffice (existing matrix entry)
 npm run type-check --workspace trackflow-backoffice
@@ -752,7 +752,6 @@ npm run build --workspace trackflow-backoffice
 | `services/central-api/migrations/versions/20260714_0007_stockout_and_discrepancy_events.py` | threshold + event tables incl. `UNIQUE(stock_exit_id)` (§6.2, GATE-1/2) |
 | `services/central-api/migrations/versions/20260714_0008_reporting_schema.py` | `reporting` schema, report table (FK to `public.clients`), queue/audit table (incl. lease/token columns + coalescing index), `source_ledger_state`, `incomplete_weeks` (§6.3–6.4) |
 | `services/central-api/scripts/prune_business_events.py` | 26-week business-event retention (§3.3) |
-| `services/central-api/scripts/check_alembic_schema_drift.py` | read-only CI check using Alembic autogenerate comparison across `public` + `reporting`; exits nonzero on model/schema drift without creating a revision file (§6, §12.3) |
 | `services/central-api/tests/{test_reporting_api,test_reporting_queue,test_inventory_clients,test_inventory_discrepancies}.py` | §12.2 |
 | `uis/backoffice/app/api/reporting/[[...path]]/route.ts` | allowlisted BFF (§11) |
 | `uis/backoffice/lib/reporting/{api,types}.ts` | typed client |
@@ -827,14 +826,14 @@ Each phase: files → dependencies → tests → acceptance gate → rollback �
 | **GATE-2** | Discrepancy occurrence contract: `UNIQUE (stock_exit_id)` — one occurrence per outbound order, making the context rate formula exact (≤ 1); future multiplicity via a child audit table only | **Open — approve.** Schema-enforced KPI integrity |
 | **GATE-3** | Source from durable tables instead of `telemetry_events`, with the four context event names as the logical extraction vocabulary | **Open — approve.** Telemetry is lossy, client-blind, 7-day-retained by deliberate design |
 | **GATE-4** | Orchestration model | **Approved:** Prefect-as-library inside temporary dispatcher/runner containers; PostgreSQL queue; Coolify `*/5` crons; no Prefect Cloud/server/scheduling/database |
-| **GATE-5** | Ledger-reset handling: extend `db_size_guard.reset_ledger` to the full §8.1 procedure — **pre-reset checkpoint run**, transactional TRUNCATE of ledger + event tables with `source_ledger_state.last_reset_at`, and **`incomplete_weeks` marking** (incl. checkpoint-failure fallback); week-boundary runbook procedure for planned resets; 26-week business-event retention; Supabase size budget | **Open — approve.** Required for FK integrity, for preserving facts up to the reset instant, and for honestly labeling any week a reset leaves partial |
+| **GATE-5** | Ledger-reset handling: extend `db_size_guard.reset_ledger` to the full §8.1 procedure — **pre-reset checkpoint run**, transactional TRUNCATE of ledger + event tables with `source_ledger_state.last_reset_at`, and **`incomplete_weeks` marking** (incl. checkpoint-failure fallback); week-boundary runbook procedure for planned resets; 26-week business-event retention; Supabase size budget | **Approved 2026-07-14:** owner accepted the checkpoint, transactional reset boundary, incomplete-week fallback, retention, and size-budget procedure before Phase 10 implementation. |
 | **GATE-6** | Manual pipeline runs admin-only (server-enforced), incl. `force_refresh` | **Approved direction** (administrator-only trigger mandated in review); implementation per §9.3/§10 |
 | **GATE-7** | **Strengthened:** Technical Telemetry contains *only* technical diagnostics; exact business metrics relocate to `/backoffice/operations/*` (Fulfilment, Stock-loss), components split not duplicated | **Approved:** page placement and component split accepted for Phase 9 |
 | **GATE-8a** | **Cache-mechanism proof:** the §9.4 spike must prove cross-process cache reuse on R2 with no persistent Prefect API/database, or select and document the boto3 application-managed fallback; the transformation task retains `cache_key_fn` and `cache_expiration` either way | **Accepted 2026-07-14:** application-managed boto3 fallback selected; two fresh processes proved reuse against an emulated private S3/R2 endpoint with `PREFECT_API_URL` empty. Evidence: `business_performance/spikes/R2_CACHE_SPIKE.md` |
 | **GATE-8b** | **Owner-executed R2 provisioning:** after GATE-8a, create the private bucket; issue an API token scoped to Object Read & Write on that bucket only; set the `prefect-results/` 1-day lifecycle rule; inject `REPORTING_R2_*` secrets into the `reporting-runner` Coolify service **only** | **Open — owner approval and infrastructure step before Phase 11.** Absent configuration keeps cache disabled without affecting correctness, but final milestone completion requires the approved one-hour cache behavior |
 | *(Scheduling & caching decisions)* | Daily 07:00 America/Chicago refresh; `*/5` dispatcher; 1-hour Prefect cache on R2 | **Approved in review** — recorded here for traceability, not open |
 
-**Phase-specific approvals still required:** GATE-1/2/3 before Phase 2; GATE-5 before the reset-guard work in Phase 10; GATE-8b plus the database-standard production migration/grants approval before Phase 11. GATE-8a is a local technical acceptance test, not a stakeholder infrastructure decision. GATE-7 placement is approved.
+**Phase-specific approvals still required:** GATE-8b plus the database-standard production migration/grants approval before Phase 11. GATE-1/2/3/5/7 and GATE-8a are satisfied; GATE-8a is a local technical acceptance test, not a stakeholder infrastructure decision.
 
 ---
 
