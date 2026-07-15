@@ -14,6 +14,63 @@ services:
       timeout: 3s
       retries: 20
 
+  prefect-postgres:
+    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: ${PREFECT_DB_PASSWORD:-prefect_local_only}
+    volumes:
+      - prefect-db:/var/lib/postgresql/data
+      - ./docker/prefect-postgres-init.sql:/docker-entrypoint-initdb.d/10-pg-trgm.sql:ro
+    read_only: true
+    tmpfs: ["/tmp", "/var/run/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect && psql -U prefect -d prefect -tAc \"SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'\" | grep -qx 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  prefect-server:
+    image: ${PREFECT_SERVER_IMAGE:-prefecthq/prefect:3.7.8-python3.11@sha256:d4d142f1426ed0e8d7f48b3cc730f7b0469dcbcaf720959bb678f4cec3e5c3cc}
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:-prefect_local_only}@prefect-postgres:5432/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
+      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
+      PREFECT_HOME: /tmp/prefect
+      DO_NOT_TRACK: "1"
+    depends_on:
+      prefect-postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=5).read()"]
+      interval: 5s
+      timeout: 6s
+      retries: 60
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 512M}
+
+  # Release guard: Prefect must have created its state tables in PostgreSQL.
+  prefect-postgres-guard:
+    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
+    profiles: ["verification"]
+    environment:
+      PGPASSWORD: ${PREFECT_DB_PASSWORD:-prefect_local_only}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command:
+      [
+        "/bin/sh",
+        "-ec",
+        "test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'\")\" = 1 && test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_extension WHERE extname='pg_trgm'\")\" = 1",
+      ]
+
   identity:
     build: {context: ., dockerfile: docker/identity.Dockerfile}
     environment:
@@ -96,6 +153,8 @@ services:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       HOME: /tmp/trackflow
       PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
       PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
@@ -106,6 +165,7 @@ services:
       REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
     depends_on:
       postgres: {condition: service_healthy}
+      prefect-server: {condition: service_healthy}
     read_only: true
     tmpfs: ["/tmp"]
     command:
@@ -135,6 +195,8 @@ services:
       TELEMETRY_SECURITY_RETENTION_DAYS: ${TELEMETRY_SECURITY_RETENTION_DAYS:-7}
       HOME: /tmp/trackflow
       PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
       PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
@@ -156,3 +218,4 @@ services:
 
 volumes:
   identity-data:
+  prefect-db:

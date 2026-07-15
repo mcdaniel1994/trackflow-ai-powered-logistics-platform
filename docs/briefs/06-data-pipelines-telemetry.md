@@ -4,7 +4,11 @@
 
 ## Status
 
-In progress — implementation complete; one approved production acceptance run remains. The
+In progress — dedicated Prefect production remediation Phase 1 is implemented and locally
+verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
+reporting and maintenance clients target it while `reporting.pipeline_runs` remains the sole
+dispatch authority. Execution hardening, optional recovery-state persistence/backups, operator UX,
+and external soak/restore acceptance gates remain. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
 reporting surface, declarative reporting/maintenance workers, production migration verifier,
 readiness probes, and automatic image rollback are implemented and locally verified through

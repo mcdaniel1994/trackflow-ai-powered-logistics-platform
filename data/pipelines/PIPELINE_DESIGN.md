@@ -277,7 +277,13 @@ flowchart LR
 
 **Why technical telemetry stays separate:** it is deliberately best-effort (post-response, exception-swallowing, 7-day retention) so it can never slow or fail a business request. Authoritative business reporting needs the opposite properties. One system cannot honestly be both.
 
-**Prefect boundary (approved):** Prefect runs **only as a library inside the temporary dispatcher/runner container invocations**. There is no Prefect Cloud account, no permanent Prefect server, no Prefect-managed schedule, and no separate Prefect database — flow/task state beyond the current process is not relied upon; **TrackFlow PostgreSQL (`reporting.pipeline_runs` + the reporting tables) is the sole durable operational and business record.** R2 holds disposable cache bytes only (§9.4).
+**Prefect boundary (owner-approved amendment, July 15, 2026):** flows still execute in-process in
+the reporting worker, but their orchestration API is now a private, digest-pinned Prefect 3.7.8
+Server backed by a dedicated PostgreSQL 16 database. There is no Prefect Cloud account and no
+work-pool or Prefect-managed dispatch. **TrackFlow PostgreSQL `reporting.pipeline_runs` remains the
+sole business-work queue and dispatch authority**; Prefect state provides task-level recovery and
+history only. The dedicated Prefect database never shares TrackFlow/Supabase credentials or
+storage. R2 remains optional and cannot be a correctness dependency (§9.4).
 
 ### 5.1 `data/` packaging
 
@@ -567,13 +573,13 @@ Changed source data changes `source_content_digest` and therefore the key **imme
 - The idempotent database **load and publication tasks always execute**, cached or not — a cache hit skips recomputation, never publication.
 - A failed run leaves the previous successful report untouched and visible (§8.3): reporting rows change only inside a successful load transaction.
 
-### 9.6 Orchestration deployment — decision (approved)
+### 9.6 Orchestration deployment — amended production decision
 
 | Option | Verdict | Why |
 |---|---|---|
 | Prefect Cloud / work pools | **Rejected (final)** | External SaaS dependency and credential surface; contradicts the approved boundary |
-| Self-hosted permanent Prefect server + worker | **Rejected (final)** | Always-on containers + a second stateful store; `reporting.pipeline_runs` already provides durable state |
-| **Prefect-as-library + PostgreSQL queue + Coolify `*/5` dispatcher/runner (approved)** | **Adopt** | Matches every platform precedent; durable, recoverable, auditable in the system of record |
+| Self-hosted Prefect Server used as a second work queue | **Rejected (final)** | Work pools would create dual dispatch authority and conflict with `reporting.pipeline_runs` |
+| **In-process flows + dedicated private Prefect Server/PostgreSQL + TrackFlow queue (approved July 15)** | **Adopt** | Removes ephemeral subprocess-server churn while preserving PostgreSQL queue authority and image-only app rollback |
 
 ---
 

@@ -11,9 +11,10 @@ Data engineering assets for the TrackFlow platform.
 
 Engagement 6 establishes an isolated `trackflow-data-pipelines` uv project. Phase 5 adds a durable
 PostgreSQL queue, America/Chicago dispatcher, lease/CAS state machine, and advisory-lock-protected
-runner lifecycle alongside the pure weekly KPI transforms. Phase 6 supplies the Prefect-as-library
-ETL executor and an optional one-hour S3-compatible cache; no permanent Prefect server or external
-service is introduced, and absent cache configuration preserves full correctness.
+runner lifecycle alongside the pure weekly KPI transforms. Phase 6 supplies the in-process Prefect
+ETL executor and an optional one-hour S3-compatible cache. The July 15 owner-approved amendment
+adds a private Prefect Server backed by dedicated PostgreSQL for stable orchestration state without
+adding work-pool dispatch; absent cache configuration preserves full correctness.
 Production hardening adds the always-on `business_performance.worker`: it polls every five
 seconds, heartbeats every ten seconds, checks the Dallas schedule every minute, and continues to
 use PostgreSQL leases, claim tokens, idempotency, and advisory locking.
