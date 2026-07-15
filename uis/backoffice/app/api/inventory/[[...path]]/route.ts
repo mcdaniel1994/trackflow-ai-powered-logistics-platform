@@ -7,8 +7,13 @@ type RouteContext = {
 };
 
 const ALLOWED_ROUTES = new Map([
+  ["GET clients", "/inventory/clients"],
+  ["POST clients", "/inventory/clients"],
+  ["PATCH clients/:id", "/inventory/clients/:id"],
   ["GET products", "/inventory/products"],
+  ["POST products", "/inventory/products"],
   ["GET products/:id", "/inventory/products/:id"],
+  ["PATCH products/:id", "/inventory/products/:id"],
   ["POST orders/inbound", "/inventory/orders/inbound"],
   ["POST orders/outbound", "/inventory/orders/outbound"],
   ["GET orders", "/inventory/orders"],
@@ -16,20 +21,27 @@ const ALLOWED_ROUTES = new Map([
 
 function allowlistedPath(method: string, path: string[]) {
   const joined = path.join("/");
-  const routeKey =
-    method === "GET" && path.length === 2 && path[0] === "products" && /^\d+$/.test(path[1])
-      ? "GET products/:id"
-      : `${method} ${joined}`;
+  let routeKey = `${method} ${joined}`;
+  if ((method === "GET" || method === "PATCH") && path.length === 2 && path[0] === "products" && /^\d+$/.test(path[1])) {
+    routeKey = `${method} products/:id`;
+  } else if (
+    method === "PATCH" &&
+    path.length === 2 &&
+    path[0] === "clients" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(path[1])
+  ) {
+    routeKey = "PATCH clients/:id";
+  }
   const template = ALLOWED_ROUTES.get(routeKey);
 
   if (!template) {
     return null;
   }
 
-  // Only the numeric product ID is interpolated; arbitrary upstream paths remain unreachable.
-  return template === "/inventory/products/:id"
-    ? `/inventory/products/${encodeURIComponent(path[1])}`
-    : template;
+  // Only validated numeric/UUID identifiers are interpolated; arbitrary paths stay unreachable.
+  if (template === "/inventory/products/:id") return `/inventory/products/${encodeURIComponent(path[1])}`;
+  if (template === "/inventory/clients/:id") return `/inventory/clients/${encodeURIComponent(path[1])}`;
+  return template;
 }
 
 async function handler(request: NextRequest, context: RouteContext) {
@@ -50,3 +62,4 @@ async function handler(request: NextRequest, context: RouteContext) {
 
 export const GET = handler;
 export const POST = handler;
+export const PATCH = handler;

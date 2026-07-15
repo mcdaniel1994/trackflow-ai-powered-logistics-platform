@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   Boxes,
   ClipboardList,
   LayoutDashboard,
@@ -36,6 +37,12 @@ const navigationItems: NavigationItem[] = [
     href: "/backoffice/telemetry/fulfilment",
     icon: Activity,
     activePrefix: "/backoffice/telemetry",
+  },
+  {
+    label: "Business Reporting",
+    href: "/backoffice/reporting",
+    icon: BarChart3,
+    activePrefix: "/backoffice/reporting",
   },
   {
     label: "Carrier Scoring",
