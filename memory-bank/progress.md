@@ -29,6 +29,13 @@
   enabled with 7-day retention, a daily prune, and a `scripts/db_size_guard.py` size guard
   (400 MB soft / 450 MB hard, ledger-safe reset) that keeps Supabase Free bounded. Runbook:
   `docs/runbooks/operations-feed.md`; signal reference: `docs/runbooks/telemetry-inventory.md`.
+  The production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
+  always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
+  health, adds fail-closed migration/grant verification, introduces `/health/live` and
+  `/health/ready`, and automatically restores the previous immutable image after deploy or
+  readiness failure. Repository implementation is complete; credential rotation, the GitHub
+  Production secret, one approved deployment, and the controlled rollback drill remain owner
+  acceptance actions.
   Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
   carriers tables, and AI telemetry remain explicitly deferred.
 

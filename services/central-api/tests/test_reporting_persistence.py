@@ -55,6 +55,7 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         "pipeline_runs",
         "source_ledger_state",
         "weekly_warehouse_client_performance",
+        "worker_heartbeats",
     }
     pipeline_columns = {column["name"] for column in inspector.get_columns("pipeline_runs", schema="reporting")}
     assert {

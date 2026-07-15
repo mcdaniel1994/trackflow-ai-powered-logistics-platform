@@ -20,13 +20,13 @@ def _service_block(compose_text: str, service: str) -> str:
     return match.group(0)
 
 
-def test_r2_secrets_are_scoped_to_reporting_runner_only() -> None:
+def test_r2_secrets_are_scoped_to_reporting_worker_only() -> None:
     for filename in ("compose.yaml", "compose.coolify.yaml"):
         compose_text = (REPO_ROOT / filename).read_text()
-        runner = _service_block(compose_text, "reporting-runner")
+        worker = _service_block(compose_text, "reporting-worker")
         for variable in R2_VARIABLES:
             assert compose_text.count(variable) == 2  # environment key + interpolation
-            assert runner.count(variable) == 2
+            assert worker.count(variable) == 2
 
 
 def test_central_api_settings_have_no_r2_fields() -> None:

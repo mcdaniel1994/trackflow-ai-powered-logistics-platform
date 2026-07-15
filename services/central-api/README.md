@@ -55,7 +55,9 @@ uv run --project services/central-api seed-incidents \
 uv run --project services/central-api uvicorn central_api.main:app --reload --port 8002
 ```
 
-Local health endpoint: `http://127.0.0.1:8002/health`
+Local liveness: `http://127.0.0.1:8002/health/live`. Readiness is
+`/health/ready`; `/health` retains the original compatibility response. Readiness verifies the
+database, image schema floor, inventory columns, reporting grants, and worker heartbeat.
 
 ## Quality gates
 
@@ -76,6 +78,9 @@ without confirming the target, recovery posture, and explicit approval.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | SQLAlchemy PostgreSQL URL |
+| `MIGRATION_DATABASE_URL` | Dedicated migration-role URL; mandatory for Alembic in production and never supplied to runtime containers |
+| `APP_ENV` | `production` enables fail-closed migration-role and readiness checks |
+| `RUNTIME_DATABASE_ROLE` | Expected production runtime identity; defaults to `trackflow_runtime` |
 | `CENTRAL_API_CORS_ORIGINS` | Comma-separated trusted browser origins |
 | `IDENTITY_JWT_PUBLIC_KEY` | Identity RS256 public key; escaped newlines are accepted |
 | `IDENTITY_JWT_ALGORITHM` | Must remain `RS256` |

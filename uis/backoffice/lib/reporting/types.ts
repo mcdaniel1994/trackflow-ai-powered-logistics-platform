@@ -51,6 +51,10 @@ export interface PipelineRunsStatus {
   latest: LatestPipelineRun | null;
   queued: QueuedPipelineRun[];
   latest_successful: LatestSuccessfulRun | null;
+  worker: {
+    status: "healthy" | "stale" | "unknown";
+    last_seen_at: string | null;
+  };
   next_scheduled_refresh: {
     local_time: "07:00";
     timezone: "America/Chicago";

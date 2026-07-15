@@ -14,6 +14,9 @@ PostgreSQL queue, America/Chicago dispatcher, lease/CAS state machine, and advis
 runner lifecycle alongside the pure weekly KPI transforms. Phase 6 supplies the Prefect-as-library
 ETL executor and an optional one-hour S3-compatible cache; no permanent Prefect server or external
 service is introduced, and absent cache configuration preserves full correctness.
+Production hardening adds the always-on `business_performance.worker`: it polls every five
+seconds, heartbeats every ten seconds, checks the Dallas schedule every minute, and continues to
+use PostgreSQL leases, claim tokens, idempotency, and advisory locking.
 
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines

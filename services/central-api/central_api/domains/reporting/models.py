@@ -106,6 +106,19 @@ class IncompleteWeek(SQLModel, table=True):
     recorded_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
 
 
+class WorkerHeartbeat(SQLModel, table=True):
+    """Last known liveness signal for the declarative reporting worker."""
+
+    __tablename__ = "worker_heartbeats"
+    __table_args__: ClassVar[tuple[SchemaItem | dict[str, str], ...]] = (
+        CheckConstraint("worker_name = 'reporting'", name="ck_worker_heartbeats_reporting_only"),
+        {"schema": REPORTING_SCHEMA},
+    )
+
+    worker_name: str = Field(sa_column=Column(Text, primary_key=True, nullable=False))
+    heartbeat_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
 class PipelineRun(SQLModel, table=True):
     """Durable run request, worker lease, retry state, and sanitized audit record."""
 

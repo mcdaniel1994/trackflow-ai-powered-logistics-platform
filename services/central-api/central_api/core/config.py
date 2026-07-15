@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     database_lock_timeout_ms: int = 5_000
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     app_env: str = "local"
+    runtime_database_role: str = "trackflow_runtime"
     telemetry_enabled: bool = False
     telemetry_operational_retention_days: int = 90
     telemetry_security_retention_days: int = 365
@@ -54,6 +55,8 @@ class Settings(BaseSettings):
     @property
     def alembic_database_url(self) -> str:
         """Use the dedicated DDL role when configured; local dev falls back safely."""
+        if self.app_env.strip().lower() == "production" and not self.migration_database_url:
+            raise ValueError("MIGRATION_DATABASE_URL is required when APP_ENV=production")
         return (self.migration_database_url or self.database_url).strip()
 
     @field_validator("identity_jwt_algorithm")

@@ -78,6 +78,10 @@ Then read the active engagement brief and the README for every folder being modi
   `/backoffice/carrier-scoring`. See `docs/briefs/06-data-pipelines-telemetry.md`,
   `docs/runbooks/operations-feed.md`, and the living signal reference
   `docs/runbooks/telemetry-inventory.md`.
+  Production hardening lives in `data/pipelines/business_performance/worker.py`,
+  `services/central-api/scripts/{maintenance_worker,production_migrate}.py`, the root Compose
+  files, and `.github/workflows/deploy-production.yml`. Implementation is complete; production
+  acceptance is still pending.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

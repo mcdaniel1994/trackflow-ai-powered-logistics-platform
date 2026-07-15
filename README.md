@@ -30,6 +30,11 @@ Back Office. The production stack is verified on Coolify at
 `backoffice.forgehub.cloud`; deployment, rollback, and remaining operational
 gaps are documented in `docs/runbooks/`.
 
+**Engagement 6** is implementation-complete and awaiting one approved production acceptance run.
+It adds trustworthy telemetry, live inventory operations, durable weekly business reporting,
+always-on reporting and maintenance workers, approval-gated migrations, dependency-aware
+readiness, and automatic immutable-image rollback.
+
 ---
 
 ## ❗ The Problem
@@ -183,7 +188,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 In progress — telemetry domain, live operations feed + auto-refreshing dashboards, DB-size guard |
+| 6 | Data pipelines & telemetry | 🚧 Production acceptance pending — telemetry, durable reporting, declarative workers, safe migrations/readiness/rollback |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
 | 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
 | 9 | Workflow automation (n8n) | ⏳ Upcoming |

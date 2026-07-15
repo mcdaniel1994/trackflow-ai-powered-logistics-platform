@@ -38,13 +38,10 @@ from .queue import (
     RunClaim,
     RunMetrics,
     engine_from_environment,
-    finalize_failure,
-    finalize_success,
     heartbeat,
-    release_retryable,
     verify_claim_for_publication,
 )
-from .runner import FinalizedExecution, RunnerStatus
+from .runner import PipelineStageError
 
 EXTRACTION_RETRIES: Final = 3
 EXTRACTION_RETRY_DELAY_SECONDS: Final = 10
@@ -345,99 +342,87 @@ def renew_pipeline_lease(claim: RunClaim) -> None:
         engine.dispose()
 
 
-@flow(name="finalize_pipeline_run", persist_result=False)
-def finalize_pipeline_run(
-    claim: RunClaim,
-    *,
-    metrics: RunMetrics | None,
-    status: RunnerStatus,
-    error_code: ErrorCode | None = None,
-) -> FinalizedExecution:
-    engine = _engine()
-    try:
-        if status == RunnerStatus.SUCCEEDED and metrics is not None:
-            transitioned = finalize_success(engine, claim, metrics)
-        elif status == RunnerStatus.FAILED:
-            transitioned = finalize_failure(engine, claim, error_code or "VALIDATE_FAILED")
-        else:
-            transitioned = release_retryable(engine, claim, error_code or "DB_UNAVAILABLE")
-        return FinalizedExecution(status if transitioned else RunnerStatus.LEASE_LOST)
-    finally:
-        engine.dispose()
-
-
 @task(persist_result=False)
-def publish_run_summary(run_id: UUID, status: RunnerStatus, metrics: RunMetrics | None) -> None:
+def publish_run_summary(run_id: UUID, metrics: RunMetrics) -> None:
     if os.environ.get("REPORTING_EVAL_OUTPUT_ENABLED", "false").lower() != "true":
         return
     output_dir = Path(__file__).resolve().parents[2] / "eval" / "business_performance"
     output_dir.mkdir(parents=True, exist_ok=True)
     payload = {
         "run_id": str(run_id),
-        "status": status.value,
-        "rows_extracted": metrics.rows_extracted if metrics else None,
-        "rows_transformed": metrics.rows_transformed if metrics else None,
-        "rows_loaded": metrics.rows_loaded if metrics else None,
+        "status": "succeeded",
+        "rows_extracted": metrics.rows_extracted,
+        "rows_transformed": metrics.rows_transformed,
+        "rows_loaded": metrics.rows_loaded,
     }
     (output_dir / f"{run_id}.json").write_text(json.dumps(payload, sort_keys=True) + "\n")
 
 
+def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
+    if isinstance(exc, (TransformError, CacheConfigurationError)):
+        return PipelineStageError(
+            stage=stage,
+            error_code="VALIDATE_FAILED",
+            error_type=type(exc).__name__,
+            retryable=False,
+        )
+    if isinstance(exc, SQLAlchemyError):
+        return PipelineStageError(
+            stage=stage,
+            error_code="DB_UNAVAILABLE",
+            error_type=type(exc).__name__,
+            retryable=True,
+        )
+    error_code: ErrorCode = "EXTRACT_FAILED" if stage == "extract" else "LOAD_FAILED"
+    return PipelineStageError(
+        stage=stage,
+        error_code=error_code,
+        error_type=type(exc).__name__,
+        retryable=True,
+    )
+
+
 @flow(name="weekly_warehouse_client_performance", persist_result=False)
-def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) -> FinalizedExecution:
-    metrics: RunMetrics | None = None
-    final_status = RunnerStatus.RETRYABLE
+def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) -> RunMetrics:
+    """Run ETL stages; the durable runner owns queue finalization."""
     try:
         extracted = extract_warehouse_client_activity(claim.target_weeks)
-        renew_pipeline_lease(claim)
+    except LeaseLostError:
+        raise
+    except Exception as exc:
+        raise _stage_failure("extract", exc) from None
+
+    renew_pipeline_lease(claim)
+    try:
         transformed = transform_weekly_performance(
             extracted,
             claim,
             last_reset_at=_last_reset_at(),
             pipeline_version=pipeline_version,
         )
-        renew_pipeline_lease(claim)
-        loaded = load_weekly_performance_report(transformed.rows, claim)
-        metrics = RunMetrics(
-            rows_extracted=extracted.rows_extracted,
-            rows_transformed=len(transformed.rows),
-            rows_loaded=loaded.rows_loaded,
-            source_watermark=extracted.source_watermark,
-        )
-        final_status = RunnerStatus.SUCCEEDED
-        result = finalize_pipeline_run(claim, metrics=metrics, status=final_status)
-    except (TransformError, CacheConfigurationError):
-        final_status = RunnerStatus.FAILED
-        result = finalize_pipeline_run(
-            claim,
-            metrics=None,
-            status=final_status,
-            error_code="VALIDATE_FAILED",
-        )
     except LeaseLostError:
-        final_status = RunnerStatus.LEASE_LOST
-        result = FinalizedExecution(final_status)
-    except SQLAlchemyError:
-        final_status = RunnerStatus.RETRYABLE
-        result = finalize_pipeline_run(
-            claim,
-            metrics=None,
-            status=final_status,
-            error_code="DB_UNAVAILABLE",
-        )
-    except Exception:
-        final_status = RunnerStatus.RETRYABLE
-        result = finalize_pipeline_run(
-            claim,
-            metrics=None,
-            status=final_status,
-            error_code="LOAD_FAILED",
-        )
-    finally:
-        # This output is explicitly dev-only and non-critical; return_state=True
-        # absorbs filesystem failures without changing the durable run outcome.
-        publish_run_summary(claim.run_id, final_status, metrics, return_state=True)
-    return result
+        raise
+    except Exception as exc:
+        raise _stage_failure("transform", exc) from None
+
+    renew_pipeline_lease(claim)
+    try:
+        loaded = load_weekly_performance_report(transformed.rows, claim)
+    except LeaseLostError:
+        raise
+    except Exception as exc:
+        raise _stage_failure("load", exc) from None
+
+    metrics = RunMetrics(
+        rows_extracted=extracted.rows_extracted,
+        rows_transformed=len(transformed.rows),
+        rows_loaded=loaded.rows_loaded,
+        source_watermark=extracted.source_watermark,
+    )
+    # Dev-only output is non-critical and cannot change the durable outcome.
+    publish_run_summary(claim.run_id, metrics, return_state=True)
+    return metrics
 
 
-def prefect_executor(_engine: Engine, claim: RunClaim) -> FinalizedExecution:
+def prefect_executor(_engine: Engine, claim: RunClaim) -> RunMetrics:
     return weekly_warehouse_client_performance(claim, pipeline_version="engagement-6-phase-6")

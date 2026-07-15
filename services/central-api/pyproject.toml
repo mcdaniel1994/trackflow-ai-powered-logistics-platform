@@ -19,6 +19,7 @@ dependencies = [
 seed-inventory = "central_api.domains.inventory.seed:entrypoint"
 seed-incidents = "central_api.domains.incidents.seed:entrypoint"
 seed-suppliers = "central_api.domains.suppliers.seed:entrypoint"
+central-api-migrate = "scripts.production_migrate:entrypoint"
 
 [project.optional-dependencies]
 dev = [

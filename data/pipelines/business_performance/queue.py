@@ -15,6 +15,7 @@ from process.business_performance import TransformError, iso_week_start, recompu
 
 PIPELINE_NAME: Final = "business_performance"
 PIPELINE_VERSION: Final = "engagement-6-phase-5"
+REPORTING_WORKER_NAME: Final = "reporting"
 DEFAULT_RECOMPUTE_WEEKS: Final = 3
 DEFAULT_LEASE_SECONDS: Final = 600
 DEFAULT_MAX_ATTEMPTS: Final = 5
@@ -74,6 +75,20 @@ class RunMetrics:
 
 def utc_now() -> datetime:
     return datetime.now(UTC)
+
+
+def record_worker_heartbeat(engine: Engine, *, now: datetime | None = None) -> None:
+    """Upsert the singleton worker heartbeat without storing host or process identifiers."""
+    heartbeat_at = now or utc_now()
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
+                "VALUES (:worker_name, :heartbeat_at) "
+                "ON CONFLICT (worker_name) DO UPDATE SET heartbeat_at = EXCLUDED.heartbeat_at"
+            ),
+            {"worker_name": REPORTING_WORKER_NAME, "heartbeat_at": heartbeat_at},
+        )
 
 
 def engine_from_environment() -> Engine:

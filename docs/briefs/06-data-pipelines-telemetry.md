@@ -4,15 +4,15 @@
 
 ## Status
 
-In progress — Engagement 6. Phase 1 is implemented and verified locally: the `telemetry`
-domain, migration `20260709_0004`, post-response emitters, Identity auth audit logs, the
-read-only `/backoffice/telemetry` route, and the retention prune command are built and tested
-(Central API 70 tests / 90.6% coverage, Identity 35 tests, Back Office 90 tests; Ruff, mypy,
-and all builds pass; Alembic upgrade and rollback verified). **Production telemetry collection
-remains disabled (`TELEMETRY_ENABLED=false`) until the retention prune is wired to a scheduled
-runner** — the one gate outstanding before enablement. Deployment to Supabase/Coolify is not
-performed in this engagement. KPI consumers are Thomas Harry (CEO) and Ana Whitfield (Head of
-Warehouse Operations).
+In progress — implementation complete; one approved production acceptance run remains. The
+telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
+reporting surface, declarative reporting/maintenance workers, production migration verifier,
+readiness probes, and automatic image rollback are implemented and locally verified through
+Alembic revision `20260715_0009`. Coolify no longer needs separate cron configuration. Before the
+hardened workflow is enabled, rotate the previously exposed migration credential, grant the
+migration role database-level `CREATE`, and store the replacement once as the GitHub Production
+environment secret `MIGRATION_DATABASE_URL`. KPI consumers are Thomas Harry (CEO) and Ana
+Whitfield (Head of Warehouse Operations).
 
 The engagement delivers a **Phase 1 slice only**: exact warehouse metrics read from the
 existing inventory tables, best-effort operational/security diagnostics, and a Back Office

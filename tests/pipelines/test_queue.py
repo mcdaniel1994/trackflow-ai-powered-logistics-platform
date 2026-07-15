@@ -22,11 +22,13 @@ from pipelines.business_performance.queue import (
     finalize_failure,
     finalize_success,
     heartbeat,
+    record_worker_heartbeat,
     recover_stale_runs,
     release_retryable,
     verify_claim_for_publication,
 )
 from pipelines.business_performance.runner import (
+    PipelineStageError,
     PermanentRunError,
     RunnerStatus,
     TransientRunError,
@@ -273,8 +275,39 @@ def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None
     unknown = run_once(pipeline_engine, unexpected)
     assert unknown.status == RunnerStatus.RETRYABLE
     unknown_row = _run_row(pipeline_engine, UUID(unknown.run_id or ""))
-    assert unknown_row["error_code"] == "EXTRACT_FAILED"
+    assert unknown_row["error_code"] == "LOAD_FAILED"
     assert "sensitive" not in str(unknown_row["error_summary"])
+
+
+def test_runner_logs_only_safe_stage_failure_metadata(
+    pipeline_engine: Engine,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=1))
+
+    def fail(_engine: Engine, _claim: RunClaim) -> RunMetrics:
+        raise PipelineStageError(
+            stage="transform",
+            error_code="LOAD_FAILED",
+            error_type="RuntimeError",
+            retryable=True,
+        )
+
+    result = run_once(pipeline_engine, fail)
+    assert result.status == RunnerStatus.RETRYABLE
+    assert "stage=transform" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
+    assert "password" not in caplog.text.lower()
+
+
+def test_worker_heartbeat_is_a_single_upserted_row(pipeline_engine: Engine) -> None:
+    record_worker_heartbeat(pipeline_engine, now=BASE_TIME)
+    record_worker_heartbeat(pipeline_engine, now=BASE_TIME + timedelta(seconds=10))
+    with pipeline_engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT worker_name, heartbeat_at FROM reporting.worker_heartbeats")
+        ).one()
+    assert row == ("reporting", BASE_TIME + timedelta(seconds=10))
 
 
 def test_runner_is_idle_when_queue_is_empty(pipeline_engine: Engine) -> None:

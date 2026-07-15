@@ -87,39 +87,72 @@ services:
       postgres: {condition: service_healthy}
     command: [".venv/bin/python", "-m", "scripts.operations_feed"]
 
-  # One-shot scheduled jobs. Local runs use the `scheduled` profile; production
-  # scheduling remains an explicit Phase 11 Coolify owner action.
-  reporting-dispatcher:
+  # Durable reporting queue consumer, worker heartbeat, and Dallas scheduler.
+  reporting-worker:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
-    profiles: ["scheduled"]
+    restart: on-failure
+    stop_grace_period: 15m
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
-    depends_on:
-      postgres: {condition: service_healthy}
-    command: [".venv/bin/python", "-m", "pipelines.business_performance.dispatcher"]
-
-  reporting-runner:
-    build: {context: ., dockerfile: docker/central-api.Dockerfile}
-    profiles: ["scheduled"]
-    environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      HOME: /tmp/trackflow
+      PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
+      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
+      DO_NOT_TRACK: "1"
       REPORTING_R2_BUCKET: ${REPORTING_R2_BUCKET:-}
       REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
       REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
       REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
     depends_on:
       postgres: {condition: service_healthy}
-    command: [".venv/bin/python", "-m", "pipelines.business_performance.runner"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /tmp/trackflow/prefect /tmp/trackflow/.prefect && exec .venv/bin/python -m pipelines.business_performance.worker",
+      ]
+    deploy:
+      replicas: 1
+      resources:
+        limits: {cpus: "0.50", memory: 768M}
 
-  business-event-prune:
+  # Database guardrail and 02:15 America/Chicago retention scheduler.
+  maintenance-worker:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
-    profiles: ["scheduled"]
+    restart: on-failure
+    stop_grace_period: 5m
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       BUSINESS_EVENT_RETENTION_WEEKS: ${BUSINESS_EVENT_RETENTION_WEEKS:-26}
+      OPERATIONS_FEED_USER_UUID: ${OPERATIONS_FEED_USER_UUID:-${SEED_USER_UUID:-}}
+      OPERATIONS_FEED_BACKFILL_DAYS: ${OPERATIONS_FEED_BACKFILL_DAYS:-10}
+      DB_SIZE_SOFT_LIMIT_MB: ${DB_SIZE_SOFT_LIMIT_MB:-400}
+      DB_SIZE_HARD_LIMIT_MB: ${DB_SIZE_HARD_LIMIT_MB:-450}
+      TELEMETRY_OPERATIONAL_RETENTION_DAYS: ${TELEMETRY_OPERATIONAL_RETENTION_DAYS:-7}
+      TELEMETRY_SECURITY_RETENTION_DAYS: ${TELEMETRY_SECURITY_RETENTION_DAYS:-7}
+      HOME: /tmp/trackflow
+      PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
+      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
+      DO_NOT_TRACK: "1"
     depends_on:
       postgres: {condition: service_healthy}
-    command: [".venv/bin/python", "-m", "scripts.prune_business_events"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        "mkdir -p /tmp/trackflow/prefect /tmp/trackflow/.prefect && exec .venv/bin/python -m scripts.maintenance_worker",
+      ]
+    deploy:
+      replicas: 1
+      resources:
+        limits: {cpus: "0.25", memory: 384M}
 
 volumes:
   identity-data:

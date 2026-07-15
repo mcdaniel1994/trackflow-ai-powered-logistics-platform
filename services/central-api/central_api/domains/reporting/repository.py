@@ -1,6 +1,6 @@
 """Read-only reporting queries; pipeline queue writes stay in the data package."""
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import RowMapping, text
@@ -111,3 +111,11 @@ class ReportingRepository:
             {"pipeline_name": PIPELINE_NAME},
         ).mappings().one_or_none()
         return self._successful(row)
+
+    def worker_last_seen_at(self) -> datetime | None:
+        return self.session.execute(
+            text(
+                "SELECT heartbeat_at FROM reporting.worker_heartbeats "
+                "WHERE worker_name = 'reporting'"
+            )
+        ).scalar_one_or_none()

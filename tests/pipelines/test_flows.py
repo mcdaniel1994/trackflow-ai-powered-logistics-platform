@@ -16,7 +16,7 @@ from pipelines.business_performance import flows
 from pipelines.business_performance.cache import CacheConfigurationError
 from pipelines.business_performance.flows import prefect_executor, upsert_weekly_performance_rows
 from pipelines.business_performance.queue import RunClaim, claim_next, enqueue_cli, release_retryable
-from pipelines.business_performance.runner import FinalizedExecution, RunnerStatus, run_once
+from pipelines.business_performance.runner import PipelineStageError, RunnerStatus, run_once
 from process.business_performance import TransformError, WeeklyPerformanceRow
 
 WEEK = date(2026, 7, 13)
@@ -165,43 +165,34 @@ def test_idempotent_load_removes_only_stale_rows_in_target_week(
 
 
 @pytest.mark.parametrize(
-    ("failure", "expected_status", "expected_code"),
+    ("failure", "expected_retryable", "expected_code"),
     [
-        (TransformError("bad source"), RunnerStatus.FAILED, "VALIDATE_FAILED"),
-        (CacheConfigurationError("partial config"), RunnerStatus.FAILED, "VALIDATE_FAILED"),
-        (SQLAlchemyError("db down"), RunnerStatus.RETRYABLE, "DB_UNAVAILABLE"),
-        (RuntimeError("load failed"), RunnerStatus.RETRYABLE, "LOAD_FAILED"),
+        (TransformError("bad source"), False, "VALIDATE_FAILED"),
+        (CacheConfigurationError("partial config"), False, "VALIDATE_FAILED"),
+        (SQLAlchemyError("db down"), True, "DB_UNAVAILABLE"),
+        (RuntimeError("load failed"), True, "EXTRACT_FAILED"),
     ],
 )
-def test_flow_classifies_failures_without_persisting_exception_details(
+def test_flow_propagates_safe_stage_failures_without_exception_details(
     monkeypatch: pytest.MonkeyPatch,
     failure: Exception,
-    expected_status: RunnerStatus,
+    expected_retryable: bool,
     expected_code: str,
 ) -> None:
     claim = RunClaim(uuid4(), uuid4(), "cli", WEEK, (WEEK,), 1)
-    captured: list[tuple[RunnerStatus, str | None]] = []
 
     def fail_extract(_weeks: tuple[date, ...]) -> None:
         raise failure
 
-    def finalize(
-        _claim: RunClaim,
-        *,
-        metrics: object,
-        status: RunnerStatus,
-        error_code: str | None = None,
-    ) -> FinalizedExecution:
-        del metrics
-        captured.append((status, error_code))
-        return FinalizedExecution(status)
-
     monkeypatch.setattr(flows, "extract_warehouse_client_activity", fail_extract)
-    monkeypatch.setattr(flows, "finalize_pipeline_run", finalize)
-    monkeypatch.setattr(flows, "publish_run_summary", lambda *_args, **_kwargs: None)
-    result = flows.weekly_warehouse_client_performance.fn(claim, "test-version")
-    assert result.status == expected_status
-    assert captured == [(expected_status, expected_code)]
+    with pytest.raises(PipelineStageError) as raised:
+        flows.weekly_warehouse_client_performance.fn(claim, "test-version")
+    assert str(raised.value) == "pipeline stage failed"
+    assert raised.value.stage == "extract"
+    assert raised.value.error_code == expected_code
+    assert raised.value.error_type == type(failure).__name__
+    assert raised.value.retryable is expected_retryable
+    assert "bad source" not in str(raised.value)
 
 
 def test_flow_aborts_without_finalization_when_lease_is_lost(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -211,6 +202,21 @@ def test_flow_aborts_without_finalization_when_lease_is_lost(monkeypatch: pytest
         raise flows.LeaseLostError("lost")
 
     monkeypatch.setattr(flows, "extract_warehouse_client_activity", lose_lease)
-    monkeypatch.setattr(flows, "publish_run_summary", lambda *_args, **_kwargs: None)
-    result = flows.weekly_warehouse_client_performance.fn(claim, "test-version")
-    assert result.status == RunnerStatus.LEASE_LOST
+    with pytest.raises(flows.LeaseLostError):
+        flows.weekly_warehouse_client_performance.fn(claim, "test-version")
+
+
+def test_prefect_records_propagated_pipeline_failure_as_failed_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    claim = RunClaim(uuid4(), uuid4(), "cli", WEEK, (WEEK,), 1)
+
+    def fail_extract(_weeks: tuple[date, ...]) -> None:
+        raise TransformError("private record detail")
+
+    monkeypatch.setattr(flows, "extract_warehouse_client_activity", fail_extract)
+    with prefect_test_harness():
+        state = flows.weekly_warehouse_client_performance(claim, "test-version", return_state=True)
+    assert state.is_failed()
+    with pytest.raises(PipelineStageError) as raised:
+        state.result()
+    assert raised.value.stage == "extract"
+    assert "private record detail" not in str(raised.value)

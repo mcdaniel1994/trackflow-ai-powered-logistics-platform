@@ -1,6 +1,7 @@
 """Public contracts for weekly reports and durable pipeline status."""
 
 from datetime import date, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -56,10 +57,16 @@ class NextScheduledRefresh(BaseModel):
     next_occurrence_utc: datetime
 
 
+class ReportingWorkerHealth(BaseModel):
+    status: Literal["healthy", "stale", "unknown"]
+    last_seen_at: datetime | None
+
+
 class PipelineRunsResponse(BaseModel):
     latest: PipelineRunLatest | None
     queued: list[QueuedPipelineRun]
     latest_successful: LatestSuccessfulRun | None
+    worker: ReportingWorkerHealth
     next_scheduled_refresh: NextScheduledRefresh
 
 

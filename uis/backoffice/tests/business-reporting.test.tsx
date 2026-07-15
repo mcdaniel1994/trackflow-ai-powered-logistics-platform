@@ -58,6 +58,7 @@ const status = {
     target_weeks: ["2026-07-13"],
     rows_loaded: 24,
   },
+  worker: { status: "healthy" as const, last_seen_at: "2026-07-14T12:04:00Z" },
   next_scheduled_refresh: {
     local_time: "07:00" as const,
     timezone: "America/Chicago" as const,
@@ -157,5 +158,14 @@ describe("business reporting dashboard", () => {
     reportingMocks.getWeeklyPerformance.mockRejectedValue({ message: "Reporting service is temporarily unavailable.", status: 503 });
     render(<BusinessReportingView />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Reporting service is temporarily unavailable.");
+  });
+
+  it("warns when queued work has no healthy worker", async () => {
+    reportingMocks.getPipelineRunsStatus.mockResolvedValue({
+      ...status,
+      worker: { status: "stale", last_seen_at: "2026-07-14T12:00:00Z" },
+    });
+    render(<BusinessReportingView />);
+    expect(await screen.findByText(/reporting worker is not responding/i)).toBeInTheDocument();
   });
 });
