@@ -6,6 +6,11 @@ import { StockBadge, stockStatus } from "@/components/inventory/StockBadge";
 const inventoryMocks = vi.hoisted(() => ({
   pathname: "/backoffice/inventory/products",
   listProducts: vi.fn(),
+  listClients: vi.fn(),
+  createClient: vi.fn(),
+  renameClient: vi.fn(),
+  createProduct: vi.fn(),
+  updateProductThreshold: vi.fn(),
   getProduct: vi.fn(),
   createInboundOrder: vi.fn(),
   createOutboundOrder: vi.fn(),
@@ -22,6 +27,10 @@ vi.mock("@/lib/inventory/api", async () => {
   return { ...actual, ...inventoryMocks };
 });
 
+vi.mock("@/lib/auth/context", () => ({
+  useAuth: () => ({ user: { role: "admin" } }),
+}));
+
 import { InboundOrderForm } from "@/components/inventory/InboundOrderForm";
 import { InventoryCarrierView } from "@/components/InventoryCarrierView";
 import { InventoryHistoryView } from "@/components/inventory/InventoryHistoryView";
@@ -30,9 +39,9 @@ import { InventoryProductsView } from "@/components/inventory/InventoryProductsV
 import { OutboundOrderForm } from "@/components/inventory/OutboundOrderForm";
 
 const products = [
-  { id: 1, name: "No Stock", sku: "ZERO", client_name: "Client", category: "fashion" as const, warehouse: "LA" as const, current_stock: 0 },
-  { id: 2, name: "Low Stock", sku: "LOW", client_name: "Client", category: "electronics" as const, warehouse: "ZGZ" as const, current_stock: 10 },
-  { id: 3, name: "Healthy Stock", sku: "GOOD", client_name: "Client", category: "cosmetics" as const, warehouse: "LA" as const, current_stock: 11 },
+  { id: 1, name: "No Stock", sku: "ZERO", client_id: "client-1", client_name: "Client", category: "fashion" as const, warehouse: "LA" as const, min_stock_threshold: 5, current_stock: 0 },
+  { id: 2, name: "Low Stock", sku: "LOW", client_id: "client-1", client_name: "Client", category: "electronics" as const, warehouse: "ZGZ" as const, min_stock_threshold: 4, current_stock: 10 },
+  { id: 3, name: "Healthy Stock", sku: "GOOD", client_id: "client-1", client_name: "Client", category: "cosmetics" as const, warehouse: "LA" as const, min_stock_threshold: 3, current_stock: 11 },
 ];
 
 describe("inventory UI", () => {
@@ -40,6 +49,11 @@ describe("inventory UI", () => {
     vi.clearAllMocks();
     inventoryMocks.pathname = "/backoffice/inventory/products";
     inventoryMocks.listProducts.mockResolvedValue({ items: products, total: 3, limit: 20, offset: 0 });
+    inventoryMocks.listClients.mockResolvedValue([{ client_id: "client-1", client_name: "Client" }]);
+    inventoryMocks.createClient.mockResolvedValue({ client_id: "client-2", client_name: "New Client" });
+    inventoryMocks.renameClient.mockResolvedValue({ client_id: "client-1", client_name: "Renamed Client" });
+    inventoryMocks.createProduct.mockResolvedValue(products[0]);
+    inventoryMocks.updateProductThreshold.mockResolvedValue({ ...products[0], min_stock_threshold: 7 });
     inventoryMocks.getProduct.mockImplementation(async (id: number) => products.find((product) => product.id === id));
     inventoryMocks.createInboundOrder.mockResolvedValue({ id: 1 });
     inventoryMocks.createOutboundOrder.mockResolvedValue({ id: 2 });
@@ -105,6 +119,57 @@ describe("inventory UI", () => {
     expect(dispatchLinks[0]).toHaveClass("border-coral/45", "bg-coral/10");
     expect(dispatchLinks[0].querySelector("svg")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Remove" })).not.toBeInTheDocument();
+  });
+
+  it("creates products with a client selector and nonnegative threshold", async () => {
+    const user = userEvent.setup();
+    render(<InventoryProductsView />);
+    await screen.findByText("Healthy Stock");
+    await user.click(screen.getByRole("button", { name: "Add product" }));
+    await user.type(screen.getByLabelText("Product name"), "New Product");
+    await user.type(screen.getByLabelText("SKU"), "NEW-1");
+    await user.selectOptions(screen.getByLabelText("Client"), "client-1");
+    await user.clear(screen.getByLabelText("Minimum stock threshold"));
+    await user.type(screen.getByLabelText("Minimum stock threshold"), "6");
+    await user.click(screen.getByRole("button", { name: "Create product" }));
+
+    await waitFor(() => expect(inventoryMocks.createProduct).toHaveBeenCalledWith({
+      name: "New Product",
+      sku: "NEW-1",
+      client_id: "client-1",
+      category: "fashion",
+      warehouse: "LA",
+      min_stock_threshold: 6,
+    }));
+  });
+
+  it("shows the client as immutable while editing only the threshold", async () => {
+    const user = userEvent.setup();
+    render(<InventoryProductsView />);
+    await screen.findByText("Healthy Stock");
+    await user.selectOptions(screen.getByLabelText("Edit product threshold"), "1");
+    expect(screen.getByText("Client ownership is immutable after product creation.")).toBeInTheDocument();
+    expect(screen.queryByRole("combobox", { name: "Client" })).not.toBeInTheDocument();
+    await user.clear(screen.getByLabelText("Minimum stock threshold"));
+    await user.type(screen.getByLabelText("Minimum stock threshold"), "7");
+    await user.click(screen.getByRole("button", { name: "Save threshold" }));
+    await waitFor(() => expect(inventoryMocks.updateProductThreshold).toHaveBeenCalledWith(1, 7));
+  });
+
+  it("lets administrators create and rename clients", async () => {
+    const user = userEvent.setup();
+    render(<InventoryProductsView />);
+    await screen.findByText("Healthy Stock");
+    await user.click(screen.getByRole("button", { name: "Manage clients" }));
+    await user.type(screen.getByLabelText("New client name"), "New Client");
+    await user.click(screen.getByRole("button", { name: "Create client" }));
+    await waitFor(() => expect(inventoryMocks.createClient).toHaveBeenCalledWith("New Client"));
+
+    const rename = screen.getByLabelText("Rename Client");
+    await user.clear(rename);
+    await user.type(rename, "Renamed Client");
+    await user.click(screen.getByRole("button", { name: "Save name" }));
+    await waitFor(() => expect(inventoryMocks.renameClient).toHaveBeenCalledWith("client-1", "Renamed Client"));
   });
 
   it("derives inbound SKU and warehouse and resets entered fields after success", async () => {

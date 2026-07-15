@@ -97,7 +97,38 @@ services:
         limits: {cpus: "0.25", memory: 384M}
 
   # Scheduled tasks (Coolify runs these on a cron; profile keeps them out of the default
-  # `up`). telemetry-prune: daily. db-size-guard: ~every 15 minutes.
+  # `up`). Dispatcher/runner: */5. Prune jobs: daily. Size guard: ~every 15 minutes.
+  reporting-dispatcher:
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
+    command: [".venv/bin/python", "-m", "pipelines.business_performance.dispatcher"]
+
+  reporting-runner:
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
+      REPORTING_R2_BUCKET: ${REPORTING_R2_BUCKET:-}
+      REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
+      REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
+      REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
+    command: [".venv/bin/python", "-m", "pipelines.business_performance.runner"]
+
+  business-event-prune:
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?required}
+      BUSINESS_EVENT_RETENTION_WEEKS: ${BUSINESS_EVENT_RETENTION_WEEKS:-26}
+    command: [".venv/bin/python", "-m", "scripts.prune_business_events"]
+
   telemetry-prune:
     image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
     pull_policy: always

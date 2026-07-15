@@ -1,6 +1,7 @@
 """Thin HTTP boundary for the exact Engagement 5 inventory routes."""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
@@ -9,10 +10,16 @@ from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped
 from ...core.dependencies import current_principal, write_principal
 from ...db.session import get_session
 from .schemas import (
+    ClientCreate,
+    ClientRead,
+    ClientUpdate,
+    InventoryDiscrepancyCreate,
+    InventoryDiscrepancyRead,
     MovementPage,
     ProductPage,
     SKUCreate,
     SKURead,
+    SKUUpdate,
     StockEntryCreate,
     StockEntryRead,
     StockExitCreate,
@@ -26,6 +33,33 @@ router = APIRouter(prefix="/inventory", tags=["inventory"])
 def inventory_service(session: Annotated[Session, Depends(get_session)]) -> InventoryService:
     """Bind one request-scoped database session to the inventory service."""
     return InventoryService(session)
+
+
+@router.get("/clients", response_model=list[ClientRead])
+def list_clients(
+    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[InventoryService, Depends(inventory_service)],
+) -> list[ClientRead]:
+    return service.list_clients()
+
+
+@router.post("/clients", response_model=ClientRead, status_code=status.HTTP_201_CREATED)
+def create_client(
+    payload: ClientCreate,
+    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[InventoryService, Depends(inventory_service)],
+) -> ClientRead:
+    return service.create_client(payload, principal.role)
+
+
+@router.patch("/clients/{client_id}", response_model=ClientRead)
+def rename_client(
+    client_id: UUID,
+    payload: ClientUpdate,
+    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[InventoryService, Depends(inventory_service)],
+) -> ClientRead:
+    return service.rename_client(client_id, payload, principal.role)
 
 
 @router.get("/products", response_model=ProductPage)
@@ -56,6 +90,16 @@ def get_product(
     return service.get_product(sku_id)
 
 
+@router.patch("/products/{sku_id}", response_model=SKURead)
+def update_product(
+    sku_id: int,
+    payload: SKUUpdate,
+    _principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[InventoryService, Depends(inventory_service)],
+) -> SKURead:
+    return service.update_sku(sku_id, payload)
+
+
 @router.post("/orders/inbound", response_model=StockEntryRead, status_code=status.HTTP_201_CREATED)
 def create_inbound_order(
     payload: StockEntryCreate,
@@ -73,6 +117,15 @@ def create_outbound_order(
     service: Annotated[InventoryService, Depends(inventory_service)],
 ) -> StockExitRead:
     return service.record_outbound(payload, principal.user_id)
+
+
+@router.post("/discrepancies", response_model=InventoryDiscrepancyRead, status_code=status.HTTP_201_CREATED)
+def create_discrepancy(
+    payload: InventoryDiscrepancyCreate,
+    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[InventoryService, Depends(inventory_service)],
+) -> InventoryDiscrepancyRead:
+    return service.record_discrepancy(payload, principal.user_id)
 
 
 @router.get("/orders", response_model=MovementPage)

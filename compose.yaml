@@ -87,5 +87,39 @@ services:
       postgres: {condition: service_healthy}
     command: [".venv/bin/python", "-m", "scripts.operations_feed"]
 
+  # One-shot scheduled jobs. Local runs use the `scheduled` profile; production
+  # scheduling remains an explicit Phase 11 Coolify owner action.
+  reporting-dispatcher:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [".venv/bin/python", "-m", "pipelines.business_performance.dispatcher"]
+
+  reporting-runner:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      REPORTING_R2_BUCKET: ${REPORTING_R2_BUCKET:-}
+      REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
+      REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
+      REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [".venv/bin/python", "-m", "pipelines.business_performance.runner"]
+
+  business-event-prune:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    profiles: ["scheduled"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      BUSINESS_EVENT_RETENTION_WEEKS: ${BUSINESS_EVENT_RETENTION_WEEKS:-26}
+    depends_on:
+      postgres: {condition: service_healthy}
+    command: [".venv/bin/python", "-m", "scripts.prune_business_events"]
+
 volumes:
   identity-data:

@@ -11,6 +11,7 @@ dependencies = [
   "sqlmodel>=0.0.24",
   "trackflow-auth",
   "trackflow-incidents",
+  "trackflow-data-pipelines",
   "uvicorn[standard]>=0.35.0",
 ]
 
@@ -33,6 +34,7 @@ dev = [
 [tool.uv.sources]
 trackflow-auth = { path = "../../packages/trackflow_auth", editable = true }
 trackflow-incidents = { path = "../../packages/trackflow_incidents", editable = true }
+trackflow-data-pipelines = { path = "../../data", editable = true }
 
 [build-system]
 requires = ["hatchling"]
@@ -62,7 +64,16 @@ plugins = ["pydantic.mypy"]
 warn_unused_ignores = false
 
 [[tool.mypy.overrides]]
-module = ["jose", "jose.*", "trackflow_auth", "trackflow_auth.*"]
+module = [
+  "jose",
+  "jose.*",
+  "pipelines",
+  "pipelines.*",
+  "process",
+  "process.*",
+  "trackflow_auth",
+  "trackflow_auth.*",
+]
 ignore_missing_imports = true
 
 [tool.coverage.run]

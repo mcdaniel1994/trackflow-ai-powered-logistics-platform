@@ -127,10 +127,10 @@ export function OperationsOverview() {
                 Recent activity
               </h2>
               <Link
-                href="/backoffice/telemetry/fulfilment"
+                href="/backoffice/operations/fulfilment"
                 className="inline-flex items-center gap-1 text-sm font-bold text-navy hover:text-coral"
               >
-                Full telemetry <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                Fulfilment details <ArrowRight className="h-4 w-4" aria-hidden="true" />
               </Link>
             </div>
             <ul className="divide-y divide-mist overflow-hidden rounded-xl border border-mist bg-white shadow-sm">
@@ -162,6 +162,12 @@ export function OperationsOverview() {
 
           <section className="flex flex-wrap gap-3">
             <Link
+              href="/backoffice/operations/stock-loss"
+              className="inline-flex items-center gap-2 rounded-lg border border-mist bg-white px-4 py-2 text-sm font-black text-navy transition hover:bg-ivory"
+            >
+              Stock loss details
+            </Link>
+            <Link
               href="/backoffice/inventory/products"
               className="inline-flex items-center gap-2 rounded-lg border border-navy bg-navy px-4 py-2 text-sm font-black text-white transition hover:bg-navy-deep"
             >
@@ -171,7 +177,7 @@ export function OperationsOverview() {
               href="/backoffice/telemetry/security"
               className="inline-flex items-center gap-2 rounded-lg border border-mist bg-white px-4 py-2 text-sm font-black text-navy transition hover:bg-ivory"
             >
-              Security telemetry
+              Technical security telemetry
             </Link>
           </section>
         </>

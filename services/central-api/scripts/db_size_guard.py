@@ -22,8 +22,12 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
+from pipelines.business_performance.flows import prefect_executor
+from pipelines.business_performance.queue import DEFAULT_RECOMPUTE_WEEKS, enqueue_cli
+from pipelines.business_performance.runner import RunnerStatus, run_once
+from process.business_performance import iso_week_start, reset_incomplete_weeks
 from sqlalchemy import text
 from sqlmodel import Session
 
@@ -54,21 +58,107 @@ def prune_telemetry(session: Session, settings: Settings) -> dict[str, int]:
     )
 
 
-def reset_ledger(session: Session, user_uuid: str, settings: Settings) -> None:
-    """Ledger-safe reset: pause the feed, truncate movements, reseed a consistent window.
+def _checkpoint_target_weeks(reset_at: datetime) -> tuple[date, ...]:
+    current_week = iso_week_start(reset_at)
+    return tuple(
+        current_week - timedelta(weeks=offset)
+        for offset in reversed(range(DEFAULT_RECOMPUTE_WEEKS))
+    )
 
-    Truncating and reseeding (rather than deleting arbitrary old rows) keeps computed
-    stock (received minus dispatched/lost) internally consistent by construction. The feed
-    is paused first and re-enabled last so no concurrent write lands mid-reset.
+
+def run_reporting_checkpoint() -> bool:
+    """Run one durable checkpoint request and report whether this exact request succeeded."""
+    engine = get_engine()
+    run_id = enqueue_cli(engine)
+    result = run_once(engine, prefect_executor)
+    succeeded = bool(result.status == RunnerStatus.SUCCEEDED and result.run_id == str(run_id))
+    if not succeeded:
+        logger.error(
+            "db_size_guard_checkpoint_failed checkpoint_run_id=%s runner_status=%s claimed_run_id=%s",
+            run_id,
+            result.status,
+            result.run_id,
+        )
+    return succeeded
+
+
+def _reset_source_tables(
+    session: Session,
+    *,
+    reset_at: datetime,
+    target_weeks: tuple[date, ...],
+    checkpoint_succeeded: bool,
+) -> None:
+    """Atomically clear disposable sources and persist the reporting reset boundary."""
+    incomplete = reset_incomplete_weeks(
+        reset_at,
+        target_weeks,
+        checkpoint_succeeded=checkpoint_succeeded,
+    )
+    session.execute(
+        text(
+            "TRUNCATE inventory_discrepancies, stockout_events, "
+            "stock_exits, stock_entries RESTART IDENTITY"
+        )
+    )
+    session.execute(
+        text(
+            "UPDATE reporting.source_ledger_state "
+            "SET last_reset_at = :reset_at, updated_at = :reset_at WHERE id = 1"
+        ),
+        {"reset_at": reset_at},
+    )
+    for week_start, reason in incomplete.items():
+        session.execute(
+            text(
+                "INSERT INTO reporting.incomplete_weeks (week_start, reason, recorded_at) "
+                "VALUES (:week_start, :reason, :reset_at) "
+                "ON CONFLICT (week_start) DO UPDATE SET "
+                "reason = EXCLUDED.reason, recorded_at = EXCLUDED.recorded_at"
+            ),
+            {"week_start": week_start, "reason": reason, "reset_at": reset_at},
+        )
+    session.commit()
+
+
+def reset_ledger(
+    session: Session,
+    user_uuid: str,
+    settings: Settings,
+    *,
+    reset_at: datetime | None = None,
+) -> None:
+    """Checkpoint, reset, annotate, and rebuild the disposable source ledger.
+
+    The feed is paused before the checkpoint so its published aggregates cover a stable
+    source. Checkpoint failure never blocks the hard-limit reset; affected weeks are marked
+    incomplete instead of being silently represented as verified history.
     """
     set_feed_enabled(session, enabled=False, note="db_size_guard: hard-limit reset in progress")
+    boundary = reset_at or datetime.now(UTC)
+    target_weeks = _checkpoint_target_weeks(boundary)
+    try:
+        checkpoint_succeeded = run_reporting_checkpoint()
+    except Exception:
+        # A hard-limit reset cannot wait indefinitely for reporting recovery.
+        # Persist the fixed failure classification below without logging payloads.
+        logger.error("db_size_guard_checkpoint_failed_before_reset")
+        checkpoint_succeeded = False
     with Session(get_engine()) as work:
-        work.execute(text("TRUNCATE stock_exits, stock_entries RESTART IDENTITY"))
-        work.commit()
+        _reset_source_tables(
+            work,
+            reset_at=boundary,
+            target_weeks=target_weeks,
+            checkpoint_succeeded=checkpoint_succeeded,
+        )
         seed_inventory(work, user_uuid)
         backfill_history(work, user_uuid, days=settings.operations_feed_backfill_days)
     set_feed_enabled(session, enabled=True, note="db_size_guard: reset complete")
-    logger.error("db_size_guard_reset_complete backfill_days=%s", settings.operations_feed_backfill_days)
+    logger.error(
+        "db_size_guard_reset_complete backfill_days=%s checkpoint_succeeded=%s",
+        settings.operations_feed_backfill_days,
+        checkpoint_succeeded,
+    )
 
 
 def guard_once() -> float:

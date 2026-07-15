@@ -108,6 +108,14 @@ describe("Back Office responsive layout", () => {
     expect(drawerList).not.toHaveClass("overflow-x-auto");
     expect(drawerNavigation.getByRole("link", { name: /operations overview/i })).toBeInTheDocument();
     expect(drawerNavigation.getByRole("link", { name: /carrier scoring/i })).toBeInTheDocument();
+    expect(drawerNavigation.getByRole("link", { name: /business reporting/i })).toHaveAttribute(
+      "href",
+      "/backoffice/reporting",
+    );
+    expect(drawerNavigation.getByRole("link", { name: /technical telemetry/i })).toHaveAttribute(
+      "href",
+      "/backoffice/telemetry/fulfilment",
+    );
     expect(drawerNavigation.getByRole("link", { name: /user management/i })).toBeInTheDocument();
 
     const accountLink = drawerNavigation.getByRole("link", { name: /account/i });

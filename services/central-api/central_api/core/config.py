@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     # Automatic database-size guardrails for the Supabase Free tier (500 MB cap).
     db_size_soft_limit_mb: int = 400
     db_size_hard_limit_mb: int = 450
+    business_event_retention_weeks: int = 26
     identity_jwt_public_key: str = ""
     identity_jwt_algorithm: str = "RS256"
     identity_jwt_issuer: str = "trackflow-identity"

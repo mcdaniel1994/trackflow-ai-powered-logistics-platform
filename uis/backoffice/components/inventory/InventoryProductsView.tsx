@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { PackageMinus, PackagePlus } from "lucide-react";
 import { useEffect, useState } from "react";
+import { InventoryAdministration } from "./InventoryAdministration";
 import { InventoryPageHeader } from "./InventoryPageHeader";
 import { StockBadge } from "./StockBadge";
-import { inventoryError, listProducts } from "@/lib/inventory/api";
-import type { InventoryProduct, Page } from "@/lib/inventory/types";
+import { inventoryError, listClients, listProducts } from "@/lib/inventory/api";
+import type { InventoryClient, InventoryProduct, Page } from "@/lib/inventory/types";
 
 const PAGE_SIZE = 20;
 
@@ -15,11 +16,22 @@ export function InventoryProductsView() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [clients, setClients] = useState<InventoryClient[]>([]);
+
+  async function load() {
+    const [products, inventoryClients] = await Promise.all([listProducts(PAGE_SIZE, offset), listClients()]);
+    setPage(products);
+    setClients(inventoryClients);
+  }
 
   useEffect(() => {
     let active = true;
-    void listProducts(PAGE_SIZE, offset)
-      .then((result) => active && setPage(result))
+    void Promise.all([listProducts(PAGE_SIZE, offset), listClients()])
+      .then(([result, inventoryClients]) => {
+        if (!active) return;
+        setPage(result);
+        setClients(inventoryClients);
+      })
       .catch((caught) => active && setError(inventoryError(caught).message))
       .finally(() => active && setLoading(false));
     return () => {
@@ -40,6 +52,13 @@ export function InventoryProductsView() {
         title="Products and stock"
         description="Review computed warehouse stock. Stock changes only through inbound receipts, dispatches, and confirmed losses."
       />
+      {page ? (
+        <InventoryAdministration
+          clients={clients}
+          products={page.items}
+          onChanged={load}
+        />
+      ) : null}
       {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p> : null}
       {loading ? <p className="text-sm text-neutral-600">Loading products…</p> : null}
       {!loading && page ? (
@@ -52,6 +71,7 @@ export function InventoryProductsView() {
                   <th className="px-4 py-3">Client</th>
                   <th className="px-4 py-3">Warehouse</th>
                   <th className="px-4 py-3">Stock</th>
+                  <th className="px-4 py-3">Threshold</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -65,6 +85,7 @@ export function InventoryProductsView() {
                     <td className="px-4 py-4 text-neutral-700">{product.client_name}</td>
                     <td className="px-4 py-4 font-bold text-navy">{product.warehouse}</td>
                     <td className="px-4 py-4"><StockBadge stock={product.current_stock} /></td>
+                    <td className="px-4 py-4 tabular-nums text-neutral-700">{product.min_stock_threshold}</td>
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-2">
                         <Link

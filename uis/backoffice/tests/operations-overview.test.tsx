@@ -73,6 +73,14 @@ describe("operations overview", () => {
     expect(screen.getByText("CLT-SNK", { exact: false })).toBeInTheDocument();
     // Best-effort language never claims false precision on the overview KPIs.
     expect(screen.getByText(/system of record/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Fulfilment details/i })).toHaveAttribute(
+      "href",
+      "/backoffice/operations/fulfilment",
+    );
+    expect(screen.getByRole("link", { name: /Stock loss details/i })).toHaveAttribute(
+      "href",
+      "/backoffice/operations/stock-loss",
+    );
   });
 
   it("surfaces a friendly error when the live feed cannot be read", async () => {

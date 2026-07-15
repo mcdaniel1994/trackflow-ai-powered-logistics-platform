@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { GET, POST } from "@/app/api/inventory/[[...path]]/route";
+import { GET, PATCH, POST } from "@/app/api/inventory/[[...path]]/route";
 import { CSRF_HEADER_NAME } from "@/lib/auth/constants";
 
 function context(path: string[]) {
@@ -60,6 +60,23 @@ describe("inventory BFF", () => {
     expect(headers.get(CSRF_HEADER_NAME)).toBe("csrf");
   });
 
+  it("allowlists client administration and threshold updates with validated identifiers", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"client_name":"Renamed"}', { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const clientId = "11111111-1111-4111-8111-111111111111";
+
+    const response = await PATCH(
+      new NextRequest(`http://backoffice.test/api/inventory/clients/${clientId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ display_name: "Renamed" }),
+      }),
+      context(["clients", clientId]),
+    );
+    expect(response.status).toBe(200);
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(`http://central.test/inventory/clients/${clientId}`);
+  });
+
   it("preserves Central API authentication failures for shared refresh handling", async () => {
     process.env.CENTRAL_API_URL = "http://central.test";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(
@@ -81,7 +98,7 @@ describe("inventory BFF", () => {
   });
 
   it.each([
-    ["POST", ["products"]],
+    ["PATCH", ["clients", "not-a-uuid"]],
     ["GET", ["products", "not-a-number"]],
     ["GET", ["orders", "outbound"]],
     ["POST", ["orders"]],
@@ -89,7 +106,7 @@ describe("inventory BFF", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
     const request = new NextRequest(`http://backoffice.test/api/inventory/${path.join("/")}`, { method });
-    const response = method === "GET" ? await GET(request, context(path)) : await POST(request, context(path));
+    const response = method === "GET" ? await GET(request, context(path)) : method === "PATCH" ? await PATCH(request, context(path)) : await POST(request, context(path));
 
     expect(response.status).toBe(404);
     expect(fetchMock).not.toHaveBeenCalled();

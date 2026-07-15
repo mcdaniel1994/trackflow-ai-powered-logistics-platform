@@ -7,10 +7,12 @@ export interface InventoryProduct {
   id: number;
   name: string;
   sku: string;
+  client_id: string;
   client_name: string;
   category: Category;
   warehouse: Warehouse;
   current_stock: number;
+  min_stock_threshold: number;
 }
 
 export type ProductSummary = Omit<InventoryProduct, "current_stock">;
@@ -55,4 +57,18 @@ export interface InventoryAPIError {
   message: string;
   status: number;
   fieldErrors: Record<string, string>;
+}
+
+export interface InventoryClient {
+  client_id: string;
+  client_name: string;
+}
+
+export interface ProductCreateInput {
+  name: string;
+  sku: string;
+  client_id: string;
+  category: Category;
+  warehouse: Warehouse;
+  min_stock_threshold: number;
 }

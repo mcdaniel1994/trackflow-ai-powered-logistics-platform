@@ -3,6 +3,7 @@
 from datetime import datetime
 from enum import StrEnum
 from typing import Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -40,22 +41,86 @@ class SKUCreate(APIModel):
 
     name: str = Field(min_length=1, max_length=200)
     sku: str = Field(min_length=1, max_length=80)
-    client_name: str = Field(min_length=1, max_length=160)
+    client_id: UUID
     category: Category
     warehouse: Warehouse
+    min_stock_threshold: int = Field(default=0, ge=0)
 
 
-class SKURead(SKUCreate):
+class SKURead(APIModel):
     """SKU response with stock computed from movements rather than persisted."""
 
     id: int
+    name: str
+    sku: str
+    client_id: UUID
+    client_name: str
+    category: Category
+    warehouse: Warehouse
+    min_stock_threshold: int
     current_stock: int
 
 
-class SKUSummary(SKUCreate):
+class SKUSummary(APIModel):
     """Nested SKU data returned alongside each movement."""
 
     id: int
+    name: str
+    sku: str
+    client_id: UUID
+    client_name: str
+    category: Category
+    warehouse: Warehouse
+    min_stock_threshold: int
+
+
+class SKUUpdate(APIModel):
+    """Threshold is mutable; client_id is accepted only to return the documented conflict."""
+
+    min_stock_threshold: int | None = Field(default=None, ge=0)
+    client_id: UUID | None = None
+
+    @model_validator(mode="after")
+    def require_one_field(self) -> Self:
+        if self.min_stock_threshold is None and self.client_id is None:
+            raise ValueError("at least one update field is required")
+        return self
+
+
+class ClientCreate(APIModel):
+    display_name: str = Field(min_length=1, max_length=160)
+
+
+class ClientUpdate(APIModel):
+    display_name: str = Field(min_length=1, max_length=160)
+
+
+class ClientRead(APIModel):
+    client_id: UUID
+    client_name: str
+
+
+class InventoryDiscrepancyCreate(APIModel):
+    stock_exit_id: int = Field(gt=0)
+    quantity_delta: int
+
+    @model_validator(mode="after")
+    def require_nonzero_delta(self) -> Self:
+        if self.quantity_delta == 0:
+            raise ValueError("quantity_delta must not be zero")
+        return self
+
+
+class InventoryDiscrepancyRead(APIModel):
+    id: int
+    stock_exit_id: int
+    sku_id: int
+    warehouse: Warehouse
+    client_id: UUID
+    quantity_delta: int
+    source: Literal["manual", "feed"]
+    detected_at: datetime
+    created_by_user_uuid: str | None
 
 
 class StockEntryCreate(APIModel):

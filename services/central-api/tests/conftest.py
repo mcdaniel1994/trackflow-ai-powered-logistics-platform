@@ -18,6 +18,7 @@ from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAM
 
 from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_session
+from central_api.domains.inventory.models import Client
 from central_api.main import create_app
 
 TokenFactory = Callable[..., str]
@@ -44,8 +45,11 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE telemetry_events, suppliers, incidents, stock_exits, stock_entries, skus, "
-                "operations_feed_control RESTART IDENTITY CASCADE"
+                "TRUNCATE telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
+                "stock_exits, stock_entries, skus, clients, "
+                "operations_feed_control, reporting.weekly_warehouse_client_performance, "
+                "reporting.pipeline_runs, reporting.incomplete_weeks, reporting.source_ledger_state "
+                "RESTART IDENTITY CASCADE"
             )
         )
         # Restore the singleton control row so the feed's kill switch has consistent state.
@@ -53,6 +57,12 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
             text(
                 "INSERT INTO operations_feed_control (id, enabled, note, updated_at) "
                 "VALUES (1, true, 'test-reset', now()) ON CONFLICT (id) DO NOTHING"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reporting.source_ledger_state (id, updated_at) "
+                "VALUES (1, now()) ON CONFLICT (id) DO NOTHING"
             )
         )
     yield
@@ -94,11 +104,12 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
         expires_delta: timedelta = timedelta(minutes=10),
         must_change_password: bool = False,
         status: str = "active",
+        role: str = "user",
     ) -> str:
         now = datetime.now(UTC)
         claims: dict[str, Any] = {
             "sub": user_id,
-            "role": "user",
+            "role": role,
             "status": status,
             "must_change_password": must_change_password,
             "iss": "trackflow-identity",
@@ -138,9 +149,22 @@ def auth_headers(token_factory: TokenFactory) -> dict[str, str]:
 
 
 @pytest.fixture
+def admin_headers(token_factory: TokenFactory) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token_factory(role='admin')}"}
+
+
+@pytest.fixture
 def cookie_auth(client: TestClient, token_factory: TokenFactory) -> Callable[..., dict[str, str]]:
-    def authenticate(*, csrf: bool = True, must_change_password: bool = False) -> dict[str, str]:
-        client.cookies.set(ACCESS_COOKIE_NAME, token_factory(must_change_password=must_change_password))
+    def authenticate(
+        *,
+        csrf: bool = True,
+        must_change_password: bool = False,
+        role: str = "user",
+    ) -> dict[str, str]:
+        client.cookies.set(
+            ACCESS_COOKIE_NAME,
+            token_factory(must_change_password=must_change_password, role=role),
+        )
         if not csrf:
             return {}
         token = "test-csrf-token"
@@ -151,11 +175,22 @@ def cookie_auth(client: TestClient, token_factory: TokenFactory) -> Callable[...
 
 
 @pytest.fixture
-def product_payload() -> dict[str, object]:
+def inventory_client(engine: Engine) -> Client:
+    with Session(engine) as session:
+        client = Client(display_name="PureStep Footwear")
+        session.add(client)
+        session.commit()
+        session.refresh(client)
+        session.expunge(client)
+        return client
+
+
+@pytest.fixture
+def product_payload(inventory_client: Client) -> dict[str, object]:
     return {
         "name": "Classic White Sneaker - Size 42",
         "sku": "CLT-SNK-W-42",
-        "client_name": "PureStep Footwear",
+        "client_id": str(inventory_client.id),
         "category": "fashion",
         "warehouse": "LA",
     }

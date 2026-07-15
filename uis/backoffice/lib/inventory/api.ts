@@ -2,9 +2,11 @@ import { fetchWithAuth } from "@/lib/auth/client-http";
 import type {
   InboundOrderInput,
   InventoryAPIError,
+  InventoryClient,
   InventoryProduct,
   OutboundOrderInput,
   Page,
+  ProductCreateInput,
   StockMovement,
 } from "@/lib/inventory/types";
 
@@ -71,6 +73,35 @@ export function listProducts(limit = 20, offset = 0) {
 
 export function getProduct(id: number) {
   return request<InventoryProduct>(`/products/${id}`);
+}
+
+export function listClients() {
+  return request<InventoryClient[]>("/clients");
+}
+
+export function createClient(displayName: string) {
+  return request<InventoryClient>("/clients", {
+    method: "POST",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+export function renameClient(clientId: string, displayName: string) {
+  return request<InventoryClient>(`/clients/${encodeURIComponent(clientId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+export function createProduct(input: ProductCreateInput) {
+  return request<InventoryProduct>("/products", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function updateProductThreshold(productId: number, minStockThreshold: number) {
+  return request<InventoryProduct>(`/products/${productId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ min_stock_threshold: minStockThreshold }),
+  });
 }
 
 export function createInboundOrder(input: InboundOrderInput) {

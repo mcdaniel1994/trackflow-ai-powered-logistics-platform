@@ -18,12 +18,14 @@ from sqlalchemy import (
 from sqlalchemy.engine import Row
 from sqlmodel import Session, select
 
-from .models import SKU, StockEntry, StockExit
+from .models import SKU, Client, InventoryDiscrepancy, StockEntry, StockExit, StockoutEvent
 
 # SQLModel supplies SQLAlchemy tables dynamically; the casts expose their typed columns.
 sku_table = cast(Table, SKU.__table__)  # type: ignore[attr-defined]
 entry_table = cast(Table, StockEntry.__table__)  # type: ignore[attr-defined]
 exit_table = cast(Table, StockExit.__table__)  # type: ignore[attr-defined]
+client_table = cast(Table, Client.__table__)  # type: ignore[attr-defined]
+discrepancy_table = cast(Table, InventoryDiscrepancy.__table__)  # type: ignore[attr-defined]
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,7 @@ class MovementRecord:
     created_at: datetime
     user_uuid: str
     sku: SKU
+    client_name: str
 
 
 class InventoryRepository:
@@ -75,11 +78,12 @@ class InventoryRepository:
         )
         return entries, exits, current_stock
 
-    def list_products(self, *, limit: int, offset: int) -> tuple[list[tuple[SKU, int]], int]:
+    def list_products(self, *, limit: int, offset: int) -> tuple[list[tuple[SKU, str, int]], int]:
         """Load each SKU and its location-specific stock in one aggregate query."""
         entries, exits, current_stock = self._stock_parts()
         statement = (
-            sa_select(SKU, current_stock)
+            sa_select(SKU, client_table.c.display_name, current_stock)
+            .join(client_table, client_table.c.id == sku_table.c.client_id)
             .outerjoin(
                 entries,
                 (entries.c.sku_id == sku_table.c.id) & (entries.c.warehouse == sku_table.c.warehouse),
@@ -94,13 +98,14 @@ class InventoryRepository:
         )
         rows = self.session.execute(statement).all()
         total = int(self.session.scalar(sa_select(func.count()).select_from(SKU)) or 0)
-        return [(cast(SKU, row[0]), int(row[1])) for row in rows], total
+        return [(cast(SKU, row[0]), str(row[1]), int(row[2])) for row in rows], total
 
-    def get_product(self, sku_id: int) -> tuple[SKU, int] | None:
+    def get_product(self, sku_id: int) -> tuple[SKU, str, int] | None:
         """Load one SKU and its computed warehouse balance."""
         entries, exits, current_stock = self._stock_parts()
         statement = (
-            sa_select(SKU, current_stock)
+            sa_select(SKU, client_table.c.display_name, current_stock)
+            .join(client_table, client_table.c.id == sku_table.c.client_id)
             .outerjoin(
                 entries,
                 (entries.c.sku_id == sku_table.c.id) & (entries.c.warehouse == sku_table.c.warehouse),
@@ -114,7 +119,7 @@ class InventoryRepository:
         row = self.session.execute(statement).one_or_none()
         if row is None:
             return None
-        return cast(SKU, row[0]), int(row[1])
+        return cast(SKU, row[0]), str(row[1]), int(row[2])
 
     def get_sku_for_update(self, sku_id: int) -> SKU | None:
         """Serialize movement writes for one SKU/location until transaction end."""
@@ -137,6 +142,28 @@ class InventoryRepository:
     def add_sku(self, sku: SKU) -> None:
         """Queue a new SKU inside the caller-owned transaction."""
         self.session.add(sku)
+
+    def get_client(self, client_id: object) -> Client | None:
+        return self.session.get(Client, client_id)
+
+    def list_clients(self) -> list[Client]:
+        return list(self.session.exec(select(Client).order_by(client_table.c.display_name)).all())
+
+    def add_client(self, client: Client) -> None:
+        self.session.add(client)
+
+    def add_stockout_event(self, event: StockoutEvent) -> None:
+        self.session.add(event)
+
+    def get_exit(self, stock_exit_id: int) -> StockExit | None:
+        return self.session.get(StockExit, stock_exit_id)
+
+    def add_discrepancy(self, discrepancy: InventoryDiscrepancy) -> None:
+        self.session.add(discrepancy)
+
+    def discrepancy_exists(self, stock_exit_id: int) -> bool:
+        statement = sa_select(discrepancy_table.c.id).where(discrepancy_table.c.stock_exit_id == stock_exit_id)
+        return self.session.execute(statement).first() is not None
 
     def add_entry(self, entry: StockEntry) -> None:
         """Queue an inbound movement inside the caller-owned transaction."""
@@ -174,11 +201,12 @@ class InventoryRepository:
         )
         movements = union_all(inbound, outbound).subquery()
         statement = (
-            sa_select(movements, SKU)
+            sa_select(movements, SKU, client_table.c.display_name)
             .join(
                 SKU,
                 (sku_table.c.id == movements.c.sku_id) & (sku_table.c.warehouse == movements.c.warehouse),
             )
+            .join(client_table, client_table.c.id == sku_table.c.client_id)
             .order_by(movements.c.created_at.desc(), movements.c.movement_type, movements.c.id.desc())
             .limit(limit)
             .offset(offset)
@@ -210,5 +238,6 @@ class InventoryRepository:
             warehouse=str(mapping["warehouse"]),
             created_at=cast(datetime, mapping["created_at"]),
             user_uuid=str(mapping["user_uuid"]),
-            sku=cast(SKU, row[-1]),
+            sku=cast(SKU, row[-2]),
+            client_name=str(row[-1]),
         )

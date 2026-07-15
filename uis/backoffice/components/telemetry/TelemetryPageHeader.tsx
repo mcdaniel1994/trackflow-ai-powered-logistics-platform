@@ -11,8 +11,8 @@ type TelemetrySection = {
 };
 
 const telemetrySections: TelemetrySection[] = [
-  { label: "Fulfilment", href: "/backoffice/telemetry/fulfilment", icon: BarChart3 },
-  { label: "Security", href: "/backoffice/telemetry/security", icon: ShieldAlert },
+  { label: "Dispatch diagnostics", href: "/backoffice/telemetry/fulfilment", icon: BarChart3 },
+  { label: "Security diagnostics", href: "/backoffice/telemetry/security", icon: ShieldAlert },
 ];
 
 export function TelemetryPageHeader({
@@ -33,7 +33,7 @@ export function TelemetryPageHeader({
       <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">{description}</p>
       <nav
         className="mt-5 flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-mist bg-ivory/70 p-1 shadow-sm"
-        aria-label="Telemetry sections"
+        aria-label="Technical telemetry sections"
       >
         {telemetrySections.map((section) => {
           const active = pathname === section.href;

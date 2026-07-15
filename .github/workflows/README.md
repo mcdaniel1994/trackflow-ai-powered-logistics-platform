@@ -25,9 +25,10 @@ deployments are serialized and are not cancelled after they start.
 
 The release workflow now machine-enforces:
 
-- Identity and Central API Ruff, mypy, pytest coverage, and package builds. Central API retains its
-  configured 90% coverage floor and tests against an ephemeral local PostgreSQL after applying the
-  existing schema; Identity reports coverage without a hard floor.
+- Identity, Central API, and Data Pipelines Ruff, mypy, pytest coverage, and package builds. Data
+  Pipelines also executes its cache-disabled direct CLI before the test suite. Central API and Data
+  Pipelines retain configured 90% coverage floors and test after applying the schema to ephemeral
+  local PostgreSQL. Identity reports coverage without a hard floor.
 - `trackflow_auth` and `trackflow_incidents` tests, static checks, and package builds.
 - Back Office type-check, lint, unit tests, and production build.
 - Shared TypeScript type-check and build. `packages/shared` has no standalone lint or test scripts;

@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const telemetryMocks = vi.hoisted(() => ({
   pathname: "/backoffice/telemetry/fulfilment",
   getDispatchMetrics: vi.fn(),
-  getReceivingMetrics: vi.fn(),
-  getStockLossMetrics: vi.fn(),
   getAccessDenialMetrics: vi.fn(),
 }));
 
@@ -30,38 +28,33 @@ describe("telemetry UI", () => {
       period: { from: "2026-07-01", to: "2026-07-07" },
       rows: [{ date: "2026-07-01", warehouse: "LA", dispatched: 20, rejected: 5, indicative_failure_rate: 0.2 }],
     });
-    telemetryMocks.getReceivingMetrics.mockResolvedValue({
-      period: { from: "2026-07-01", to: "2026-07-07" },
-      rows: [{ date: "2026-07-01", warehouse: "ZGZ", count: 8 }],
-    });
-    telemetryMocks.getStockLossMetrics.mockResolvedValue({
-      period: { from: "2026-07-01", to: "2026-07-07" },
-      rows: [{ date: "2026-07-01", warehouse: "LA", count: 2, units: 9 }],
-    });
     telemetryMocks.getAccessDenialMetrics.mockResolvedValue({
       period: { from: "2026-07-01", to: "2026-07-07" },
       rows: [{ date: "2026-07-01", reason: "unauthenticated", count: 3 }],
     });
   });
 
-  it("renders exact dispatch/receiving figures and labels rejections as diagnostic", async () => {
+  it("renders rejected-dispatch diagnostics without exact business metrics", async () => {
     render(<FulfilmentView />);
 
-    await waitFor(() => expect(screen.getByText("Dispatch by day and warehouse")).toBeInTheDocument());
-    // Exact dispatched total and best-effort rejected total appear as stat cards.
-    expect(screen.getByText("Dispatched (exact)")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("Rejected dispatches by day and warehouse")).toBeInTheDocument());
     expect(screen.getByText("Rejected (diagnostic)")).toBeInTheDocument();
     expect(screen.getByText("20.0%")).toBeInTheDocument(); // indicative failure rate
     expect(screen.getAllByText(/Best-effort diagnostic — may undercount/i).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Dispatched (exact)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Received (exact)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Receiving by day and warehouse")).not.toBeInTheDocument();
   });
 
-  it("shows the security view with denials, stock loss, and an Identity-logs note", async () => {
+  it("shows security diagnostics without exact stock-loss metrics", async () => {
+    telemetryMocks.pathname = "/backoffice/telemetry/security";
     render(<SecurityView />);
 
     await waitFor(() => expect(screen.getByText("API access denials by day and reason")).toBeInTheDocument());
     expect(screen.getByText("Unauthenticated")).toBeInTheDocument();
-    expect(screen.getByText("Stock loss by day and warehouse")).toBeInTheDocument();
-    expect(screen.getByText(/Login auditing is kept in Identity's safe logs/i)).toBeInTheDocument();
+    expect(screen.queryByText("Stock loss by day and warehouse")).not.toBeInTheDocument();
+    expect(screen.queryByText("Stock loss units (exact)")).not.toBeInTheDocument();
+    expect(screen.getByText(/Login auditing remains in Identity's safe logs/i)).toBeInTheDocument();
   });
 
   it("renders an empty state when a metric has no rows", async () => {
@@ -72,7 +65,7 @@ describe("telemetry UI", () => {
     render(<FulfilmentView />);
 
     await waitFor(() =>
-      expect(screen.getByText("No dispatch telemetry in this range.")).toBeInTheDocument(),
+      expect(screen.getByText("No rejected-dispatch diagnostics in this range.")).toBeInTheDocument(),
     );
   });
 
@@ -85,9 +78,9 @@ describe("telemetry UI", () => {
 
   it("marks the active telemetry section in the sub-navigation", () => {
     telemetryMocks.pathname = "/backoffice/telemetry/security";
-    render(<TelemetryPageHeader eyebrow="Telemetry" title="Security" description="test" />);
+    render(<TelemetryPageHeader eyebrow="Technical telemetry" title="Security diagnostics" description="test" />);
 
-    const active = screen.getByRole("link", { name: /Security/i });
+    const active = screen.getByRole("link", { name: /Security diagnostics/i });
     expect(active).toHaveAttribute("aria-current", "page");
   });
 });
