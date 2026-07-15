@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
@@ -22,6 +23,8 @@ from .queue import (
     release_retryable,
 )
 
+logger = logging.getLogger(__name__)
+
 
 class RunnerStatus(StrEnum):
     IDLE = "idle"
@@ -37,12 +40,7 @@ class RunnerResult:
     run_id: str | None = None
 
 
-@dataclass(frozen=True)
-class FinalizedExecution:
-    status: RunnerStatus
-
-
-RunExecutor = Callable[[Engine, RunClaim], RunMetrics | FinalizedExecution]
+RunExecutor = Callable[[Engine, RunClaim], RunMetrics]
 
 
 class TransientRunError(RuntimeError):
@@ -55,6 +53,24 @@ class PermanentRunError(RuntimeError):
     def __init__(self, error_code: ErrorCode) -> None:
         super().__init__(error_code)
         self.error_code = error_code
+
+
+class PipelineStageError(RuntimeError):
+    """Safe cross-boundary failure metadata without exception messages or payloads."""
+
+    def __init__(
+        self,
+        *,
+        stage: str,
+        error_code: ErrorCode,
+        error_type: str,
+        retryable: bool,
+    ) -> None:
+        super().__init__("pipeline stage failed")
+        self.stage = stage
+        self.error_code = error_code
+        self.error_type = error_type
+        self.retryable = retryable
 
 
 def run_once(
@@ -76,24 +92,42 @@ def run_once(
         if not heartbeat(engine, claim):
             return RunnerResult(RunnerStatus.LEASE_LOST, run_id)
         try:
-            execution = executor(engine, claim)
-            if isinstance(execution, FinalizedExecution):
-                return RunnerResult(execution.status, run_id)
-            metrics = execution
+            metrics = executor(engine, claim)
             if not heartbeat(engine, claim):
                 raise LeaseLostError("pipeline run lease is no longer owned")
         except LeaseLostError:
             return RunnerResult(RunnerStatus.LEASE_LOST, run_id)
+        except PipelineStageError as exc:
+            logger.error(
+                "reporting_pipeline_failure run_id=%s attempt=%s stage=%s error_code=%s error_type=%s",
+                run_id,
+                claim.attempt,
+                exc.stage,
+                exc.error_code,
+                exc.error_type,
+            )
+            if exc.retryable:
+                transitioned = release_retryable(engine, claim, exc.error_code)
+                return RunnerResult(RunnerStatus.RETRYABLE if transitioned else RunnerStatus.LEASE_LOST, run_id)
+            transitioned = finalize_failure(engine, claim, exc.error_code)
+            return RunnerResult(RunnerStatus.FAILED if transitioned else RunnerStatus.LEASE_LOST, run_id)
         except PermanentRunError as exc:
             transitioned = finalize_failure(engine, claim, exc.error_code)
             return RunnerResult(RunnerStatus.FAILED if transitioned else RunnerStatus.LEASE_LOST, run_id)
         except TransientRunError as exc:
             transitioned = release_retryable(engine, claim, exc.error_code)
             return RunnerResult(RunnerStatus.RETRYABLE if transitioned else RunnerStatus.LEASE_LOST, run_id)
-        except Exception:
+        except Exception as exc:
             # Persist only a fixed failure class; payloads, SQL, credentials, and
             # stack traces never enter the durable audit row.
-            transitioned = release_retryable(engine, claim, "EXTRACT_FAILED")
+            logger.error(
+                "reporting_pipeline_failure run_id=%s attempt=%s stage=orchestration "
+                "error_code=LOAD_FAILED error_type=%s",
+                run_id,
+                claim.attempt,
+                type(exc).__name__,
+            )
+            transitioned = release_retryable(engine, claim, "LOAD_FAILED")
             return RunnerResult(RunnerStatus.RETRYABLE if transitioned else RunnerStatus.LEASE_LOST, run_id)
 
         transitioned = finalize_success(engine, claim, metrics)

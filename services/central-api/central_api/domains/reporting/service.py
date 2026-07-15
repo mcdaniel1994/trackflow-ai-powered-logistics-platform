@@ -3,10 +3,10 @@
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import cast
+from typing import Literal, cast
 from zoneinfo import ZoneInfo
 
-from pipelines.business_performance.queue import QueueValidationError, enqueue_manual
+from pipelines.business_performance.queue import QueueValidationError, enqueue_manual  # type: ignore[import-untyped]
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
@@ -16,12 +16,14 @@ from .schemas import (
     NextScheduledRefresh,
     PipelineRunAccepted,
     PipelineRunsResponse,
+    ReportingWorkerHealth,
     WeeklyPerformanceResponse,
 )
 
 logger = logging.getLogger(__name__)
 DALLAS_TIMEZONE = ZoneInfo("America/Chicago")
 DAILY_REFRESH_TIME = time(hour=7)
+WORKER_STALE_AFTER = timedelta(seconds=30)
 
 
 @dataclass
@@ -88,11 +90,21 @@ class ReportingService:
 
     def latest_runs(self) -> PipelineRunsResponse:
         try:
+            now = utc_now()
+            last_seen_at = self.repository.worker_last_seen_at()
+            worker_status: Literal["healthy", "stale", "unknown"]
+            if last_seen_at is None:
+                worker_status = "unknown"
+            elif now - last_seen_at > WORKER_STALE_AFTER:
+                worker_status = "stale"
+            else:
+                worker_status = "healthy"
             return PipelineRunsResponse(
                 latest=self.repository.latest_run(),
                 queued=self.repository.queued_runs(),
                 latest_successful=self.repository.latest_successful_run(),
-                next_scheduled_refresh=self._next_refresh(utc_now()),
+                worker=ReportingWorkerHealth(status=worker_status, last_seen_at=last_seen_at),
+                next_scheduled_refresh=self._next_refresh(now),
             )
         except SQLAlchemyError as exc:
             raise self._database_failure("latest_runs", exc) from exc

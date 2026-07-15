@@ -89,6 +89,9 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
   const successful = status.latest_successful;
   const stale = successful && now ? now - new Date(successful.finished_at).getTime() > 26 * 60 * 60 * 1000 : false;
   const visibleStatus = latest && ["requested", "retryable"].includes(latest.status) ? "queued" : latest?.status;
+  const workerUnavailable =
+    status.worker.status !== "healthy" &&
+    (status.queued.length > 0 || latest?.status === "requested" || latest?.status === "retryable");
 
   return (
     <section className="grid gap-3 rounded-xl border border-mist bg-white p-4 shadow-sm md:grid-cols-3" aria-label="Pipeline status">
@@ -109,6 +112,11 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
         </div>
         {latest?.status === "failed" && latest.error_code ? (
           <p role="alert" className="mt-2 text-xs font-bold text-rose-700">Failure: {latest.error_code}</p>
+        ) : null}
+        {workerUnavailable ? (
+          <p role="alert" className="mt-2 text-xs font-bold text-coral">
+            Reporting worker {status.worker.status === "stale" ? "is not responding" : "has not checked in yet"}; queued work will wait.
+          </p>
         ) : null}
       </div>
       <div>

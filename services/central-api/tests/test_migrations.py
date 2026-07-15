@@ -48,6 +48,7 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
             "pipeline_runs",
             "source_ledger_state",
             "weekly_warehouse_client_performance",
+            "worker_heartbeats",
         }
         pipeline_indexes = {
             index["name"] for index in inspect(engine).get_indexes("pipeline_runs", schema="reporting")
@@ -83,6 +84,7 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
 
         command.upgrade(config, "head")
         assert "pipeline_runs" in inspect(engine).get_table_names(schema="reporting")
+        assert "worker_heartbeats" in inspect(engine).get_table_names(schema="reporting")
 
         command.downgrade(config, "20260713_0005")
         sku_columns = {column["name"] for column in inspect(engine).get_columns("skus")}

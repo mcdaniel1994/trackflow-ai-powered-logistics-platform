@@ -217,6 +217,7 @@ def test_latest_runs_distinguishes_latest_success_and_queue_without_internals(
         "target_weeks": [MONDAY.isoformat()],
         "rows_loaded": 24,
     }
+    assert payload["worker"] == {"status": "unknown", "last_seen_at": None}
     assert [item["trigger_type"] for item in payload["queued"]] == ["manual", "manual"]
     serialized = response.text.lower()
     for forbidden in ("cache_nonce", "bucket", "object_key", "claim_token", "lease_expires_at"):
@@ -230,6 +231,38 @@ def test_latest_runs_empty_state(client: TestClient, auth_headers: dict[str, str
     assert payload["latest"] is None
     assert payload["latest_successful"] is None
     assert payload["queued"] == []
+    assert payload["worker"] == {"status": "unknown", "last_seen_at": None}
+
+
+def test_latest_runs_reports_worker_health(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime(2026, 7, 15, 16, 0, tzinfo=UTC)
+    monkeypatch.setattr("central_api.domains.reporting.service.utc_now", lambda: now)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
+                "VALUES ('reporting', :heartbeat_at)"
+            ),
+            {"heartbeat_at": now - timedelta(seconds=10)},
+        )
+    healthy = client.get("/reporting/pipeline-runs/latest", headers=auth_headers)
+    assert healthy.json()["worker"] == {
+        "status": "healthy",
+        "last_seen_at": (now - timedelta(seconds=10)).isoformat().replace("+00:00", "Z"),
+    }
+
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE reporting.worker_heartbeats SET heartbeat_at = :heartbeat_at"),
+            {"heartbeat_at": now - timedelta(seconds=31)},
+        )
+    stale = client.get("/reporting/pipeline-runs/latest", headers=auth_headers)
+    assert stale.json()["worker"]["status"] == "stale"
 
 
 @pytest.mark.parametrize(
