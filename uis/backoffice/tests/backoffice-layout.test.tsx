@@ -112,6 +112,10 @@ describe("Back Office responsive layout", () => {
       "href",
       "/backoffice/reporting",
     );
+    expect(drawerNavigation.getByRole("link", { name: /technical telemetry/i })).toHaveAttribute(
+      "href",
+      "/backoffice/telemetry/fulfilment",
+    );
     expect(drawerNavigation.getByRole("link", { name: /user management/i })).toBeInTheDocument();
 
     const accountLink = drawerNavigation.getByRole("link", { name: /account/i });

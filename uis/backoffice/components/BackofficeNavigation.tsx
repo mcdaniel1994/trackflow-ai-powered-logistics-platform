@@ -33,7 +33,7 @@ const navigationItems: NavigationItem[] = [
     activePrefix: "/backoffice/inventory",
   },
   {
-    label: "Telemetry",
+    label: "Technical Telemetry",
     href: "/backoffice/telemetry/fulfilment",
     icon: Activity,
     activePrefix: "/backoffice/telemetry",

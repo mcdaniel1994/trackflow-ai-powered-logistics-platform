@@ -1,43 +1,34 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, ShieldAlert, type LucideIcon } from "lucide-react";
+import { PackageMinus, Truck, type LucideIcon } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-type TelemetrySection = {
+type OperationsSection = {
   label: string;
   href: string;
   icon: LucideIcon;
 };
 
-const telemetrySections: TelemetrySection[] = [
-  { label: "Dispatch diagnostics", href: "/backoffice/telemetry/fulfilment", icon: BarChart3 },
-  { label: "Security diagnostics", href: "/backoffice/telemetry/security", icon: ShieldAlert },
+const operationsSections: OperationsSection[] = [
+  { label: "Fulfilment", href: "/backoffice/operations/fulfilment", icon: Truck },
+  { label: "Stock loss", href: "/backoffice/operations/stock-loss", icon: PackageMinus },
 ];
 
-export function TelemetryPageHeader({
-  eyebrow,
-  title,
-  description,
-}: {
-  eyebrow: string;
-  title: string;
-  description: string;
-}) {
+export function OperationsPageHeader({ title, description }: { title: string; description: string }) {
   const pathname = usePathname();
 
   return (
     <header className="mb-6">
-      <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">{eyebrow}</p>
+      <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">Operations</p>
       <h1 className="mt-2 text-3xl font-black text-navy-deep">{title}</h1>
       <p className="mt-2 max-w-3xl text-sm leading-6 text-neutral-600">{description}</p>
       <nav
         className="mt-5 flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-mist bg-ivory/70 p-1 shadow-sm"
-        aria-label="Technical telemetry sections"
+        aria-label="Operations metric sections"
       >
-        {telemetrySections.map((section) => {
+        {operationsSections.map((section) => {
           const active = pathname === section.href;
-
           return (
             <Link
               key={section.href}
