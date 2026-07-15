@@ -4,17 +4,26 @@ from collections.abc import Callable
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from central_api.domains.inventory.repository import exit_table
 
 
-def test_health_checks_database(client: TestClient) -> None:
+def test_health_checks_database(client: TestClient, engine: Engine) -> None:
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
+                "VALUES ('reporting', now())"
+            )
+        )
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok", "database": "ok"}
+    assert client.get("/health/live").json() == {"status": "alive"}
+    assert client.get("/health/ready").json() == {"status": "ready"}
 
 
 @pytest.mark.parametrize(

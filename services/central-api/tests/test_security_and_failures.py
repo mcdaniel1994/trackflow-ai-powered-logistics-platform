@@ -90,7 +90,12 @@ def test_health_database_failure_is_safe(app: FastAPI, caplog: pytest.LogCapture
     caplog.set_level("ERROR")
     with TestClient(app) as test_client:
         response = test_client.get("/health")
+        ready = test_client.get("/health/ready")
+        live = test_client.get("/health/live")
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Inventory database unavailable"}
+    assert ready.status_code == 503
+    assert ready.json() == {"status": "not_ready"}
+    assert live.status_code == 200
     assert "secret-password" not in caplog.text

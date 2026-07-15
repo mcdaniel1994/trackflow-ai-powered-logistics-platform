@@ -2,11 +2,10 @@
 
 ## Status and safety boundary
 
-Repository-side Phase 10 preparation is implemented and locally verifiable. Production migration,
-grants, R2 provisioning, Coolify schedules, and the first production run remain Phase 11 owner
-actions. Do not execute those actions without explicit approval naming the target database and
-accepting the migration/recovery plan. Never paste database or R2 credentials into commands,
-source control, logs, screenshots, or chat.
+Repository implementation and production hardening are complete and locally verified. Credential
+rotation, the GitHub Production migration secret, the first approved hardened deployment, and the
+rollback drill remain owner actions. Do not bypass the GitHub Production reviewer gate. Never
+paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report in PostgreSQL is the business system of record. Cloudflare R2 is a private,
 disposable transformation cache only; a missing or unavailable cache must not change report
@@ -14,17 +13,16 @@ correctness.
 
 ## Runtime topology and schedule
 
-| Service | Command | Intended Coolify cron | Secrets |
+| Service | Command | Internal schedule | Secrets |
 |---|---|---|---|
-| `reporting-dispatcher` | `.venv/bin/python -m pipelines.business_performance.dispatcher` | `*/5 * * * *` | `DATABASE_URL` only |
-| `reporting-runner` | `.venv/bin/python -m pipelines.business_performance.runner` | `*/5 * * * *` | `DATABASE_URL` and optional `REPORTING_R2_*` |
-| `business-event-prune` | `.venv/bin/python -m scripts.prune_business_events` | Daily | `DATABASE_URL`; retention defaults to 26 weeks |
-| `db-size-guard` | `.venv/bin/python -m scripts.db_size_guard` | About every 15 minutes | `DATABASE_URL` and feed configuration |
+| `reporting-worker` | `python -m pipelines.business_performance.worker` | queue 5s; heartbeat 10s; dispatcher 60s | runtime `DATABASE_URL`; optional `REPORTING_R2_*` |
+| `maintenance-worker` | `python -m scripts.maintenance_worker` | size guard 15m; prune 02:15 America/Chicago | runtime `DATABASE_URL` and feed/retention configuration |
 
 The dispatcher checks America/Chicago time and creates at most one scheduled request after 07:00
-for each Dallas business date. Missed ticks recover on the next `*/5` invocation. The PostgreSQL
+for each Dallas business date. Missed ticks recover on the next minute check. The PostgreSQL
 queue and its lease/claim-token transitions remain authoritative; no Prefect server, Prefect Cloud,
-or separate Prefect database exists.
+or permanent Prefect database exists. Both workers are normal one-replica Compose services; do not
+create duplicate Coolify scheduled jobs.
 
 ## Local dry run
 
@@ -72,31 +70,21 @@ GATE-8b remains open. When explicitly approved:
 3. Add a lifecycle rule deleting `prefect-results/` objects after one day.
 4. Inject `REPORTING_R2_BUCKET`, `REPORTING_R2_ENDPOINT`,
    `REPORTING_R2_ACCESS_KEY_ID`, and `REPORTING_R2_SECRET_ACCESS_KEY` into
-   `reporting-runner` only.
-5. Confirm those variables are absent from Central API, dispatcher, Back Office, Identity, public
-   website, prune jobs, and size guard.
+   `reporting-worker` only.
+5. Confirm those variables are absent from Central API, maintenance worker, Back Office, Identity,
+   public website, and operations feed.
 
 If any value is missing, leave all four unset. Partial configuration fails closed; fully absent
 configuration runs correctly with caching disabled.
 
-## Migration and runtime grants — Phase 11 owner action
+## Migration and runtime grants
 
 Follow `supabase-migrations.md` for target confirmation, backup/disposable-data approval, migration
-role usage, and rollback constraints. After migration `20260714_0008`, connect as
-`trackflow_migration` (the reporting-schema owner) and grant the runtime role access to the new
-schema and objects:
-
-```sql
-BEGIN;
-GRANT USAGE ON SCHEMA reporting TO trackflow_runtime;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA reporting TO trackflow_runtime;
-ALTER DEFAULT PRIVILEGES IN SCHEMA reporting
-  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO trackflow_runtime;
-COMMIT;
-```
-
-Verify as the runtime role with read/write operations inside a transaction that is rolled back.
-The runtime role must not have `CREATE` on `reporting` and must not receive the migration credential.
+role usage, and rollback constraints. The approved workflow runs `central-api-migrate` from the
+same immutable Central API image before changing Coolify's image tag. That command verifies the
+migration identity, takes an advisory lock, upgrades to image head, applies current and future
+table/sequence grants in `public` and `reporting`, and verifies them. The runtime role must not
+have `CREATE` on either application schema and must never receive the migration credential.
 
 ## Reset checkpoint and incomplete weeks
 
@@ -125,23 +113,22 @@ the partial interval, but the reset week is still honestly marked.
 26-week ISO boundary. It does not prune reporting rows or technical telemetry. Verify deletion
 counts from the structured completion log; do not log event payloads or client identifiers.
 
-After enabling production schedules, verify:
+After the approved production deployment, verify:
 
 - dispatcher creates one scheduled request for the Dallas date after 07:00;
 - runner reaches `succeeded`, with a recent heartbeat while running;
 - `/reporting/weekly-warehouse-client-performance` and the Back Office show the same week;
 - incomplete weeks are prominently badged;
-- only `reporting-runner` has R2 variables;
+- only `reporting-worker` has R2 variables;
 - the daily prune and size guard complete without sensitive output.
 
-If dispatcher or runner behavior is unsafe, disable those Coolify schedules first. Previous
-successful reporting rows remain readable when a later run fails. Prefer a forward fix. Roll back
-the image to the prior immutable SHA only after disabling scheduled jobs; database downgrade is a
-separate approval-gated action under `supabase-migrations.md`. R2 objects are disposable and may be
-deleted without a database rollback.
+If worker behavior is unsafe, scale the relevant Compose worker to zero. Previous successful
+reporting rows remain readable when a later run fails. Prefer a forward fix. The workflow restores
+the prior immutable image automatically after deploy/readiness failure and never downgrades the
+database. R2 objects are disposable and may be deleted without a database rollback.
 
 ## Known gaps
 
 - GATE-8b R2 infrastructure is not provisioned.
-- Production migrations/grants and schedules are not applied.
-- The first scheduled production run and rollback drill are not executed.
+- The rotated `MIGRATION_DATABASE_URL` is not yet stored in GitHub Production.
+- The first hardened production run and rollback drill are not executed.

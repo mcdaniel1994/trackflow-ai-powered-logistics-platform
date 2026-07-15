@@ -2,12 +2,11 @@
 
 ## Status
 
-Production-verified on July 3, 2026 UTC (July 2 America/Chicago). Future
-production migrations, seeds, DNS, firewall, deployment, and rollback actions
-still require explicit owner approval. The repository-side automated SHA
-deployment workflow is implemented, and its one-time Coolify/GitHub production
-configuration was completed July 3, 2026. It has not yet completed its first
-approved production run or a live rollback drill.
+Production-verified on July 3, 2026 UTC (July 2 America/Chicago). Future production mutations
+still require the GitHub Production reviewer approval. The hardened release workflow now
+migrates, verifies grants, deploys declarative workers, polls dependency-aware readiness,
+smoke-tests unauthenticated protection, and restores the previous image tag on failure. Its first
+approved production run and live rollback drill remain pending.
 
 ## Verified production record
 
@@ -32,7 +31,8 @@ approved production run or a live rollback drill.
 - Coolify `4.1.2` API access is enabled; the production image-tag variable is
   available at Buildtime and Runtime; native Git auto-deploy is disabled; and
   the GitHub Production environment has required review, a `main`-only rule,
-  and four masked deployment secrets. No token, webhook URL, UUID, environment
+  and four masked deployment secrets. Add rotated `MIGRATION_DATABASE_URL` as the fifth
+  approval-protected secret before enabling the hardened flow. No token, webhook URL, UUID, environment
   value, or production coordinate is recorded here.
 
 ## Prerequisites
@@ -68,22 +68,17 @@ Normal production releases use `.github/workflows/container-images.yml` and
 3. Confirm all three GHCR image jobs publish the same immutable
    `sha-<40-lowercase-hex>` tag.
 4. Review and approve the waiting GitHub `production` Environment deployment.
-5. Let the workflow confirm all three manifests, select the single production
-   (non-preview) `TRACKFLOW_IMAGE_TAG`, require its Buildtime and Runtime flags,
-   preserve its metadata plus every other production/preview record, trigger
-   the Coolify webhook, and poll the returned deployment for about 15 minutes.
-6. Verify Identity, Central API, and Back Office health plus the authenticated
-   inventory, supplier, and incident paths. Confirm the migration and seed
-   profile services remain stopped.
-
-The workflow never runs migrations or seeds and does not automatically roll
-back. A failed deployment reports the attempted SHA. A timeout means GitHub
-stopped polling; the Coolify deployment may still be running, so inspect
-Coolify before approving another deployment or rollback.
+5. The workflow runs the target image's `central-api-migrate`, records before/after revisions,
+   verifies runtime grants, then mutates only the non-preview `TRACKFLOW_IMAGE_TAG`.
+6. It polls Coolify, then Back Office's Identity/Central readiness aggregate and expected
+   unauthenticated reporting protection. Deployment/readiness failure restores the prior image
+   without downgrading the database.
+7. Review the GitHub summary for SHA, revisions, readiness, smoke tests, and rollback state.
 
 Before enabling the first run, create the GitHub `production` Environment with
 required reviewers. Store `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
-`COOLIFY_BASE_URL`, and `COOLIFY_APPLICATION_UUID` as Environment secrets so
+`COOLIFY_BASE_URL`, `COOLIFY_APPLICATION_UUID`, and the rotated
+`MIGRATION_DATABASE_URL` as Environment secrets so
 GitHub masks every production coordinate before the runner starts. The Coolify
 token needs only the permissions required to list application environment
 metadata, update one environment variable, and inspect and trigger deployments:
@@ -107,23 +102,28 @@ Never print either value, paste it into an issue or workflow input, or commit it
 After rotation, use an approved deployment of a known immutable SHA to verify
 the integration; do not use migrations or seeds as a credential test.
 
+## Runtime topology
+
+Normal deployment starts `identity`, `central-api`, `backoffice`, `operations-feed`,
+`reporting-worker`, and `maintenance-worker`. Do not configure separate dispatcher, runner, prune,
+or size-guard cron jobs. Both worker services use one replica, runtime database credentials,
+read-only filesystems, `/tmp` tmpfs mounts, limits, and restart-on-failure.
+
 ## Order
 
 1. Confirm GitHub Actions published all three `sha-<full-commit>` images for
    the same commit, then set `TRACKFLOW_IMAGE_TAG` to that immutable tag.
 2. Create least-privilege database roles using the Supabase runbook.
-3. Test the migration on a disposable target.
-4. Run `central-api-migrate` as an explicit setup-profile one-off.
-5. Deploy Identity with its persistent volume; verify `/health`.
-6. Run `python -m identity.cli create-admin` in the Identity container and
+3. Test the migration on a disposable target; the approved workflow then runs and verifies it.
+4. Approve the GitHub Production deployment; let it migrate, deploy, and verify all services.
+5. For initial setup only, run `python -m identity.cli create-admin` in the Identity container and
    securely record its stable UUID.
-7. Run `seed-inventory` with that UUID, then `seed-suppliers`. Never run
+6. For initial setup only, run `seed-inventory` with that UUID, then `seed-suppliers`. Never run
    `seed-incidents` in production.
-8. Deploy Central API and verify `/health` reports database `ok`.
-9. Deploy Back Office and route only port 3000 through Traefik.
-10. Verify HTTPS login, `Secure; HttpOnly` cookies, CSRF writes, reset email,
+7. Verify `/health/live`, `/health/ready`, `/health`, and the Back Office aggregate.
+8. Verify HTTPS login, `Secure; HttpOnly` cookies, CSRF writes, reset email,
    inventory, incidents, suppliers, and all health endpoints.
-11. Confirm internet requests cannot reach Identity or Central API.
+9. Confirm internet requests cannot reach Identity or Central API.
 
 In Coolify, run setup services explicitly from `compose.coolify.yaml`; a normal
 stack deploy must not enable the `setup` profile.
@@ -158,15 +158,14 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 ## Rollback
 
 1. In GitHub Actions, select **Deploy production** and choose **Run workflow**.
-2. Enter the known-good `sha-<40-lowercase-hex>` image tag.
+2. Enter the known-good `sha-<40-lowercase-hex>` image tag and choose `image-rollback`.
 3. Approve the waiting `production` Environment deployment.
 4. Wait for manifest preflight and Coolify polling to finish, then perform the
    health and authenticated-path checks from the automated flow above.
 
-Invalid tags and tags missing any of the three manifests fail before a Coolify
-mutation. A rollback uses the same single-variable update and approval gate as
-a forward deploy. It does not run migrations or seeds and does not
-automatically downgrade the schema; use expand/contract and forward fixes.
+Invalid tags and tags missing any manifest fail before mutation. Manual image rollback uses the
+same approval gate, skips migrations, and never downgrades the database. Every migration must
+preserve the previous image through expand/backfill/deploy/contract compatibility.
 
 No live automated rollback drill has run yet. With the accepted no-backup
 waiver, a database or Identity-volume loss is recovered by recreation rather

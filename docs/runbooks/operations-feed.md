@@ -64,13 +64,13 @@ UPDATE operations_feed_control SET enabled = true,  note = 'manual resume', upda
 The feed logs `operations_feed_paused` while disabled and resumes on the next tick after re-enable.
 `OPERATIONS_FEED_ENABLED=false` (redeploy) is the deploy-time hard stop.
 
-## Scheduled tasks (Coolify)
+## Declarative maintenance worker
 
-Run these from the Central API image (they are `profiles: ["scheduled"]` services in
-`compose.coolify.yaml`, or Coolify scheduled tasks invoking the same commands):
-
-- **Daily** — telemetry retention prune: `python -m scripts.prune_telemetry_events`
-- **~Every 15 min** — database-size guard: `python -m scripts.db_size_guard`
+`compose.coolify.yaml` deploys one always-on `maintenance-worker`; no Coolify cron is required.
+It runs the database-size guard every 15 minutes and prunes telemetry plus business events daily
+at 02:15 America/Chicago. The container is read-only with only `/tmp` writable, uses the runtime
+database role, and restarts on failure. Remove any legacy Coolify scheduled tasks before rollout
+to prevent duplicate execution.
 
 ### Size-guard behaviour
 

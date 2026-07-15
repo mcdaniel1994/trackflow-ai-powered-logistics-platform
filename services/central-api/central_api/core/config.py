@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     database_lock_timeout_ms: int = 5_000
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     app_env: str = "local"
+    runtime_database_role: str = "trackflow_runtime"
     telemetry_enabled: bool = False
     telemetry_operational_retention_days: int = 90
     telemetry_security_retention_days: int = 365

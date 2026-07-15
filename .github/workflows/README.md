@@ -17,7 +17,7 @@ standard is the source of truth for *what* must pass; the workflows here are *ho
 |---|---|---|
 | `release-checks.yml` | Reusable `workflow_call` | Runs production-target Ruff/mypy/pytest/coverage/build checks and npm type-check/lint/test/build checks with a non-fail-fast matrix. |
 | `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Calls release checks first, builds Linux AMD64 images on PRs, and publishes `main` plus immutable `sha-<commit>` tags only for non-PR runs. |
-| `deploy-production.yml` | Reusable `workflow_call` and manual dispatch | Validates and preflights an immutable SHA tag, waits for `production` approval, updates only Coolify's non-preview `TRACKFLOW_IMAGE_TAG` while protecting preview records, triggers deployment, and polls to success, failure, or timeout. Manual dispatch is the rollback path. |
+| `deploy-production.yml` | Reusable `workflow_call` and manual dispatch | Waits for Production approval, migrates/verifies the target image, deploys its immutable SHA, polls readiness and smoke tests, and restores the prior image on failure. Manual `image-rollback` never downgrades the database. |
 
 `container-images.yml` calls `deploy-production.yml` only after all three images publish from
 `main`. Pull requests run release checks and image builds but never publish or deploy. Production
@@ -33,6 +33,8 @@ The release workflow now machine-enforces:
 - Back Office type-check, lint, unit tests, and production build.
 - Shared TypeScript type-check and build. `packages/shared` has no standalone lint or test scripts;
   its runtime behavior remains exercised by its consuming Back Office suite.
+- Production migration role/lock/grant/idempotency tests and mocked Coolify mutation, failure,
+  timeout, and image-rollback tests.
 
 These checks gate production image publication. They are not yet a broad path-aware `ci.yml`
 required check for every repository change.
@@ -54,11 +56,13 @@ Add these only when implemented with real behavior:
   status checks when implemented.
 - **Merge to `main` →** relevant changes pass release checks, publish all three immutable images,
   then wait at the GitHub `production` Environment approval gate.
-- **Production approval →** `deploy-production.yml` confirms all manifests exist, updates the single
-  Coolify image-tag variable, deploys, and polls for about 15 minutes. It never runs migrations or
-  seeds and never automatically rolls back.
-- **Rollback →** manually dispatch `deploy-production.yml` with a known-good immutable tag and
-  approve the same `production` Environment.
+- **Production approval →** `deploy-production.yml` confirms manifests, runs the image's fail-closed
+  migration/grant verifier, updates only the Coolify image tag, deploys, polls readiness, and checks
+  unauthenticated protection. Deployment/readiness failure restores the prior image tag; it never
+  downgrades the database.
+- **Rollback →** manually dispatch with a known-good immutable tag, choose `image-rollback`, and
+  approve the same Production environment. This skips migrations and relies on expand/contract
+  compatibility.
 - **Vercel →** the public website remains independently deployed through Vercel; its preview and
   production builds are separate from these backend/Back Office workflows.
 

@@ -78,6 +78,8 @@ jobs:
           echo "ROLLBACK_RESULT=not-required" >> "$GITHUB_ENV"
           echo "MIGRATION_BEFORE=not-run" >> "$GITHUB_ENV"
           echo "MIGRATION_AFTER=not-run" >> "$GITHUB_ENV"
+          echo "READINESS_RESULT=not-run" >> "$GITHUB_ENV"
+          echo "SMOKE_RESULT=not-run" >> "$GITHUB_ENV"
 
       - name: Confirm all immutable image manifests exist
         shell: bash
@@ -134,6 +136,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "READINESS_RESULT=failed" >> "$GITHUB_ENV"
           ready=false
           for attempt in {1..30}; do
             if curl --silent --show-error --fail --max-time 10 \
@@ -148,12 +151,15 @@ jobs:
             echo "Back Office readiness did not recover after deployment." >&2
             exit 1
           fi
+          echo "READINESS_RESULT=passed" >> "$GITHUB_ENV"
+          echo "SMOKE_RESULT=failed" >> "$GITHUB_ENV"
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --max-time 10 "$BACKOFFICE_BASE_URL/api/reporting/pipeline-runs/latest")"
           if [[ "$status" != "401" ]]; then
             echo "Expected unauthenticated reporting protection; received HTTP $status." >&2
             exit 1
           fi
+          echo "SMOKE_RESULT=passed" >> "$GITHUB_ENV"
 
       - name: Restore previous image after deployment or health failure
         id: automatic_rollback
@@ -199,6 +205,10 @@ jobs:
             echo "Mode: \`$DEPLOYMENT_MODE\`"
             echo
             echo "Migration: \`$MIGRATION_BEFORE -> $MIGRATION_AFTER\`"
+            echo
+            echo "Readiness: \`$READINESS_RESULT\`"
+            echo
+            echo "Smoke tests: \`$SMOKE_RESULT\`"
             echo
             echo "Image rollback: \`$ROLLBACK_RESULT\`"
             echo

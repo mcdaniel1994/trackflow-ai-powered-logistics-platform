@@ -8,7 +8,6 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -32,6 +31,7 @@ from .domains.suppliers.service import SupplierError
 from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
 from .domains.telemetry.router import router as telemetry_router
 from .domains.telemetry.service import TelemetryError
+from .health import ReadinessFailure, check_readiness
 
 
 def _access_denied_reason(exc: StarletteHTTPException) -> str | None:
@@ -155,17 +155,34 @@ def create_app() -> FastAPI:
         logger.error("unhandled_database_failure error_type=%s", type(exc).__name__)
         return JSONResponse(status_code=503, content={"detail": "Inventory service temporarily unavailable"})
 
+    @app.get("/health/live")
+    def health_live() -> dict[str, str]:
+        """Confirm only that the application process can serve requests."""
+        return {"status": "alive"}
+
+    def readiness(session: Session) -> JSONResponse | None:
+        try:
+            check_readiness(session, settings)
+        except ReadinessFailure as exc:
+            logger.error("readiness_failed check=%s", exc.check)
+            return JSONResponse(status_code=503, content={"status": "not_ready"})
+        except SQLAlchemyError as exc:
+            logger.error("readiness_database_failure error_type=%s", type(exc).__name__)
+            return JSONResponse(status_code=503, content={"status": "not_ready"})
+        return None
+
+    @app.get("/health/ready", response_model=None)
+    def health_ready(session: Annotated[Session, Depends(get_session)]) -> dict[str, str] | JSONResponse:
+        """Verify schema, runtime grants, and reporting-worker availability."""
+        failure = readiness(session)
+        return failure or {"status": "ready"}
+
     @app.get("/health", response_model=HealthRead)
     def health(session: Annotated[Session, Depends(get_session)]) -> HealthRead | JSONResponse:
-        """Confirm database readiness without returning connection details."""
-        try:
-            session.execute(text("SELECT 1"))
-        except SQLAlchemyError as exc:
-            logger.error("health_database_failure error_type=%s", type(exc).__name__)
-            return JSONResponse(
-                status_code=503,
-                content={"detail": "Inventory database unavailable"},
-            )
+        """Compatibility alias retaining the original successful response contract."""
+        failure = readiness(session)
+        if failure is not None:
+            return JSONResponse(status_code=503, content={"detail": "Inventory database unavailable"})
         return HealthRead(status="ok", database="ok")
 
     @app.exception_handler(Exception)

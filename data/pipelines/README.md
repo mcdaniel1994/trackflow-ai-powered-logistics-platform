@@ -12,3 +12,5 @@ Prefect-as-library extraction/transform/load/finalization flows, transactional p
 one-hour application-managed S3-compatible cache selected by the documented GATE-8a spike. The
 durable queue remains PostgreSQL-owned, KPI business logic remains in the pure `data/process/`
 layer, and absent R2 configuration safely disables caching.
+The production Compose stack runs one long-lived worker instead of separate Coolify cron jobs;
+its writable Prefect state is isolated under `/tmp` in an otherwise read-only container.

@@ -25,12 +25,12 @@ remain outstanding.
 | Runbook | Status | Scope |
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
-| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Production verified; automated workflow awaits first live run | Coolify order, automated SHA deployment, verification, troubleshooting, credential rotation, and rollback |
-| [supabase-migrations.md](supabase-migrations.md) | Production migration verified; future changes approval-gated | Two-role security rationale, verified role setup, disposable-data waiver, migration, and recovery |
+| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Hardened workflow implemented; first approved run pending | Approval-gated migration, SHA deployment, readiness/smoke verification, and automatic image rollback |
+| [supabase-migrations.md](supabase-migrations.md) | Hardened command verified locally; production credential rotation pending | Two-role setup, database CREATE grant, automated grants, disposable-data waiver, and recovery |
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 | [telemetry-inventory.md](telemetry-inventory.md) | Living reference | Every telemetry signal: implemented today vs. Engagement 6 vs. deferred, with fields, storage, retention, access, and evidence |
 | [operations-feed.md](operations-feed.md) | Portfolio-production | The live operations feed worker, its single-writer/kill-switch safety, telemetry enablement, and the database-size guard that bounds Supabase Free |
-| [business-performance-pipeline.md](business-performance-pipeline.md) | Local preparation verified; production pending approval | Reporting schedule, durable queue, R2 cache boundary, reset checkpoints, retention, migration grants, recovery, and rollback |
+| [business-performance-pipeline.md](business-performance-pipeline.md) | Declarative workers verified; production acceptance pending | Reporting worker, durable queue, R2 boundary, maintenance, recovery, and rollback |
 
 ## Current Deployment Process (summary)
 

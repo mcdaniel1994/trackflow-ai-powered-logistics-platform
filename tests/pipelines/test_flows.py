@@ -204,3 +204,19 @@ def test_flow_aborts_without_finalization_when_lease_is_lost(monkeypatch: pytest
     monkeypatch.setattr(flows, "extract_warehouse_client_activity", lose_lease)
     with pytest.raises(flows.LeaseLostError):
         flows.weekly_warehouse_client_performance.fn(claim, "test-version")
+
+
+def test_prefect_records_propagated_pipeline_failure_as_failed_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    claim = RunClaim(uuid4(), uuid4(), "cli", WEEK, (WEEK,), 1)
+
+    def fail_extract(_weeks: tuple[date, ...]) -> None:
+        raise TransformError("private record detail")
+
+    monkeypatch.setattr(flows, "extract_warehouse_client_activity", fail_extract)
+    with prefect_test_harness():
+        state = flows.weekly_warehouse_client_performance(claim, "test-version", return_state=True)
+    assert state.is_failed()
+    with pytest.raises(PipelineStageError) as raised:
+        state.result()
+    assert raised.value.stage == "extract"
+    assert "private record detail" not in str(raised.value)
