@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     @property
     def alembic_database_url(self) -> str:
         """Use the dedicated DDL role when configured; local dev falls back safely."""
+        if self.app_env.strip().lower() == "production" and not self.migration_database_url:
+            raise ValueError("MIGRATION_DATABASE_URL is required when APP_ENV=production")
         return (self.migration_database_url or self.database_url).strip()
 
     @field_validator("identity_jwt_algorithm")

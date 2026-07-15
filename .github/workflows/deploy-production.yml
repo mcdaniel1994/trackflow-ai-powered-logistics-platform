@@ -7,12 +7,23 @@ on:
         description: Immutable sha-<40 lowercase hex> image tag
         required: true
         type: string
+      deployment_mode:
+        description: Release runs migrations; image-rollback never downgrades the database
+        required: false
+        default: release
+        type: string
   workflow_dispatch:
     inputs:
       image_tag:
-        description: Known-good immutable sha-<40 lowercase hex> image tag
+        description: Immutable sha-<40 lowercase hex> image tag
         required: true
         type: string
+      deployment_mode:
+        description: Choose image-rollback only for a known compatible prior SHA
+        required: true
+        default: release
+        type: choice
+        options: [release, image-rollback]
 
 permissions:
   contents: read
@@ -23,58 +34,50 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy immutable SHA
+    name: Migrate, deploy, and verify immutable SHA
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     environment:
       name: production
     env:
       IMAGE_TAG: ${{ inputs.image_tag }}
+      DEPLOYMENT_MODE: ${{ inputs.deployment_mode || 'release' }}
       COOLIFY_BASE_URL: ${{ secrets.COOLIFY_BASE_URL }}
       COOLIFY_APPLICATION_UUID: ${{ secrets.COOLIFY_APPLICATION_UUID }}
       COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
       COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+      BACKOFFICE_BASE_URL: https://backoffice.forgehub.cloud
 
     steps:
-      - name: Validate immutable image tag
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Validate and mask release configuration
         shell: bash
         run: |
           set -euo pipefail
           if [[ ! "$IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]]; then
-            echo "image_tag must match sha- followed by exactly 40 lowercase hexadecimal characters." >&2
+            echo "image_tag must be an immutable full SHA tag." >&2
             exit 1
           fi
-
-      - name: Validate and mask Coolify configuration
-        shell: bash
-        run: |
-          set -euo pipefail
+          if [[ "$DEPLOYMENT_MODE" != "release" && "$DEPLOYMENT_MODE" != "image-rollback" ]]; then
+            echo "deployment_mode must be release or image-rollback." >&2
+            exit 1
+          fi
           : "${COOLIFY_BASE_URL:?COOLIFY_BASE_URL is required}"
           : "${COOLIFY_APPLICATION_UUID:?COOLIFY_APPLICATION_UUID is required}"
           : "${COOLIFY_TOKEN:?COOLIFY_TOKEN is required}"
           : "${COOLIFY_WEBHOOK:?COOLIFY_WEBHOOK is required}"
-
-          if [[ ! "$COOLIFY_BASE_URL" =~ ^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?$ ]]; then
-            echo "COOLIFY_BASE_URL must be an HTTPS origin without a path, query, fragment, or trailing slash." >&2
-            exit 1
+          if [[ "$DEPLOYMENT_MODE" == "release" ]]; then
+            : "${MIGRATION_DATABASE_URL:?MIGRATION_DATABASE_URL is required for a release}"
           fi
-          if [[ ! "$COOLIFY_APPLICATION_UUID" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "COOLIFY_APPLICATION_UUID must contain only letters, numbers, underscores, or hyphens." >&2
-            exit 1
-          fi
-          if [[ ! "$COOLIFY_WEBHOOK" =~ ^https://[^[:space:]]+$ ]]; then
-            echo "COOLIFY_WEBHOOK must be an HTTPS URL without whitespace." >&2
-            exit 1
-          fi
-
-          echo "::add-mask::$COOLIFY_BASE_URL"
-          echo "::add-mask::$COOLIFY_APPLICATION_UUID"
-          echo "::add-mask::$COOLIFY_TOKEN"
-          echo "::add-mask::$COOLIFY_WEBHOOK"
-
-          api_base="${COOLIFY_BASE_URL%/}/api/v1"
-          echo "::add-mask::$api_base"
-          echo "COOLIFY_API_BASE=$api_base" >> "$GITHUB_ENV"
+          for value in "$COOLIFY_BASE_URL" "$COOLIFY_APPLICATION_UUID" "$COOLIFY_TOKEN" "$COOLIFY_WEBHOOK" "$MIGRATION_DATABASE_URL"; do
+            if [[ -n "$value" ]]; then echo "::add-mask::$value"; fi
+          done
+          echo "ROLLBACK_RESULT=not-required" >> "$GITHUB_ENV"
+          echo "MIGRATION_BEFORE=not-run" >> "$GITHUB_ENV"
+          echo "MIGRATION_AFTER=not-run" >> "$GITHUB_ENV"
 
       - name: Confirm all immutable image manifests exist
         shell: bash
@@ -88,277 +91,100 @@ jobs:
             docker buildx imagetools inspect "$image:$IMAGE_TAG" > /dev/null
           done
 
-      - name: Update only TRACKFLOW_IMAGE_TAG
+      - name: Run and verify production migrations
+        if: env.DEPLOYMENT_MODE == 'release'
         shell: bash
         run: |
           set -euo pipefail
-          before="$RUNNER_TEMP/coolify-env-before.json"
-          update_payload="$RUNNER_TEMP/coolify-env-update.json"
-          update_response="$RUNNER_TEMP/coolify-env-update-response.json"
-          after="$RUNNER_TEMP/coolify-env-after.json"
-          env_endpoint="$COOLIFY_API_BASE/applications/$COOLIFY_APPLICATION_UUID/envs"
-
-          curl --silent --show-error --fail-with-body \
-            --output "$before" \
-            --header "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$env_endpoint"
-
-          jq -e 'type == "array"' "$before" > /dev/null
-          target_count="$(
-            jq '
-              [
-                .[]
-                | select(
-                    .key == "TRACKFLOW_IMAGE_TAG"
-                    and .is_preview == false
-                  )
-              ]
-              | length
-            ' "$before"
-          )"
-          if [[ "$target_count" != "1" ]]; then
-            echo "Expected exactly one production TRACKFLOW_IMAGE_TAG environment variable; refusing to mutate Coolify." >&2
-            exit 1
-          fi
-
-          target_uuid="$(
-            jq -r '
-              .[]
-              | select(
-                  .key == "TRACKFLOW_IMAGE_TAG"
-                  and .is_preview == false
-                )
-              | .uuid // empty
-            ' "$before"
-          )"
-          if [[ ! "$target_uuid" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "Coolify did not return a usable UUID for the production TRACKFLOW_IMAGE_TAG; refusing to mutate Coolify." >&2
-            exit 1
-          fi
-
-          if ! jq -e \
-            --arg target_uuid "$target_uuid" \
-            '
-              .[]
-              | select(.uuid == $target_uuid)
-              | .is_preview == false
-                and (.is_literal | type == "boolean")
-                and (.is_multiline | type == "boolean")
-                and (.is_shown_once | type == "boolean")
-                and (.is_buildtime | type == "boolean")
-                and (.is_runtime | type == "boolean")
-            ' "$before" > /dev/null
+          output="$RUNNER_TEMP/production-migration.log"
+          if ! docker run --rm --pull=always --read-only --tmpfs /tmp \
+            --env APP_ENV=production \
+            --env DATABASE_URL="$MIGRATION_DATABASE_URL" \
+            --env MIGRATION_DATABASE_URL="$MIGRATION_DATABASE_URL" \
+            "ghcr.io/mcdaniel1994/trackflow-central-api:$IMAGE_TAG" \
+            .venv/bin/central-api-migrate > "$output" 2>&1
           then
-            echo "Coolify did not return the expected boolean metadata for the production TRACKFLOW_IMAGE_TAG; refusing to mutate Coolify." >&2
+            cat "$output"
             exit 1
           fi
-
-          before_buildtime="$(
-            jq -r --arg target_uuid "$target_uuid" \
-              '.[] | select(.uuid == $target_uuid) | .is_buildtime' "$before"
-          )"
-          before_runtime="$(
-            jq -r --arg target_uuid "$target_uuid" \
-              '.[] | select(.uuid == $target_uuid) | .is_runtime' "$before"
-          )"
-          if [[ "$before_buildtime" != "true" || "$before_runtime" != "true" ]]; then
-            echo "Production TRACKFLOW_IMAGE_TAG must be enabled at both Buildtime and Runtime; refusing to mutate Coolify." >&2
+          cat "$output"
+          result="$(grep '^production_migration_complete ' "$output" | tail -1)"
+          before="$(sed -n 's/.*before_revision=\([^ ]*\).*/\1/p' <<< "$result")"
+          after="$(sed -n 's/.*after_revision=\([^ ]*\).*/\1/p' <<< "$result")"
+          if [[ -z "$before" || -z "$after" || "$result" != *"runtime_grants=verified"* ]]; then
+            echo "Migration verification output was incomplete." >&2
             exit 1
           fi
+          echo "MIGRATION_BEFORE=$before" >> "$GITHUB_ENV"
+          echo "MIGRATION_AFTER=$after" >> "$GITHUB_ENV"
 
-          before_count="$(jq 'length' "$before")"
-          before_others_hash="$(
-            jq -cS \
-              --arg target_uuid "$target_uuid" \
-              '[.[] | select(.uuid != $target_uuid)] | sort_by(.uuid // .key)' \
-              "$before" \
-              | sha256sum \
-              | cut -d ' ' -f 1
-          )"
-          before_target_metadata="$(
-            jq -cS \
-              --arg target_uuid "$target_uuid" \
-              '
-                .[]
-                | select(.uuid == $target_uuid)
-                | {
-                    uuid,
-                    key,
-                    is_preview,
-                    is_literal,
-                    is_multiline,
-                    is_shown_once,
-                    is_buildtime,
-                    is_runtime,
-                    comment
-                  }
-              ' "$before"
-          )"
+      - name: Deploy immutable SHA through Coolify
+        id: coolify_deploy
+        continue-on-error: true
+        shell: bash
+        env:
+          TARGET_IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          CAPTURE_PREVIOUS_IMAGE_TAG: "true"
+        run: python scripts/release/coolify_release.py
 
-          jq \
-            --arg target_uuid "$target_uuid" \
-            --arg value "$IMAGE_TAG" \
-            '
-              .[]
-              | select(.uuid == $target_uuid)
-              | {
-                  key,
-                  value: $value,
-                  is_preview,
-                  is_literal,
-                  is_multiline,
-                  is_shown_once,
-                  is_buildtime,
-                  is_runtime,
-                  comment
-                }
-            ' "$before" > "$update_payload"
-
-          curl --silent --show-error --fail-with-body \
-            --request PATCH \
-            --output "$update_response" \
-            --header "Authorization: Bearer $COOLIFY_TOKEN" \
-            --header "Content-Type: application/json" \
-            --data-binary "@$update_payload" \
-            "$env_endpoint"
-
-          curl --silent --show-error --fail-with-body \
-            --output "$after" \
-            --header "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$env_endpoint"
-
-          jq -e 'type == "array"' "$after" > /dev/null
-          after_target_count="$(
-            jq '
-              [
-                .[]
-                | select(
-                    .key == "TRACKFLOW_IMAGE_TAG"
-                    and .is_preview == false
-                  )
-              ]
-              | length
-            ' "$after"
-          )"
-          after_count="$(jq 'length' "$after")"
-          after_others_hash="$(
-            jq -cS \
-              --arg target_uuid "$target_uuid" \
-              '[.[] | select(.uuid != $target_uuid)] | sort_by(.uuid // .key)' \
-              "$after" \
-              | sha256sum \
-              | cut -d ' ' -f 1
-          )"
-          after_target_metadata="$(
-            jq -cS \
-              --arg target_uuid "$target_uuid" \
-              '
-                .[]
-                | select(.uuid == $target_uuid)
-                | {
-                    uuid,
-                    key,
-                    is_preview,
-                    is_literal,
-                    is_multiline,
-                    is_shown_once,
-                    is_buildtime,
-                    is_runtime,
-                    comment
-                  }
-              ' "$after"
-          )"
-
-          if [[ "$after_target_count" != "1" ]]; then
-            echo "Coolify no longer has exactly one production TRACKFLOW_IMAGE_TAG; deployment was not triggered." >&2
-            exit 1
-          fi
-          if [[ "$after_count" != "$before_count" || "$after_others_hash" != "$before_others_hash" ]]; then
-            echo "Coolify changed an environment record other than the production TRACKFLOW_IMAGE_TAG; deployment was not triggered." >&2
-            exit 1
-          fi
-          if [[ "$after_target_metadata" != "$before_target_metadata" ]]; then
-            echo "Coolify changed production TRACKFLOW_IMAGE_TAG metadata; deployment was not triggered." >&2
-            exit 1
-          fi
-
-      - name: Trigger Coolify deployment
+      - name: Poll application health and unauthenticated protection
+        id: release_verification
+        if: steps.coolify_deploy.outcome == 'success'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          response="$RUNNER_TEMP/coolify-deploy-response.json"
-
-          curl --silent --show-error --fail-with-body \
-            --request GET \
-            --output "$response" \
-            --header "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_WEBHOOK"
-
-          deployment_uuid="$(
-            jq -r '
-              if type == "array" then
-                (.[0].deployment_uuid // .[0].uuid // empty)
-              else
-                (
-                  .deployments[0].deployment_uuid
-                  // .deployments[0].uuid
-                  // .deployment_uuid
-                  // .uuid
-                  // .data.deployment_uuid
-                  // .data.uuid
-                  // empty
-                )
-              end
-            ' "$response"
-          )"
-          if [[ ! "$deployment_uuid" =~ ^[A-Za-z0-9_-]+$ ]]; then
-            echo "Coolify did not return a usable deployment identifier; polling cannot continue." >&2
-            exit 1
-          fi
-
-          echo "::add-mask::$deployment_uuid"
-          echo "COOLIFY_DEPLOYMENT_UUID=$deployment_uuid" >> "$GITHUB_ENV"
-
-      - name: Poll Coolify deployment
-        shell: bash
-        run: |
-          set -euo pipefail
-          response="$RUNNER_TEMP/coolify-deployment-status.json"
-          status_endpoint="$COOLIFY_API_BASE/deployments/$COOLIFY_DEPLOYMENT_UUID"
-
-          for attempt in {1..45}; do
-            curl --silent --show-error --fail-with-body \
-              --retry 2 \
-              --retry-all-errors \
-              --max-time 20 \
-              --output "$response" \
-              --header "Authorization: Bearer $COOLIFY_TOKEN" \
-              "$status_endpoint"
-
-            status="$(jq -r '.status // .data.status // empty' "$response" | tr '[:upper:]' '[:lower:]')"
-            case "$status" in
-              finished|success|succeeded|completed)
-                echo "Coolify deployment finished successfully."
-                exit 0
-                ;;
-              failed|failure|cancelled|canceled|cancelled-by-user|canceled-by-user|error)
-                echo "Coolify deployment ended with status: $status" >&2
-                exit 1
-                ;;
-              queued|pending|in_progress|in-progress|running|"")
-                ;;
-              *)
-                echo "Coolify returned an unrecognized deployment status: $status" >&2
-                exit 1
-                ;;
-            esac
-
-            if [[ "$attempt" -lt 45 ]]; then
-              sleep 20
+          ready=false
+          for attempt in {1..30}; do
+            if curl --silent --show-error --fail --max-time 10 \
+              "$BACKOFFICE_BASE_URL/api/health" > /dev/null
+            then
+              ready=true
+              break
             fi
+            if [[ "$attempt" -lt 30 ]]; then sleep 10; fi
           done
+          if [[ "$ready" != "true" ]]; then
+            echo "Back Office readiness did not recover after deployment." >&2
+            exit 1
+          fi
+          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --max-time 10 "$BACKOFFICE_BASE_URL/api/reporting/pipeline-runs/latest")"
+          if [[ "$status" != "401" ]]; then
+            echo "Expected unauthenticated reporting protection; received HTTP $status." >&2
+            exit 1
+          fi
 
-          echo "Coolify deployment did not finish within approximately 15 minutes; no rollback was attempted." >&2
+      - name: Restore previous image after deployment or health failure
+        id: automatic_rollback
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${PREVIOUS_IMAGE_TAG:-}" ]]; then
+            echo "No image mutation occurred before the deployment failure."
+            echo "ROLLBACK_RESULT=not-needed" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [[ ! "$PREVIOUS_IMAGE_TAG" =~ ^sha-[0-9a-f]{40}$ ]]; then
+            echo "The previous image tag is not rollback-safe." >&2
+            exit 1
+          fi
+          TARGET_IMAGE_TAG="$PREVIOUS_IMAGE_TAG" \
+          CAPTURE_PREVIOUS_IMAGE_TAG=false \
+            python scripts/release/coolify_release.py
+          echo "ROLLBACK_RESULT=succeeded" >> "$GITHUB_ENV"
+
+      - name: Fail an unsuccessful release
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
+        shell: bash
+        run: |
+          if [[ "${{ steps.automatic_rollback.outcome }}" == "failure" ]]; then
+            echo "Release verification failed and automatic image rollback also failed." >&2
+          else
+            echo "Release verification failed; automatic image rollback result: ${ROLLBACK_RESULT}." >&2
+          fi
           exit 1
 
       - name: Write deployment summary
@@ -367,6 +193,14 @@ jobs:
         env:
           JOB_STATUS: ${{ job.status }}
         run: |
-          printf "SHA: \`%s\`\n\nStatus: \`%s\`\n" \
-            "${IMAGE_TAG#sha-}" \
-            "$JOB_STATUS" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "Deployed SHA: \`${IMAGE_TAG#sha-}\`"
+            echo
+            echo "Mode: \`$DEPLOYMENT_MODE\`"
+            echo
+            echo "Migration: \`$MIGRATION_BEFORE -> $MIGRATION_AFTER\`"
+            echo
+            echo "Image rollback: \`$ROLLBACK_RESULT\`"
+            echo
+            echo "Job status: \`$JOB_STATUS\`"
+          } >> "$GITHUB_STEP_SUMMARY"

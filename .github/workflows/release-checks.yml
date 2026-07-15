@@ -42,6 +42,12 @@ jobs:
               uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process
               uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
               uv build --project data
+          - name: release-safety
+            label: Release safety
+            runtime: python
+            command: |
+              uv run --project services/central-api --extra dev ruff check scripts/release tests/release
+              uv run --project services/central-api --extra dev pytest tests/release -q
           - name: trackflow-auth
             label: trackflow_auth
             runtime: python
