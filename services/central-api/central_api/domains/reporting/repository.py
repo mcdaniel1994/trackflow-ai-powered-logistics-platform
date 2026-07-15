@@ -1,6 +1,6 @@
 """Read-only reporting queries; pipeline queue writes stay in the data package."""
 
-from datetime import date, datetime
+from datetime import date
 from typing import Any
 
 from sqlalchemy import RowMapping, text
@@ -79,7 +79,7 @@ class ReportingRepository:
         row = self.session.execute(
             text(
                 "SELECT id AS run_id, status, trigger_type, requested_by, scheduled_business_date, "
-                "requested_at, started_at, finished_at, attempt, rows_loaded, error_code "
+                "requested_at, started_at, finished_at, attempt, rows_loaded, error_code, next_attempt_at "
                 "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
                 "ORDER BY requested_at DESC, id DESC LIMIT 1"
             ),
@@ -112,10 +112,21 @@ class ReportingRepository:
         ).mappings().one_or_none()
         return self._successful(row)
 
-    def worker_last_seen_at(self) -> datetime | None:
+    def worker_signals(self) -> RowMapping | None:
         return self.session.execute(
             text(
-                "SELECT heartbeat_at FROM reporting.worker_heartbeats "
+                "SELECT heartbeat_at, last_progress_at, orchestrator_healthy "
+                "FROM reporting.worker_heartbeats "
                 "WHERE worker_name = 'reporting'"
             )
-        ).scalar_one_or_none()
+        ).mappings().one_or_none()
+
+    def running_signals(self) -> RowMapping | None:
+        return self.session.execute(
+            text(
+                "SELECT current_stage, stage_started_at FROM reporting.pipeline_runs "
+                "WHERE pipeline_name = :pipeline_name AND status = 'running' "
+                "ORDER BY started_at LIMIT 1"
+            ),
+            {"pipeline_name": PIPELINE_NAME},
+        ).mappings().one_or_none()

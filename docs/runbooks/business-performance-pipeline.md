@@ -65,6 +65,33 @@ Monitor `GET /reporting/pipeline-runs/latest`. A running row is healthy while it
 the lease. Only an expired lease is reclaimed. A stale worker whose claim token no longer matches
 cannot publish or finalize.
 
+The API derives one `queue_state` used by the Back Office and readiness rules:
+
+- `idle`: worker and orchestrator are healthy and no work is pending;
+- `processing`: a running stage remains within its configured deadline;
+- `queued`: requested work is waiting behind the current/next claim;
+- `retrying`: the newest run is retryable and exposes its safe next-attempt time;
+- `stuck`: a running stage exceeded its deadline, or an idle worker heartbeat is fresh while poll
+  progress is stale;
+- `unavailable`: the worker heartbeat is stale/missing or its last Prefect probe failed.
+
+### Operator triage
+
+For `unavailable`, confirm `reporting-worker`, `prefect-server`, and `prefect-postgres` container
+health, then inspect only fixed-token worker/Prefect logs. Leave requested rows queued; do not run a
+second worker or manually change status. Restore the dependency and verify `orchestrator_healthy`
+returns true before work is claimed.
+
+For `stuck`, record the run ID, attempt, `current_stage`, `stage_started_at`, and safe error code.
+Do not extend the lease or edit the claim token. If the hard watchdog has not already restarted the
+worker, restart only `reporting-worker`; PostgreSQL releases the advisory lock and the stale sweep
+returns the row to `retryable`. Startup reconciliation closes the abandoned Prefect flow run.
+
+For retry exhaustion (`failed` after attempt 5), use `error_code` to repair the dependency or input
+problem, confirm readiness, then have an administrator create a new request. Never reset `attempt`
+or recycle the failed row. `ORCHESTRATION_FAILED`, `INTERNAL_FAILED`, `DB_UNAVAILABLE`, and
+`LOCK_UNAVAILABLE` are retryable before exhaustion; validation failures require a corrected request.
+
 ## R2 provisioning — owner action
 
 GATE-8b remains open. When explicitly approved:
@@ -118,6 +145,49 @@ and `prefect-server`; restore the newest verified dump into a new dedicated volu
 table/extension probe; then start Prefect Server before clients. The TrackFlow queue remains intact,
 so reconcile any `running` audit row through the normal stale-lease/orphan procedure rather than
 creating work from Prefect history.
+
+## Approval-gated Prefect upgrade
+
+Prefect server/database changes are independent infrastructure changes, not ordinary app releases.
+They require owner approval and a maintenance window:
+
+1. Confirm the proposed server release supports PostgreSQL and is the same major as the intended
+   client. Add its exact image digest/version mapping to `prefect_version_guard.py`; never use a
+   floating tag.
+2. Produce and verify a fresh `prefect-backups/` dump. Record current server image digest, client
+   lock version, database size, and `/api/health` result.
+3. Stop reporting and maintenance clients. Change only `PREFECT_SERVER_IMAGE` first and start
+   `prefect-postgres` plus `prefect-server`. Prefect 3.7.8's observed `server start` path applies its
+   schema migrations; for a future version, confirm that release's documented migration behavior
+   before the window and use its explicit database-upgrade command if required.
+4. Require `/api/health`, `prefect-postgres-guard`, and `prefect-version-guard` to pass. Then deploy
+   any app image with the compatible Prefect client and start clients.
+5. Run one manual report and verify correlation/stage fields. Keep `reporting.pipeline_runs` as the
+   only work authority throughout.
+
+If the server upgrade fails before clients start, restore the prior server digest and, only when
+its schema is compatible, restart it. If its database migration is incompatible, restore the
+pre-upgrade dump to a new dedicated volume. An app image rollback changes only
+`TRACKFLOW_IMAGE_TAG`; it must never silently change or downgrade Prefect Server or its database.
+
+## Resource limits and external gates
+
+Repository limits remain provisional: Prefect Server 512 MiB, Prefect PostgreSQL 256 MiB,
+reporting worker 768 MiB, and backup service 128 MiB. Do not lower or claim these as production-
+tuned from local idle readings. Production release still requires the approved 24-hour soak,
+active-run per-process RSS/duration evidence, the deliberate slow-run renewal gate, and 48-hour
+post-release memory sampling with at least 30% VPS headroom. Tune one service at a time from p99
+evidence and repeat the acceptance suite.
+
+Local idle snapshot on July 15, 2026 (Docker Desktop, not production): Prefect Server 183.5 MiB,
+Prefect PostgreSQL 73.72 MiB, reporting worker 118.4 MiB, and backup service 24.88 MiB. This is only
+a reproducible baseline; it does not satisfy active-run, soak, VPS, or p99 evidence gates.
+
+The local database-backed crash matrix deliberately terminates a spawned worker process during
+each of `extract`, `transform`, and `load`. Every case verifies PostgreSQL releases the advisory
+lock, rolls back the uncommitted reporting write, and moves the expired run to `retryable` with
+`STALE_ABANDONED`; separate claim-token tests reject zombie publication and reconciliation tests
+close Prefect runs orphaned by restart.
 
 ## Migration and runtime grants
 

@@ -36,6 +36,7 @@ class PipelineRunLatest(BaseModel):
     attempt: int
     rows_loaded: int | None
     error_code: str | None
+    next_attempt_at: datetime | None
 
 
 class QueuedPipelineRun(BaseModel):
@@ -60,9 +61,12 @@ class NextScheduledRefresh(BaseModel):
 class ReportingWorkerHealth(BaseModel):
     status: Literal["healthy", "stale", "unknown"]
     last_seen_at: datetime | None
+    last_progress_at: datetime | None
+    orchestrator_healthy: bool | None
 
 
 class PipelineRunsResponse(BaseModel):
+    queue_state: Literal["idle", "processing", "queued", "retrying", "stuck", "unavailable"]
     latest: PipelineRunLatest | None
     queued: list[QueuedPipelineRun]
     latest_successful: LatestSuccessfulRun | None

@@ -90,6 +90,11 @@ def test_prefect_postgres_guard_rejects_sqlite_fallback() -> None:
     for filename in ("compose.yaml", "compose.coolify.yaml"):
         compose_text = (REPO_ROOT / filename).read_text()
         guard = _service_block(compose_text, "prefect-postgres-guard")
+        version_guard = _service_block(compose_text, "prefect-version-guard")
+        reporting = _service_block(compose_text, "reporting-worker")
         assert 'tablename=\'flow_run\'' in guard
         assert "extname='pg_trgm'" in guard
-        assert 'profiles: ["verification"]' in guard
+        assert 'profiles: ["verification"]' not in guard
+        assert "scripts.prefect_version_guard" in version_guard
+        assert "prefect-postgres-guard: {condition: service_completed_successfully}" in reporting
+        assert "prefect-version-guard: {condition: service_completed_successfully}" in reporting

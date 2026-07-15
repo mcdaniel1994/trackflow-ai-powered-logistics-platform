@@ -217,7 +217,13 @@ def test_latest_runs_distinguishes_latest_success_and_queue_without_internals(
         "target_weeks": [MONDAY.isoformat()],
         "rows_loaded": 24,
     }
-    assert payload["worker"] == {"status": "unknown", "last_seen_at": None}
+    assert payload["queue_state"] == "unavailable"
+    assert payload["worker"] == {
+        "status": "unknown",
+        "last_seen_at": None,
+        "last_progress_at": None,
+        "orchestrator_healthy": None,
+    }
     assert [item["trigger_type"] for item in payload["queued"]] == ["manual", "manual"]
     serialized = response.text.lower()
     for forbidden in ("cache_nonce", "bucket", "object_key", "claim_token", "lease_expires_at"):
@@ -231,7 +237,13 @@ def test_latest_runs_empty_state(client: TestClient, auth_headers: dict[str, str
     assert payload["latest"] is None
     assert payload["latest_successful"] is None
     assert payload["queued"] == []
-    assert payload["worker"] == {"status": "unknown", "last_seen_at": None}
+    assert payload["queue_state"] == "unavailable"
+    assert payload["worker"] == {
+        "status": "unknown",
+        "last_seen_at": None,
+        "last_progress_at": None,
+        "orchestrator_healthy": None,
+    }
 
 
 def test_latest_runs_reports_worker_health(
@@ -245,16 +257,23 @@ def test_latest_runs_reports_worker_health(
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
-                "VALUES ('reporting', :heartbeat_at)"
+                "INSERT INTO reporting.worker_heartbeats "
+                "(worker_name, heartbeat_at, last_progress_at, orchestrator_healthy) "
+                "VALUES ('reporting', :heartbeat_at, :progress_at, true)"
             ),
-            {"heartbeat_at": now - timedelta(seconds=10)},
+            {
+                "heartbeat_at": now - timedelta(seconds=10),
+                "progress_at": now - timedelta(seconds=5),
+            },
         )
     healthy = client.get("/reporting/pipeline-runs/latest", headers=auth_headers)
     assert healthy.json()["worker"] == {
         "status": "healthy",
         "last_seen_at": (now - timedelta(seconds=10)).isoformat().replace("+00:00", "Z"),
+        "last_progress_at": (now - timedelta(seconds=5)).isoformat().replace("+00:00", "Z"),
+        "orchestrator_healthy": True,
     }
+    assert healthy.json()["queue_state"] == "idle"
 
     with engine.begin() as connection:
         connection.execute(
@@ -263,6 +282,7 @@ def test_latest_runs_reports_worker_health(
         )
     stale = client.get("/reporting/pipeline-runs/latest", headers=auth_headers)
     assert stale.json()["worker"]["status"] == "stale"
+    assert stale.json()["queue_state"] == "unavailable"
 
 
 @pytest.mark.parametrize(

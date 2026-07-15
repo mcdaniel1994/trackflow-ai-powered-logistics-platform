@@ -50,6 +50,7 @@ const status = {
     attempt: 1,
     rows_loaded: null,
     error_code: "LOAD_FAILED",
+    next_attempt_at: null,
   },
   queued: [{ run_id: "queued-1", trigger_type: "manual" as const, requested_at: "2026-07-14T12:03:00Z" }],
   latest_successful: {
@@ -58,7 +59,13 @@ const status = {
     target_weeks: ["2026-07-13"],
     rows_loaded: 24,
   },
-  worker: { status: "healthy" as const, last_seen_at: "2026-07-14T12:04:00Z" },
+  queue_state: "queued" as const,
+  worker: {
+    status: "healthy" as const,
+    last_seen_at: "2026-07-14T12:04:00Z",
+    last_progress_at: "2026-07-14T12:04:00Z",
+    orchestrator_healthy: true,
+  },
   next_scheduled_refresh: {
     local_time: "07:00" as const,
     timezone: "America/Chicago" as const,
@@ -132,19 +139,23 @@ describe("business reporting dashboard", () => {
     expect(screen.queryByRole("button", { name: "Force refresh" })).not.toBeInTheDocument();
   });
 
-  it.each([
-    ["requested", "queued"],
-    ["running", "running"],
-    ["succeeded", "succeeded"],
-    ["failed", "failed"],
-  ] as const)("renders the %s pipeline state as %s", async (pipelineStatus, label) => {
+  it.each(["idle", "processing", "queued", "retrying", "stuck", "unavailable"] as const)(
+    "renders the server-derived %s queue state",
+    async (queueState) => {
     reportingMocks.getPipelineRunsStatus.mockResolvedValue({
       ...status,
-      latest: { ...status.latest, status: pipelineStatus },
-      queued: pipelineStatus === "requested" ? status.queued : [],
+      queue_state: queueState,
+      latest: {
+        ...status.latest,
+        status: queueState === "retrying" ? "retryable" : status.latest.status,
+        next_attempt_at: queueState === "retrying" ? "2026-07-15T12:30:00Z" : null,
+      },
     });
     render(<BusinessReportingView />);
-    expect(await screen.findByText(label, { selector: "span" })).toBeInTheDocument();
+    expect(await screen.findByText(queueState, { selector: "span" })).toBeInTheDocument();
+    if (queueState === "retrying") {
+      expect(screen.getByText(/attempt 1 of 5, next try at/i)).toBeInTheDocument();
+    }
   });
 
   it("shows an initial loading state while reporting requests are pending", () => {
@@ -163,9 +174,15 @@ describe("business reporting dashboard", () => {
   it("warns when queued work has no healthy worker", async () => {
     reportingMocks.getPipelineRunsStatus.mockResolvedValue({
       ...status,
-      worker: { status: "stale", last_seen_at: "2026-07-14T12:00:00Z" },
+      queue_state: "unavailable",
+      worker: {
+        status: "stale",
+        last_seen_at: "2026-07-14T12:00:00Z",
+        last_progress_at: "2026-07-14T12:00:00Z",
+        orchestrator_healthy: false,
+      },
     });
     render(<BusinessReportingView />);
-    expect(await screen.findByText(/reporting worker is not responding/i)).toBeInTheDocument();
+    expect(await screen.findByText(/worker or orchestrator is not responding/i)).toBeInTheDocument();
   });
 });

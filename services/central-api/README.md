@@ -60,6 +60,8 @@ Local liveness: `http://127.0.0.1:8002/health/live`. Readiness is
 database, image schema floor, inventory columns, reporting grants, and worker heartbeat.
 The maintenance image also runs API-only Prefect terminal-run retention; the separate
 `prefect-db-backup` image owns `pg_dump` and backup R2 access so Central API never receives either.
+Reporting status uses one shared derivation for readiness and the API's six `queue_state` values;
+Compose blocks worker startup until PostgreSQL-state and Prefect version guards pass.
 
 ## Quality gates
 

@@ -80,6 +80,7 @@ jobs:
           echo "MIGRATION_AFTER=not-run" >> "$GITHUB_ENV"
           echo "READINESS_RESULT=not-run" >> "$GITHUB_ENV"
           echo "SMOKE_RESULT=not-run" >> "$GITHUB_ENV"
+          echo "PREFECT_GUARD_RESULT=not-run" >> "$GITHUB_ENV"
 
       - name: Confirm all immutable image manifests exist
         shell: bash
@@ -92,6 +93,13 @@ jobs:
           do
             docker buildx imagetools inspect "$image:$IMAGE_TAG" > /dev/null
           done
+
+      - name: Validate Prefect release contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f compose.coolify.yaml config --no-interpolate --quiet
+          python scripts/release/verify_prefect_contract.py
 
       - name: Run and verify production migrations
         if: env.DEPLOYMENT_MODE == 'release'
@@ -152,6 +160,9 @@ jobs:
             exit 1
           fi
           echo "READINESS_RESULT=passed" >> "$GITHUB_ENV"
+          # reporting-worker cannot start until the PostgreSQL and live-version
+          # Compose guards complete, and Central API readiness requires its heartbeat.
+          echo "PREFECT_GUARD_RESULT=passed" >> "$GITHUB_ENV"
           echo "SMOKE_RESULT=failed" >> "$GITHUB_ENV"
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --max-time 10 "$BACKOFFICE_BASE_URL/api/reporting/pipeline-runs/latest")"
@@ -209,6 +220,8 @@ jobs:
             echo "Readiness: \`$READINESS_RESULT\`"
             echo
             echo "Smoke tests: \`$SMOKE_RESULT\`"
+            echo
+            echo "Prefect guards: \`$PREFECT_GUARD_RESULT\`"
             echo
             echo "Image rollback: \`$ROLLBACK_RESULT\`"
             echo

@@ -39,10 +39,25 @@ function formatTimestamp(value: string | null | undefined) {
 }
 
 function statusTone(status: string) {
-  if (status === "succeeded") return "border-teal/50 bg-teal/10 text-navy";
-  if (status === "failed") return "border-rose-200 bg-rose-50 text-rose-800";
-  if (status === "running") return "border-sky/50 bg-sky/10 text-navy";
+  if (status === "idle") return "border-teal/50 bg-teal/10 text-navy";
+  if (status === "stuck" || status === "unavailable") return "border-rose-200 bg-rose-50 text-rose-800";
+  if (status === "processing") return "border-sky/50 bg-sky/10 text-navy";
   return "border-coral/40 bg-coral/10 text-navy";
+}
+
+function queueStateMessage(status: PipelineRunsStatus) {
+  if (status.queue_state === "processing") return "A reporting run is processing.";
+  if (status.queue_state === "queued") return "Queued work is waiting behind the current run.";
+  if (status.queue_state === "retrying") {
+    return `Retrying — attempt ${status.latest?.attempt ?? 1} of 5, next try at ${formatTimestamp(status.latest?.next_attempt_at)}.`;
+  }
+  if (status.queue_state === "unavailable") {
+    return "Reporting worker or orchestrator is not responding; queued work will wait.";
+  }
+  if (status.queue_state === "stuck") {
+    return "Reporting worker is running but not making progress — see the reporting runbook.";
+  }
+  return "Reporting is idle and ready for work.";
 }
 
 function ReportTable({ label, rows }: { label: string; rows: WeeklyPerformanceEntry[] }) {
@@ -88,21 +103,15 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
   const latest = status.latest;
   const successful = status.latest_successful;
   const stale = successful && now ? now - new Date(successful.finished_at).getTime() > 26 * 60 * 60 * 1000 : false;
-  const visibleStatus = latest && ["requested", "retryable"].includes(latest.status) ? "queued" : latest?.status;
-  const workerUnavailable =
-    status.worker.status !== "healthy" &&
-    (status.queued.length > 0 || latest?.status === "requested" || latest?.status === "retryable");
 
   return (
     <section className="grid gap-3 rounded-xl border border-mist bg-white p-4 shadow-sm md:grid-cols-3" aria-label="Pipeline status">
       <div>
         <p className="text-xs font-black uppercase tracking-wide text-neutral-500">Current run</p>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          {latest ? (
-            <span className={`rounded-full border px-2.5 py-1 text-xs font-black uppercase ${statusTone(latest.status)}`}>
-              {visibleStatus}
-            </span>
-          ) : <span className="text-sm text-neutral-600">No runs yet</span>}
+          <span className={`rounded-full border px-2.5 py-1 text-xs font-black uppercase ${statusTone(status.queue_state)}`}>
+            {status.queue_state}
+          </span>
           {latest ? <span className="text-xs font-bold text-neutral-600">{latest.trigger_type}</span> : null}
           {status.queued.length ? (
             <span className="rounded-full border border-coral/40 bg-coral/10 px-2.5 py-1 text-xs font-black text-navy">
@@ -113,11 +122,12 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
         {latest?.status === "failed" && latest.error_code ? (
           <p role="alert" className="mt-2 text-xs font-bold text-rose-700">Failure: {latest.error_code}</p>
         ) : null}
-        {workerUnavailable ? (
-          <p role="alert" className="mt-2 text-xs font-bold text-coral">
-            Reporting worker {status.worker.status === "stale" ? "is not responding" : "has not checked in yet"}; queued work will wait.
-          </p>
-        ) : null}
+        <p
+          role={status.queue_state === "stuck" || status.queue_state === "unavailable" ? "alert" : undefined}
+          className={`mt-2 text-xs font-bold ${status.queue_state === "stuck" || status.queue_state === "unavailable" ? "text-rose-700" : "text-neutral-600"}`}
+        >
+          {queueStateMessage(status)}
+        </p>
       </div>
       <div>
         <p className="text-xs font-black uppercase tracking-wide text-neutral-500">Last successful refresh</p>

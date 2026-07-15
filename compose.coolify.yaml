@@ -63,7 +63,6 @@ services:
   # Approval-gated release guard. A missing table proves Prefect fell back from PostgreSQL.
   prefect-postgres-guard:
     image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
-    profiles: ["verification"]
     security_opt: ["no-new-privileges:true"]
     environment:
       PGPASSWORD: ${PREFECT_DB_PASSWORD:?required}
@@ -77,6 +76,19 @@ services:
         "-ec",
         "test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'\")\" = 1 && test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_extension WHERE extname='pg_trgm'\")\" = 1",
       ]
+
+  prefect-version-guard:
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    environment:
+      PREFECT_SERVER_IMAGE_REF: ${PREFECT_SERVER_IMAGE:?required}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command: [".venv/bin/python", "-m", "scripts.prefect_version_guard"]
 
   prefect-db-backup:
     <<: *runtime
@@ -222,6 +234,8 @@ services:
       REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
     depends_on:
       prefect-server: {condition: service_healthy}
+      prefect-postgres-guard: {condition: service_completed_successfully}
+      prefect-version-guard: {condition: service_completed_successfully}
     read_only: true
     tmpfs: ["/tmp"]
     command:

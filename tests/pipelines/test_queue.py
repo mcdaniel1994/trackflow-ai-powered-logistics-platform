@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import multiprocessing
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 
 from pipelines.business_performance.locks import REPORTING_PIPELINE_LOCK_KEY
 from pipelines.business_performance.queue import (
@@ -31,8 +33,8 @@ from pipelines.business_performance.queue import (
 )
 from pipelines.business_performance.runner import (
     ClaimOutcome,
-    PipelineStageError,
     PermanentRunError,
+    PipelineStageError,
     RunnerStatus,
     TransientRunError,
     execute_claim_with_renewal,
@@ -42,6 +44,29 @@ from pipelines.business_performance.runner import (
 
 BASE_TIME = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
 MONDAY = date(2026, 7, 13)
+
+
+def _crash_during_stage(database_url: str, stage: str, week_start: date) -> None:
+    """Claim work, hold the singleton lock, write uncommitted data, then die."""
+    engine = create_engine(database_url, pool_pre_ping=True)
+    claim = claim_next(engine, now=datetime.now(UTC))
+    if claim is None or not record_stage(engine, claim, stage):
+        os._exit(98)
+    connection = engine.connect()
+    connection.execute(
+        text("SELECT pg_advisory_lock(:key)"),
+        {"key": REPORTING_PIPELINE_LOCK_KEY},
+    )
+    connection.commit()
+    connection.begin()
+    connection.execute(
+        text(
+            "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
+            "VALUES (:week_start, :reason)"
+        ),
+        {"week_start": week_start, "reason": f"kill-matrix-{stage}"},
+    )
+    os._exit(97)
 
 
 def _run_row(engine: Engine, run_id: UUID) -> dict[str, object]:
@@ -239,6 +264,58 @@ def test_stale_recovery_uses_lease_and_heartbeat_only(pipeline_engine: Engine) -
     assert _run_row(pipeline_engine, claim.run_id)["status"] == "retryable"
 
 
+@pytest.mark.parametrize(
+    ("stage", "week_start"),
+    [
+        ("extract", date(2026, 6, 22)),
+        ("transform", date(2026, 6, 29)),
+        ("load", date(2026, 7, 6)),
+    ],
+)
+def test_process_death_releases_lock_rolls_back_and_requeues_each_stage(
+    pipeline_engine: Engine,
+    database_url: str,
+    stage: str,
+    week_start: date,
+) -> None:
+    run_id = enqueue_cli(
+        pipeline_engine,
+        now=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    process = multiprocessing.get_context("spawn").Process(
+        target=_crash_during_stage,
+        args=(database_url, stage, week_start),
+    )
+    process.start()
+    process.join(timeout=15)
+    assert process.exitcode == 97
+
+    with pipeline_engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT pg_try_advisory_lock(:key)"),
+            {"key": REPORTING_PIPELINE_LOCK_KEY},
+        ).scalar_one()
+        connection.execute(
+            text("SELECT pg_advisory_unlock(:key)"),
+            {"key": REPORTING_PIPELINE_LOCK_KEY},
+        )
+        assert connection.execute(
+            text(
+                "SELECT count(*) FROM reporting.incomplete_weeks "
+                "WHERE week_start = :week_start"
+            ),
+            {"week_start": week_start},
+        ).scalar_one() == 0
+
+    assert recover_stale_runs(
+        pipeline_engine,
+        now=datetime.now(UTC) + timedelta(minutes=11),
+    ) == 1
+    row = _run_row(pipeline_engine, run_id)
+    assert row["status"] == "retryable"
+    assert row["error_code"] == "STALE_ABANDONED"
+
+
 def test_stale_recovery_fails_max_attempt_and_never_moves_terminal_rows(
     pipeline_engine: Engine,
 ) -> None:
@@ -268,16 +345,15 @@ def test_old_worker_cannot_heartbeat_publish_or_finalize_after_reclaim(
         heartbeat(pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=12))
         is False
     )
-    with pytest.raises(LeaseLostError):
-        with pipeline_engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
-                    "VALUES (:week_start, 'zombie-test')"
-                ),
-                {"week_start": MONDAY},
-            )
-            verify_claim_for_publication(connection, claim)
+    with pytest.raises(LeaseLostError), pipeline_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
+                "VALUES (:week_start, 'zombie-test')"
+            ),
+            {"week_start": MONDAY},
+        )
+        verify_claim_for_publication(connection, claim)
     with pipeline_engine.connect() as connection:
         assert (
             connection.execute(

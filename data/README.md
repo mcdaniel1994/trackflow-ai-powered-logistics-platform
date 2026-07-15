@@ -21,7 +21,9 @@ use PostgreSQL leases, claim tokens, idempotency, and advisory locking. The seco
 phase adds independent continuous lease renewal, token-CAS flow-run/stage correlation, fail-closed
 Prefect health, startup orphan reconciliation, bounded I/O timeouts, and a hard run watchdog. Phase 3
 adds optional Prefect recovery results under `prefect-results/recovery`, API-only terminal-run
-retention, and an isolated read-only PostgreSQL backup service with a distinct R2 token.
+retention, and an isolated read-only PostgreSQL backup service with a distinct R2 token. Phase 4
+adds shared server-derived queue/readiness states and startup gates that verify Prefect PostgreSQL
+state plus the digest-mapped server/client version contract before the worker can claim work.
 
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines

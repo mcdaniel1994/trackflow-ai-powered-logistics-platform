@@ -32,6 +32,9 @@ services:
       interval: 5s
       timeout: 5s
       retries: 30
+    deploy:
+      resources:
+        limits: {cpus: "0.25", memory: 256M}
 
   prefect-server:
     image: ${PREFECT_SERVER_IMAGE:-prefecthq/prefect:3.7.8-python3.11@sha256:d4d142f1426ed0e8d7f48b3cc730f7b0469dcbcaf720959bb678f4cec3e5c3cc}
@@ -59,7 +62,6 @@ services:
   # Release guard: Prefect must have created its state tables in PostgreSQL.
   prefect-postgres-guard:
     image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
-    profiles: ["verification"]
     environment:
       PGPASSWORD: ${PREFECT_DB_PASSWORD:-prefect_local_only}
     depends_on:
@@ -72,6 +74,17 @@ services:
         "-ec",
         "test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'\")\" = 1 && test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_extension WHERE extname='pg_trgm'\")\" = 1",
       ]
+
+  # Startup gate: the live server must be API-compatible with the app image's client.
+  prefect-version-guard:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    environment:
+      PREFECT_SERVER_IMAGE_REF: ${PREFECT_SERVER_IMAGE:-prefecthq/prefect:3.7.8-python3.11@sha256:d4d142f1426ed0e8d7f48b3cc730f7b0469dcbcaf720959bb678f4cec3e5c3cc}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command: [".venv/bin/python", "-m", "scripts.prefect_version_guard"]
 
   # Daily read-only Prefect database dump; disabled safely when backup R2 is absent.
   prefect-db-backup:
@@ -199,6 +212,8 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
       prefect-server: {condition: service_healthy}
+      prefect-postgres-guard: {condition: service_completed_successfully}
+      prefect-version-guard: {condition: service_completed_successfully}
     read_only: true
     tmpfs: ["/tmp"]
     command:

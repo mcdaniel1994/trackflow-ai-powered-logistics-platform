@@ -304,6 +304,14 @@ Prefect database credential. A separate pinned PostgreSQL-based backup image use
 dumps beneath `prefect-backups/`, retain seven days, and sample database size. Fully absent R2 logs
 a fixed disabled notice and never blocks reporting.
 
+**Operator/release amendment (Phase 4):** Central API readiness and the reporting status endpoint
+call one server-side derivation for `idle`, `processing`, `queued`, `retrying`, `stuck`, and
+`unavailable`; the Back Office renders those states without reinterpreting queue internals. A
+healthy renewing lease cannot hide an overdue stage. Normal Compose startup runs a PostgreSQL table
+guard and a digest-mapped Prefect client/server compatibility guard, and `reporting-worker` depends
+on both completing successfully. Release verification checks the same static pinning contract;
+image rollback changes only `TRACKFLOW_IMAGE_TAG`, never the independent Prefect server/database.
+
 ### 5.1 `data/` packaging
 
 - **New uv project `data/pyproject.toml`** — `trackflow-data-pipelines`, `requires-python = ">=3.11"`, hatchling `packages = ["pipelines", "process"]`; ruff (line-length 120, E/F/I/UP/B/SIM/RUF), mypy `strict = true`, pytest `testpaths = ["../tests/pipelines"]`, coverage `fail_under = 90`.
