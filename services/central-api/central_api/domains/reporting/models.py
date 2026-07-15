@@ -6,6 +6,7 @@ from typing import ClassVar
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     Date,
@@ -117,6 +118,8 @@ class WorkerHeartbeat(SQLModel, table=True):
 
     worker_name: str = Field(sa_column=Column(Text, primary_key=True, nullable=False))
     heartbeat_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    last_progress_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    orchestrator_healthy: bool | None = Field(default=None, sa_column=Column(Boolean, nullable=True))
 
 
 class PipelineRun(SQLModel, table=True):
@@ -136,8 +139,13 @@ class PipelineRun(SQLModel, table=True):
         CheckConstraint(
             "error_code IS NULL OR error_code IN "
             "('EXTRACT_FAILED', 'VALIDATE_FAILED', 'LOAD_FAILED', 'DB_UNAVAILABLE', "
-            "'LOCK_UNAVAILABLE', 'STALE_ABANDONED', 'MAX_ATTEMPTS_EXCEEDED')",
+            "'LOCK_UNAVAILABLE', 'STALE_ABANDONED', 'MAX_ATTEMPTS_EXCEEDED', "
+            "'ORCHESTRATION_FAILED', 'INTERNAL_FAILED')",
             name="ck_pipeline_runs_error_code",
+        ),
+        CheckConstraint(
+            "current_stage IS NULL OR current_stage IN ('extract', 'transform', 'load')",
+            name="ck_pipeline_runs_current_stage",
         ),
         CheckConstraint(
             "(rows_extracted IS NULL OR rows_extracted >= 0) "
@@ -195,6 +203,9 @@ class PipelineRun(SQLModel, table=True):
     heartbeat_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     lease_expires_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     cache_nonce: UUID | None = Field(default=None, sa_column=Column(PGUUID(as_uuid=True), nullable=True))
+    prefect_flow_run_id: UUID | None = Field(default=None, sa_column=Column(PGUUID(as_uuid=True), nullable=True))
+    current_stage: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    stage_started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     rows_extracted: int | None = Field(default=None, sa_column=Column(Integer, nullable=True))
     rows_transformed: int | None = Field(default=None, sa_column=Column(Integer, nullable=True))
     rows_loaded: int | None = Field(default=None, sa_column=Column(Integer, nullable=True))

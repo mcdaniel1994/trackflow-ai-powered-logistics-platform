@@ -17,6 +17,7 @@ from pipelines.business_performance.cache import (
     CacheParameters,
     S3CacheStore,
     cache_store_from_environment,
+    prefect_result_storage_from_environment,
     transformation_cache_key,
     transform_with_cache,
 )
@@ -163,6 +164,18 @@ def test_absent_cache_config_computes_normally(monkeypatch: pytest.MonkeyPatch) 
     result = transform_with_cache(None, _parameters(), lambda: [_row()], now=NOW)
     assert result.cache_hit is False
     assert result.rows == [_row()]
+    assert prefect_result_storage_from_environment() is None
+
+
+def test_prefect_recovery_storage_uses_a_distinct_private_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("REPORTING_R2_BUCKET", "private-reporting")
+    monkeypatch.setenv("REPORTING_R2_ENDPOINT", "https://example.invalid")
+    monkeypatch.setenv("REPORTING_R2_ACCESS_KEY_ID", "scoped-id")
+    monkeypatch.setenv("REPORTING_R2_SECRET_ACCESS_KEY", "scoped-secret")
+    storage = prefect_result_storage_from_environment()
+    assert storage is not None
+    assert storage.bucket_name == "private-reporting"
+    assert storage.bucket_folder == "prefect-results/recovery"
 
 
 def test_partial_cache_config_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:

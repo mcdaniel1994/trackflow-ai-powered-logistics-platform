@@ -15,8 +15,9 @@ def test_health_checks_database(client: TestClient, engine: Engine) -> None:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO reporting.worker_heartbeats (worker_name, heartbeat_at) "
-                "VALUES ('reporting', now())"
+                "INSERT INTO reporting.worker_heartbeats "
+                "(worker_name, heartbeat_at, last_progress_at, orchestrator_healthy) "
+                "VALUES ('reporting', now(), now(), true)"
             )
         )
     response = client.get("/health")

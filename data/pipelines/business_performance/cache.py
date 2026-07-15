@@ -15,11 +15,17 @@ from typing import Any, Final, Protocol, cast
 from uuid import UUID
 
 import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
 from botocore.exceptions import BotoCoreError, ClientError  # type: ignore[import-untyped]
+from prefect_aws.client_parameters import AwsClientParameters
+from prefect_aws.credentials import AwsCredentials
+from prefect_aws.s3 import S3Bucket
+from pydantic import SecretStr
 
 from process.business_performance import WeeklyPerformanceRow
 
 CACHE_PREFIX: Final = "prefect-results/"
+RECOVERY_RESULT_PREFIX: Final = "prefect-results/recovery"
 CACHE_TTL: Final = timedelta(hours=1)
 EVALUATION_VERSION: Final = "weekly-kpis-v1"
 logger = logging.getLogger(__name__)
@@ -166,6 +172,7 @@ class S3CacheStore:
             aws_access_key_id=config.access_key_id,
             aws_secret_access_key=config.secret_access_key,
             region_name=config.region,
+            config=Config(connect_timeout=10, read_timeout=30, retries={"max_attempts": 2, "mode": "standard"}),
         )
 
     def object_key(self, cache_key: str) -> str:
@@ -218,6 +225,31 @@ class S3CacheStore:
 def cache_store_from_environment() -> S3CacheStore | None:
     config = CacheConfig.from_environment()
     return None if config is None else S3CacheStore(config)
+
+
+def prefect_result_storage_from_environment() -> S3Bucket | None:
+    """Build optional Prefect recovery storage from the reporting-only R2 credentials."""
+    config = CacheConfig.from_environment()
+    if config is None:
+        return None
+    credentials = AwsCredentials(
+        aws_access_key_id=config.access_key_id,
+        aws_secret_access_key=SecretStr(config.secret_access_key),
+        region_name=config.region,
+        aws_client_parameters=AwsClientParameters(
+            endpoint_url=config.endpoint,
+            config={
+                "connect_timeout": 10,
+                "read_timeout": 30,
+                "retries": {"max_attempts": 2, "mode": "standard"},
+            },
+        ),
+    )
+    return S3Bucket(
+        bucket_name=config.bucket,
+        bucket_folder=RECOVERY_RESULT_PREFIX,
+        credentials=credentials,
+    )
 
 
 def transform_with_cache(

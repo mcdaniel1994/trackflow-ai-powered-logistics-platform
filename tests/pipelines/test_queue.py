@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import multiprocessing
+import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, date, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine, text
+from sqlalchemy import Engine, create_engine, text
 
 from pipelines.business_performance.locks import REPORTING_PIPELINE_LOCK_KEY
 from pipelines.business_performance.queue import (
@@ -22,21 +24,49 @@ from pipelines.business_performance.queue import (
     finalize_failure,
     finalize_success,
     heartbeat,
+    record_prefect_flow_run,
+    record_stage,
     record_worker_heartbeat,
     recover_stale_runs,
     release_retryable,
     verify_claim_for_publication,
 )
 from pipelines.business_performance.runner import (
-    PipelineStageError,
+    ClaimOutcome,
     PermanentRunError,
+    PipelineStageError,
     RunnerStatus,
     TransientRunError,
+    execute_claim_with_renewal,
+    finalize_claim,
     run_once,
 )
 
 BASE_TIME = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
 MONDAY = date(2026, 7, 13)
+
+
+def _crash_during_stage(database_url: str, stage: str, week_start: date) -> None:
+    """Claim work, hold the singleton lock, write uncommitted data, then die."""
+    engine = create_engine(database_url, pool_pre_ping=True)
+    claim = claim_next(engine, now=datetime.now(UTC))
+    if claim is None or not record_stage(engine, claim, stage):
+        os._exit(98)
+    connection = engine.connect()
+    connection.execute(
+        text("SELECT pg_advisory_lock(:key)"),
+        {"key": REPORTING_PIPELINE_LOCK_KEY},
+    )
+    connection.commit()
+    connection.begin()
+    connection.execute(
+        text(
+            "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
+            "VALUES (:week_start, :reason)"
+        ),
+        {"week_start": week_start, "reason": f"kill-matrix-{stage}"},
+    )
+    os._exit(97)
 
 
 def _run_row(engine: Engine, run_id: UUID) -> dict[str, object]:
@@ -45,7 +75,9 @@ def _run_row(engine: Engine, run_id: UUID) -> dict[str, object]:
             connection.execute(
                 text("SELECT * FROM reporting.pipeline_runs WHERE id = :id"),
                 {"id": run_id},
-            ).mappings().one()
+            )
+            .mappings()
+            .one()
         )
 
 
@@ -56,11 +88,21 @@ def _claim_requested(engine: Engine, *, now: datetime = BASE_TIME) -> RunClaim:
     return claim
 
 
-def test_atomic_claim_allows_exactly_one_concurrent_worker(pipeline_engine: Engine) -> None:
+def test_finalize_claim_rejects_an_incomplete_outcome(pipeline_engine: Engine) -> None:
+    claim = _claim_requested(pipeline_engine)
+    with pytest.raises(RuntimeError, match="invalid claim outcome"):
+        finalize_claim(pipeline_engine, claim, ClaimOutcome(RunnerStatus.SUCCEEDED))
+
+
+def test_atomic_claim_allows_exactly_one_concurrent_worker(
+    pipeline_engine: Engine,
+) -> None:
     enqueue_cli(pipeline_engine, now=BASE_TIME - timedelta(seconds=2))
     enqueue_cli(pipeline_engine, now=BASE_TIME - timedelta(seconds=1))
     with ThreadPoolExecutor(max_workers=2) as pool:
-        claims = list(pool.map(lambda _: claim_next(pipeline_engine, now=BASE_TIME), range(2)))
+        claims = list(
+            pool.map(lambda _: claim_next(pipeline_engine, now=BASE_TIME), range(2))
+        )
     assert sum(claim is not None for claim in claims) == 1
     with pipeline_engine.connect() as connection:
         counts = connection.execute(
@@ -69,7 +111,9 @@ def test_atomic_claim_allows_exactly_one_concurrent_worker(pipeline_engine: Engi
     assert set(counts) == {("requested", 1), ("running", 1)}
 
 
-def test_manual_request_queues_behind_active_and_coalesces(pipeline_engine: Engine) -> None:
+def test_manual_request_queues_behind_active_and_coalesces(
+    pipeline_engine: Engine,
+) -> None:
     active = _claim_requested(pipeline_engine)
     requested = enqueue_manual(
         pipeline_engine,
@@ -99,7 +143,9 @@ def test_manual_request_queues_behind_active_and_coalesces(pipeline_engine: Engi
     assert next_claim.run_id == requested
 
 
-def test_persisted_requested_week_survives_claim_restart(pipeline_engine: Engine) -> None:
+def test_persisted_requested_week_survives_claim_restart(
+    pipeline_engine: Engine,
+) -> None:
     run_id = enqueue_manual(
         pipeline_engine,
         requested_by=str(uuid4()),
@@ -114,10 +160,14 @@ def test_persisted_requested_week_survives_claim_restart(pipeline_engine: Engine
     assert _run_row(pipeline_engine, run_id)["target_weeks"] == [MONDAY]
 
 
-def test_default_window_is_resolved_and_reset_clipped_at_claim(pipeline_engine: Engine) -> None:
+def test_default_window_is_resolved_and_reset_clipped_at_claim(
+    pipeline_engine: Engine,
+) -> None:
     with pipeline_engine.begin() as connection:
         connection.execute(
-            text("UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"),
+            text(
+                "UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"
+            ),
             {"reset_at": datetime(2026, 7, 6, 0, 0, tzinfo=UTC)},
         )
     claim = _claim_requested(pipeline_engine)
@@ -126,21 +176,35 @@ def test_default_window_is_resolved_and_reset_clipped_at_claim(pipeline_engine: 
 
 def test_frozen_or_non_monday_manual_week_is_rejected(pipeline_engine: Engine) -> None:
     with pytest.raises(QueueValidationError, match="ISO Monday"):
-        enqueue_manual(pipeline_engine, requested_by="admin", requested_week_start=date(2026, 7, 14))
+        enqueue_manual(
+            pipeline_engine,
+            requested_by="admin",
+            requested_week_start=date(2026, 7, 14),
+        )
     with pipeline_engine.begin() as connection:
         connection.execute(
-            text("UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"),
+            text(
+                "UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"
+            ),
             {"reset_at": datetime(2026, 7, 14, 0, 0, tzinfo=UTC)},
         )
     with pytest.raises(QueueValidationError, match="precedes last ledger reset"):
-        enqueue_manual(pipeline_engine, requested_by="admin", requested_week_start=MONDAY)
+        enqueue_manual(
+            pipeline_engine, requested_by="admin", requested_week_start=MONDAY
+        )
 
 
-def test_reset_after_enqueue_fails_request_instead_of_retrying_forever(pipeline_engine: Engine) -> None:
-    run_id = enqueue_manual(pipeline_engine, requested_by="admin", requested_week_start=MONDAY)
+def test_reset_after_enqueue_fails_request_instead_of_retrying_forever(
+    pipeline_engine: Engine,
+) -> None:
+    run_id = enqueue_manual(
+        pipeline_engine, requested_by="admin", requested_week_start=MONDAY
+    )
     with pipeline_engine.begin() as connection:
         connection.execute(
-            text("UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"),
+            text(
+                "UPDATE reporting.source_ledger_state SET last_reset_at = :reset_at WHERE id = 1"
+            ),
             {"reset_at": datetime(2026, 7, 14, 0, 0, tzinfo=UTC)},
         )
     assert claim_next(pipeline_engine, now=BASE_TIME) is None
@@ -176,7 +240,9 @@ def test_fifth_transient_failure_is_terminal(pipeline_engine: Engine) -> None:
         claim.target_weeks,
         5,
     )
-    assert release_retryable(pipeline_engine, final_claim, "DB_UNAVAILABLE", now=BASE_TIME)
+    assert release_retryable(
+        pipeline_engine, final_claim, "DB_UNAVAILABLE", now=BASE_TIME
+    )
     row = _run_row(pipeline_engine, claim.run_id)
     assert row["status"] == "failed"
     assert row["error_code"] == "MAX_ATTEMPTS_EXCEEDED"
@@ -185,46 +251,128 @@ def test_fifth_transient_failure_is_terminal(pipeline_engine: Engine) -> None:
 
 def test_stale_recovery_uses_lease_and_heartbeat_only(pipeline_engine: Engine) -> None:
     claim = _claim_requested(pipeline_engine)
-    assert heartbeat(pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=5), lease_seconds=600)
-    assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 0
+    assert heartbeat(
+        pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=5), lease_seconds=600
+    )
+    assert (
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 0
+    )
     assert _run_row(pipeline_engine, claim.run_id)["status"] == "running"
-    assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
+    assert (
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
+    )
     assert _run_row(pipeline_engine, claim.run_id)["status"] == "retryable"
 
 
-def test_stale_recovery_fails_max_attempt_and_never_moves_terminal_rows(pipeline_engine: Engine) -> None:
+@pytest.mark.parametrize(
+    ("stage", "week_start"),
+    [
+        ("extract", date(2026, 6, 22)),
+        ("transform", date(2026, 6, 29)),
+        ("load", date(2026, 7, 6)),
+    ],
+)
+def test_process_death_releases_lock_rolls_back_and_requeues_each_stage(
+    pipeline_engine: Engine,
+    database_url: str,
+    stage: str,
+    week_start: date,
+) -> None:
+    run_id = enqueue_cli(
+        pipeline_engine,
+        now=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    process = multiprocessing.get_context("spawn").Process(
+        target=_crash_during_stage,
+        args=(database_url, stage, week_start),
+    )
+    process.start()
+    process.join(timeout=15)
+    assert process.exitcode == 97
+
+    with pipeline_engine.connect() as connection:
+        assert connection.execute(
+            text("SELECT pg_try_advisory_lock(:key)"),
+            {"key": REPORTING_PIPELINE_LOCK_KEY},
+        ).scalar_one()
+        connection.execute(
+            text("SELECT pg_advisory_unlock(:key)"),
+            {"key": REPORTING_PIPELINE_LOCK_KEY},
+        )
+        assert connection.execute(
+            text(
+                "SELECT count(*) FROM reporting.incomplete_weeks "
+                "WHERE week_start = :week_start"
+            ),
+            {"week_start": week_start},
+        ).scalar_one() == 0
+
+    assert recover_stale_runs(
+        pipeline_engine,
+        now=datetime.now(UTC) + timedelta(minutes=11),
+    ) == 1
+    row = _run_row(pipeline_engine, run_id)
+    assert row["status"] == "retryable"
+    assert row["error_code"] == "STALE_ABANDONED"
+
+
+def test_stale_recovery_fails_max_attempt_and_never_moves_terminal_rows(
+    pipeline_engine: Engine,
+) -> None:
     claim = _claim_requested(pipeline_engine)
     with pipeline_engine.begin() as connection:
         connection.execute(
             text("UPDATE reporting.pipeline_runs SET attempt = 5 WHERE id = :id"),
             {"id": claim.run_id},
         )
-    assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
-    assert _run_row(pipeline_engine, claim.run_id)["error_code"] == "MAX_ATTEMPTS_EXCEEDED"
+    assert (
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+    )
+    assert (
+        _run_row(pipeline_engine, claim.run_id)["error_code"] == "MAX_ATTEMPTS_EXCEEDED"
+    )
     assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(days=1)) == 0
 
 
-def test_old_worker_cannot_heartbeat_publish_or_finalize_after_reclaim(pipeline_engine: Engine) -> None:
+def test_old_worker_cannot_heartbeat_publish_or_finalize_after_reclaim(
+    pipeline_engine: Engine,
+) -> None:
     claim = _claim_requested(pipeline_engine)
-    assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
-    assert heartbeat(pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=12)) is False
-    with pytest.raises(LeaseLostError):
-        with pipeline_engine.begin() as connection:
-            connection.execute(
-                text(
-                    "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
-                    "VALUES (:week_start, 'zombie-test')"
-                ),
-                {"week_start": MONDAY},
-            )
-            verify_claim_for_publication(connection, claim)
+    assert (
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+    )
+    assert (
+        heartbeat(pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=12))
+        is False
+    )
+    with pytest.raises(LeaseLostError), pipeline_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO reporting.incomplete_weeks (week_start, reason) "
+                "VALUES (:week_start, 'zombie-test')"
+            ),
+            {"week_start": MONDAY},
+        )
+        verify_claim_for_publication(connection, claim)
     with pipeline_engine.connect() as connection:
-        assert connection.execute(text("SELECT count(*) FROM reporting.incomplete_weeks")).scalar_one() == 0
-    assert finalize_success(pipeline_engine, claim, RunMetrics(1, 1, 1), now=BASE_TIME) is False
-    assert finalize_failure(pipeline_engine, claim, "LOAD_FAILED", now=BASE_TIME) is False
+        assert (
+            connection.execute(
+                text("SELECT count(*) FROM reporting.incomplete_weeks")
+            ).scalar_one()
+            == 0
+        )
+    assert (
+        finalize_success(pipeline_engine, claim, RunMetrics(1, 1, 1), now=BASE_TIME)
+        is False
+    )
+    assert (
+        finalize_failure(pipeline_engine, claim, "LOAD_FAILED", now=BASE_TIME) is False
+    )
 
 
-def test_runner_releases_claim_when_advisory_lock_is_held(pipeline_engine: Engine) -> None:
+def test_runner_releases_claim_when_advisory_lock_is_held(
+    pipeline_engine: Engine,
+) -> None:
     enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=1))
     with pipeline_engine.connect() as lock_connection:
         assert lock_connection.execute(
@@ -232,7 +380,9 @@ def test_runner_releases_claim_when_advisory_lock_is_held(pipeline_engine: Engin
             {"key": REPORTING_PIPELINE_LOCK_KEY},
         ).scalar_one()
         try:
-            result = run_once(pipeline_engine, lambda _engine, _claim: RunMetrics(0, 0, 0))
+            result = run_once(
+                pipeline_engine, lambda _engine, _claim: RunMetrics(0, 0, 0)
+            )
         finally:
             lock_connection.execute(
                 text("SELECT pg_advisory_unlock(:key)"),
@@ -249,7 +399,11 @@ def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None
     succeeded = run_once(pipeline_engine, lambda _engine, _claim: RunMetrics(3, 2, 1))
     assert succeeded.status == RunnerStatus.SUCCEEDED
     success_row = _run_row(pipeline_engine, UUID(succeeded.run_id or ""))
-    assert (success_row["rows_extracted"], success_row["rows_transformed"], success_row["rows_loaded"]) == (3, 2, 1)
+    assert (
+        success_row["rows_extracted"],
+        success_row["rows_transformed"],
+        success_row["rows_loaded"],
+    ) == (3, 2, 1)
 
     enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=2))
 
@@ -275,7 +429,7 @@ def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None
     unknown = run_once(pipeline_engine, unexpected)
     assert unknown.status == RunnerStatus.RETRYABLE
     unknown_row = _run_row(pipeline_engine, UUID(unknown.run_id or ""))
-    assert unknown_row["error_code"] == "LOAD_FAILED"
+    assert unknown_row["error_code"] == "INTERNAL_FAILED"
     assert "sensitive" not in str(unknown_row["error_summary"])
 
 
@@ -301,13 +455,65 @@ def test_runner_logs_only_safe_stage_failure_metadata(
 
 
 def test_worker_heartbeat_is_a_single_upserted_row(pipeline_engine: Engine) -> None:
-    record_worker_heartbeat(pipeline_engine, now=BASE_TIME)
+    record_worker_heartbeat(
+        pipeline_engine,
+        now=BASE_TIME,
+        last_progress_at=BASE_TIME,
+        orchestrator_healthy=True,
+    )
     record_worker_heartbeat(pipeline_engine, now=BASE_TIME + timedelta(seconds=10))
     with pipeline_engine.connect() as connection:
         row = connection.execute(
-            text("SELECT worker_name, heartbeat_at FROM reporting.worker_heartbeats")
+            text(
+                "SELECT worker_name, heartbeat_at, last_progress_at, orchestrator_healthy "
+                "FROM reporting.worker_heartbeats"
+            )
         ).one()
-    assert row == ("reporting", BASE_TIME + timedelta(seconds=10))
+    assert row == ("reporting", BASE_TIME + timedelta(seconds=10), BASE_TIME, True)
+
+
+def test_prefect_correlation_and_stage_updates_are_claim_token_guarded(
+    pipeline_engine: Engine,
+) -> None:
+    claim = _claim_requested(pipeline_engine)
+    flow_run_id = uuid4()
+    assert record_prefect_flow_run(pipeline_engine, claim, flow_run_id)
+    assert record_stage(
+        pipeline_engine, claim, "extract", now=BASE_TIME + timedelta(seconds=1)
+    )
+    with pipeline_engine.connect() as connection:
+        row = connection.execute(
+            text(
+                "SELECT prefect_flow_run_id, current_stage, stage_started_at "
+                "FROM reporting.pipeline_runs WHERE id = :id"
+            ),
+            {"id": claim.run_id},
+        ).one()
+    assert row == (flow_run_id, "extract", BASE_TIME + timedelta(seconds=1))
+    assert (
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+    )
+    assert record_stage(pipeline_engine, claim, "load") is False
+    assert record_prefect_flow_run(pipeline_engine, claim, uuid4()) is False
+
+
+def test_claim_renewal_runs_independently_of_executor_progress(
+    pipeline_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import time
+
+    claim = _claim_requested(pipeline_engine)
+    monkeypatch.setenv("REPORTING_HEARTBEAT_SECONDS", "0.01")
+
+    def slow_executor(_engine: Engine, _claim: RunClaim, abort: object) -> RunMetrics:
+        time.sleep(0.04)
+        assert not abort.is_set()  # type: ignore[attr-defined]
+        return RunMetrics(0, 0, 0)
+
+    outcome = execute_claim_with_renewal(pipeline_engine, slow_executor, claim)
+    assert outcome.status == RunnerStatus.SUCCEEDED
+    assert _run_row(pipeline_engine, claim.run_id)["heartbeat_at"] > BASE_TIME
 
 
 def test_runner_is_idle_when_queue_is_empty(pipeline_engine: Engine) -> None:

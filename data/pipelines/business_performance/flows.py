@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
+from threading import Event
 from typing import Final, cast
 from uuid import UUID
 
+import httpx
 from prefect import flow, task
+from prefect.client.orchestration import get_client
+from prefect.client.schemas.filters import FlowRunFilter, FlowRunFilterName
+from prefect.context import FlowRunContext, get_run_context
+from prefect.exceptions import MissingContextError, PrefectHTTPStatusError
+from prefect.states import Crashed
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -28,6 +37,7 @@ from .cache import (
     CacheConfigurationError,
     CacheParameters,
     cache_store_from_environment,
+    prefect_result_storage_from_environment,
     prefect_transformation_cache_key,
     transform_with_cache,
 )
@@ -37,8 +47,10 @@ from .queue import (
     LeaseLostError,
     RunClaim,
     RunMetrics,
+    claim_is_owned,
     engine_from_environment,
-    heartbeat,
+    record_prefect_flow_run,
+    record_stage,
     verify_claim_for_publication,
 )
 from .runner import PipelineStageError
@@ -333,16 +345,6 @@ def load_weekly_performance_report(rows: list[WeeklyPerformanceRow], claim: RunC
 
 
 @task(persist_result=False)
-def renew_pipeline_lease(claim: RunClaim) -> None:
-    engine = _engine()
-    try:
-        if not heartbeat(engine, claim):
-            raise LeaseLostError("pipeline run lease is no longer owned")
-    finally:
-        engine.dispose()
-
-
-@task(persist_result=False)
 def publish_run_summary(run_id: UUID, metrics: RunMetrics) -> None:
     if os.environ.get("REPORTING_EVAL_OUTPUT_ENABLED", "false").lower() != "true":
         return
@@ -373,7 +375,16 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
             error_type=type(exc).__name__,
             retryable=True,
         )
-    error_code: ErrorCode = "EXTRACT_FAILED" if stage == "extract" else "LOAD_FAILED"
+    if isinstance(exc, (PrefectHTTPStatusError, httpx.TransportError, httpx.TimeoutException)):
+        return PipelineStageError(
+            stage=stage,
+            error_code="ORCHESTRATION_FAILED",
+            error_type=type(exc).__name__,
+            retryable=True,
+        )
+    error_code: ErrorCode = "EXTRACT_FAILED" if stage == "extract" else "INTERNAL_FAILED"
+    if stage == "load":
+        error_code = "LOAD_FAILED"
     return PipelineStageError(
         stage=stage,
         error_code=error_code,
@@ -386,15 +397,40 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
 def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) -> RunMetrics:
     """Run ETL stages; the durable runner owns queue finalization."""
     try:
+        context = get_run_context()
+        if not isinstance(context, FlowRunContext) or context.flow_run is None:
+            raise MissingContextError("flow context required")
+        flow_run_id = UUID(str(context.flow_run.id))
+    except MissingContextError:
+        # Direct `.fn` calls are supported only for pure unit tests; the production
+        # executor always enters through Prefect and therefore always performs CAS.
+        flow_run_id = None
+    if flow_run_id is not None:
+        engine = _engine()
+        try:
+            if not record_prefect_flow_run(engine, claim, flow_run_id):
+                raise LeaseLostError("pipeline run lease is no longer owned")
+        finally:
+            engine.dispose()
+
+    _begin_stage(claim, "extract", enforce=flow_run_id is not None)
+    try:
         extracted = extract_warehouse_client_activity(claim.target_weeks)
     except LeaseLostError:
         raise
     except Exception as exc:
         raise _stage_failure("extract", exc) from None
 
-    renew_pipeline_lease(claim)
+    _begin_stage(claim, "transform", enforce=flow_run_id is not None)
     try:
-        transformed = transform_weekly_performance(
+        transform_flow = transform_weekly_performance
+        recovery_storage = prefect_result_storage_from_environment()
+        if recovery_storage is not None:
+            transform_flow = transform_flow.with_options(
+                persist_result=True,
+                result_storage=recovery_storage,
+            )
+        transformed = transform_flow(
             extracted,
             claim,
             last_reset_at=_last_reset_at(),
@@ -405,7 +441,7 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
     except Exception as exc:
         raise _stage_failure("transform", exc) from None
 
-    renew_pipeline_lease(claim)
+    _begin_stage(claim, "load", enforce=flow_run_id is not None)
     try:
         loaded = load_weekly_performance_report(transformed.rows, claim)
     except LeaseLostError:
@@ -424,5 +460,65 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
     return metrics
 
 
-def prefect_executor(_engine: Engine, claim: RunClaim) -> RunMetrics:
-    return weekly_warehouse_client_performance(claim, pipeline_version="engagement-6-phase-6")
+def _begin_stage(claim: RunClaim, stage: str, *, enforce: bool) -> None:
+    if not enforce:
+        return
+    engine = _engine()
+    try:
+        if not claim_is_owned(engine, claim) or not record_stage(engine, claim, stage):
+            raise LeaseLostError("pipeline run lease is no longer owned")
+    finally:
+        engine.dispose()
+
+
+def _flow_run_name(claim: RunClaim) -> str:
+    return f"business-performance-{claim.run_id}-attempt-{claim.attempt}"
+
+
+def prefect_executor(_engine: Engine, claim: RunClaim, abort: Event | None = None) -> RunMetrics:
+    if abort is not None and abort.is_set():
+        raise LeaseLostError("pipeline run lease is no longer owned")
+    configured = weekly_warehouse_client_performance.with_options(flow_run_name=_flow_run_name(claim))
+    return configured(claim, pipeline_version="engagement-6-phase-6")
+
+
+async def _close_orphan(flow_run_id: UUID | None, deterministic_name: str) -> bool:
+    async with get_client() as client:
+        candidates = []
+        if flow_run_id is not None:
+            try:
+                candidates = [await client.read_flow_run(flow_run_id)]
+            except Exception:
+                candidates = []
+        if not candidates:
+            candidates = await client.read_flow_runs(
+                flow_run_filter=FlowRunFilter(name=FlowRunFilterName(any_=[deterministic_name])),
+                limit=1,
+            )
+        if not candidates or candidates[0].state is None or candidates[0].state.is_final():
+            return False
+        await client.set_flow_run_state(candidates[0].id, Crashed(message="worker restart reconciliation"), force=True)
+        return True
+
+
+def reconcile_orphaned_flow_runs(engine: Engine) -> int:
+    """Close Prefect runs left non-terminal by a prior worker process."""
+    with engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT id, attempt, prefect_flow_run_id FROM reporting.pipeline_runs "
+                "WHERE pipeline_name = 'business_performance' AND status = 'running'"
+            )
+        ).mappings().all()
+    reconciled = 0
+    for row in rows:
+        run_id = UUID(str(row["id"]))
+        flow_run_id = UUID(str(row["prefect_flow_run_id"])) if row["prefect_flow_run_id"] else None
+        name = f"business-performance-{run_id}-attempt-{int(row['attempt'])}"
+        try:
+            reconciled += int(asyncio.run(_close_orphan(flow_run_id, name)))
+        except (PrefectHTTPStatusError, httpx.TransportError, httpx.TimeoutException) as exc:
+            logging.getLogger(__name__).warning(
+                "reporting_orphan_reconciliation_deferred error_type=%s", type(exc).__name__
+            )
+    return reconciled

@@ -19,11 +19,11 @@ from .schemas import (
     ReportingWorkerHealth,
     WeeklyPerformanceResponse,
 )
+from .status import WORKER_STALE_AFTER, QueueSignals, derive_queue_state
 
 logger = logging.getLogger(__name__)
 DALLAS_TIMEZONE = ZoneInfo("America/Chicago")
 DAILY_REFRESH_TIME = time(hour=7)
-WORKER_STALE_AFTER = timedelta(seconds=30)
 
 
 @dataclass
@@ -91,7 +91,13 @@ class ReportingService:
     def latest_runs(self) -> PipelineRunsResponse:
         try:
             now = utc_now()
-            last_seen_at = self.repository.worker_last_seen_at()
+            latest = self.repository.latest_run()
+            queued = self.repository.queued_runs()
+            worker = self.repository.worker_signals()
+            running = self.repository.running_signals()
+            last_seen_at = worker["heartbeat_at"] if worker is not None else None
+            last_progress_at = worker["last_progress_at"] if worker is not None else None
+            orchestrator_healthy = worker["orchestrator_healthy"] if worker is not None else None
             worker_status: Literal["healthy", "stale", "unknown"]
             if last_seen_at is None:
                 worker_status = "unknown"
@@ -100,10 +106,28 @@ class ReportingService:
             else:
                 worker_status = "healthy"
             return PipelineRunsResponse(
-                latest=self.repository.latest_run(),
-                queued=self.repository.queued_runs(),
+                queue_state=derive_queue_state(
+                    QueueSignals(
+                        heartbeat_at=last_seen_at,
+                        last_progress_at=last_progress_at,
+                        orchestrator_healthy=orchestrator_healthy,
+                        running_stage=running["current_stage"] if running is not None else None,
+                        stage_started_at=running["stage_started_at"] if running is not None else None,
+                        latest_status=latest.status if latest is not None else None,
+                        latest_next_attempt_at=latest.next_attempt_at if latest is not None else None,
+                        queued_count=len(queued),
+                    ),
+                    now=now,
+                ),
+                latest=latest,
+                queued=queued,
                 latest_successful=self.repository.latest_successful_run(),
-                worker=ReportingWorkerHealth(status=worker_status, last_seen_at=last_seen_at),
+                worker=ReportingWorkerHealth(
+                    status=worker_status,
+                    last_seen_at=last_seen_at,
+                    last_progress_at=last_progress_at,
+                    orchestrator_healthy=orchestrator_healthy,
+                ),
                 next_scheduled_refresh=self._next_refresh(now),
             )
         except SQLAlchemyError as exc:

@@ -4,11 +4,22 @@
 
 ## Status
 
-In progress — implementation complete; one approved production acceptance run remains. The
+In progress — dedicated Prefect production remediation Phases 0-4 are implemented and locally
+verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
+reporting and maintenance clients target it while `reporting.pipeline_runs` remains the sole
+dispatch authority. Continuous claim renewal, token-guarded Prefect correlation, stage progress,
+orchestrator health, orphan reconciliation, and a hard run watchdog are implemented through
+Alembic revision `20260716_0010`. Optional recovery-state persistence/backups, operator UX, and
+API-only run retention, optional R2 recovery results, and a pinned read-only Prefect database backup
+service are implemented; the absent-R2 path and an isolated scratch restore are locally verified.
+The API and Back Office expose six server-derived queue states, and Compose/release checks gate
+PostgreSQL state plus digest-mapped client/server compatibility before the reporting worker starts.
+External soak, production outage/restore, 48-hour headroom, and image-rollback acceptance gates
+remain owner-approved work. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
 reporting surface, declarative reporting/maintenance workers, production migration verifier,
 readiness probes, and automatic image rollback are implemented and locally verified through
-Alembic revision `20260715_0009`. Coolify no longer needs separate cron configuration. Before the
+Alembic revision `20260716_0010`. Coolify no longer needs separate cron configuration. Before the
 hardened workflow is enabled, rotate the previously exposed migration credential, grant the
 migration role database-level `CREATE`, and store the replacement once as the GitHub Production
 environment secret `MIGRATION_DATABASE_URL`. KPI consumers are Thomas Harry (CEO) and Ana

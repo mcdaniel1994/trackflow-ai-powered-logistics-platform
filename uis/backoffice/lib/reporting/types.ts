@@ -32,6 +32,7 @@ export interface LatestPipelineRun {
   attempt: number;
   rows_loaded: number | null;
   error_code: string | null;
+  next_attempt_at: string | null;
 }
 
 export interface QueuedPipelineRun {
@@ -48,12 +49,15 @@ export interface LatestSuccessfulRun {
 }
 
 export interface PipelineRunsStatus {
+  queue_state: "idle" | "processing" | "queued" | "retrying" | "stuck" | "unavailable";
   latest: LatestPipelineRun | null;
   queued: QueuedPipelineRun[];
   latest_successful: LatestSuccessfulRun | null;
   worker: {
     status: "healthy" | "stale" | "unknown";
     last_seen_at: string | null;
+    last_progress_at: string | null;
+    orchestrator_healthy: boolean | null;
   };
   next_scheduled_refresh: {
     local_time: "07:00";

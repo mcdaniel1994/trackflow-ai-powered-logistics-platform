@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from scripts.db_size_guard import guard_once
 from scripts.prune_business_events import prune_once as prune_business_events
+from scripts.prune_prefect_runs import prune_once as prune_prefect_runs
 from scripts.prune_telemetry_events import prune_once as prune_telemetry_events
 
 logger = logging.getLogger("central_api.maintenance_worker")
@@ -76,6 +77,13 @@ def run_worker(
             except Exception as exc:
                 scheduler.last_prune_date = None
                 _safe_failure("daily_prune", exc)
+            try:
+                deleted_prefect_runs = prune_prefect_runs()
+                logger.info("maintenance_prefect_retention_complete flow_runs=%s", deleted_prefect_runs)
+            except Exception as exc:
+                # Prefect history is not business authority. API outages never block
+                # TrackFlow retention or reporting work and are retried the next day.
+                _safe_failure("prefect_retention", exc)
         stop.wait(tick_seconds)
     logger.info("maintenance_worker_stopped")
 

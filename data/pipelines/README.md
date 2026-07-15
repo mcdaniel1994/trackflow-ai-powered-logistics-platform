@@ -8,9 +8,10 @@ Each subfolder or file under `data/pipelines/` should represent **one pipeline o
 - **Recommendation**: document pipelines as you add them—their goal, data sources and sinks, dependencies, and how to run them in development, testing, and production.
 
 Engagement 6 Phase 6 completes the local pipeline execution path under `business_performance/`:
-Prefect-as-library extraction/transform/load/finalization flows, transactional publication, and a
+in-process Prefect extraction/transform/load/finalization flows, transactional publication, and a
 one-hour application-managed S3-compatible cache selected by the documented GATE-8a spike. The
 durable queue remains PostgreSQL-owned, KPI business logic remains in the pure `data/process/`
 layer, and absent R2 configuration safely disables caching.
 The production Compose stack runs one long-lived worker instead of separate Coolify cron jobs;
-its writable Prefect state is isolated under `/tmp` in an otherwise read-only container.
+its Prefect client targets the private dedicated Server/PostgreSQL pair. The TrackFlow PostgreSQL
+queue remains authoritative and the read-only worker keeps only temporary client files under `/tmp`.

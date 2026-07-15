@@ -30,7 +30,7 @@ remain outstanding.
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 | [telemetry-inventory.md](telemetry-inventory.md) | Living reference | Every telemetry signal: implemented today vs. Engagement 6 vs. deferred, with fields, storage, retention, access, and evidence |
 | [operations-feed.md](operations-feed.md) | Portfolio-production | The live operations feed worker, its single-writer/kill-switch safety, telemetry enablement, and the database-size guard that bounds Supabase Free |
-| [business-performance-pipeline.md](business-performance-pipeline.md) | Declarative workers verified; production acceptance pending | Reporting worker, durable queue, R2 boundary, maintenance, recovery, and rollback |
+| [business-performance-pipeline.md](business-performance-pipeline.md) | Dedicated Prefect repository remediation verified; production acceptance pending | Reporting authority, Prefect durability, operator triage, upgrade, recovery, and rollback |
 
 ## Current Deployment Process (summary)
 

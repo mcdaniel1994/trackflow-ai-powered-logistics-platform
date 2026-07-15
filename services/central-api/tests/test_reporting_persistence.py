@@ -65,7 +65,14 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         "heartbeat_at",
         "lease_expires_at",
         "cache_nonce",
+        "prefect_flow_run_id",
+        "current_stage",
+        "stage_started_at",
     }.issubset(pipeline_columns)
+    heartbeat_columns = {
+        column["name"] for column in inspector.get_columns("worker_heartbeats", schema="reporting")
+    }
+    assert {"last_progress_at", "orchestrator_healthy"}.issubset(heartbeat_columns)
     with Session(engine) as session:
         rows = list(session.exec(sa_select(SourceLedgerState)).all())
         assert len(rows) == 1

@@ -30,7 +30,13 @@ Back Office. The production stack is verified on Coolify at
 `backoffice.forgehub.cloud`; deployment, rollback, and remaining operational
 gaps are documented in `docs/runbooks/`.
 
-**Engagement 6** is implementation-complete and awaiting one approved production acceptance run.
+**Engagement 6** dedicated-Prefect repository remediation is implemented through Phase 4. It adds
+a private, digest-pinned Prefect Server backed by its own PostgreSQL database plus
+continuous claim renewal, token-guarded Prefect correlation, stage progress, fail-closed
+orchestrator health, a hard run watchdog, optional R2 recovery results, API-only history retention,
+isolated daily database backups, server-derived operator states, and release startup guards.
+`reporting.pipeline_runs` remains the sole dispatch authority. Production soak, restore, outage,
+memory-headroom, and rollback acceptance gates remain owner-approved external work.
 It adds trustworthy telemetry, live inventory operations, durable weekly business reporting,
 always-on reporting and maintenance workers, approval-gated migrations, dependency-aware
 readiness, and automatic immutable-image rollback.
@@ -188,7 +194,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Production acceptance pending — telemetry, durable reporting, declarative workers, safe migrations/readiness/rollback |
+| 6 | Data pipelines & telemetry | 🚧 Dedicated Prefect remediation in progress — service/database wiring verified locally |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
 | 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
 | 9 | Workflow automation (n8n) | ⏳ Upcoming |

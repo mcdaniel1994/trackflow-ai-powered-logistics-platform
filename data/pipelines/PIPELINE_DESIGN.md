@@ -277,7 +277,40 @@ flowchart LR
 
 **Why technical telemetry stays separate:** it is deliberately best-effort (post-response, exception-swallowing, 7-day retention) so it can never slow or fail a business request. Authoritative business reporting needs the opposite properties. One system cannot honestly be both.
 
-**Prefect boundary (approved):** Prefect runs **only as a library inside the temporary dispatcher/runner container invocations**. There is no Prefect Cloud account, no permanent Prefect server, no Prefect-managed schedule, and no separate Prefect database — flow/task state beyond the current process is not relied upon; **TrackFlow PostgreSQL (`reporting.pipeline_runs` + the reporting tables) is the sole durable operational and business record.** R2 holds disposable cache bytes only (§9.4).
+**Prefect boundary (owner-approved amendment, July 15, 2026):** flows still execute in-process in
+the reporting worker, but their orchestration API is now a private, digest-pinned Prefect 3.7.8
+Server backed by a dedicated PostgreSQL 16 database. There is no Prefect Cloud account and no
+work-pool or Prefect-managed dispatch. **TrackFlow PostgreSQL `reporting.pipeline_runs` remains the
+sole business-work queue and dispatch authority**; Prefect state provides task-level recovery and
+history only. The dedicated Prefect database never shares TrackFlow/Supabase credentials or
+storage. R2 remains optional and cannot be a correctness dependency (§9.4).
+
+**Execution-hardening amendment (Phase 2):** each claimed row is executed through explicit
+claim/execute/finalize steps. A daemon renewal thread extends only the PostgreSQL lease while the
+flow runs; every correlation, stage, publication, and final transition remains claim-token CAS
+guarded. The worker probes the dedicated Prefect API before claiming, records
+`prefect_flow_run_id`, deterministic run name, `current_stage`, and truthful progress, reconciles
+orphaned non-terminal Prefect runs at startup, and terminates the process on a bounded run watchdog.
+Readiness treats fresh leases and real stage progress separately, so a hung stage cannot report
+healthy merely because its renewal thread is alive. Alembic revision `20260716_0010` adds only
+backward-compatible nullable/defaulted fields and the two fixed error codes.
+
+**Recovery and durability amendment (Phase 3):** when the reporting-only R2 configuration is
+complete, the transform subflow also persists Prefect recovery output beneath
+`prefect-results/recovery`; the application-managed cache remains the only cache correctness path.
+The maintenance worker deletes old terminal flow runs through the Prefect API and receives no
+Prefect database credential. A separate pinned PostgreSQL-based backup image uses the read-only
+`prefect_backup` role and distinct `PREFECT_BACKUP_R2_*` credentials to upload daily custom-format
+dumps beneath `prefect-backups/`, retain seven days, and sample database size. Fully absent R2 logs
+a fixed disabled notice and never blocks reporting.
+
+**Operator/release amendment (Phase 4):** Central API readiness and the reporting status endpoint
+call one server-side derivation for `idle`, `processing`, `queued`, `retrying`, `stuck`, and
+`unavailable`; the Back Office renders those states without reinterpreting queue internals. A
+healthy renewing lease cannot hide an overdue stage. Normal Compose startup runs a PostgreSQL table
+guard and a digest-mapped Prefect client/server compatibility guard, and `reporting-worker` depends
+on both completing successfully. Release verification checks the same static pinning contract;
+image rollback changes only `TRACKFLOW_IMAGE_TAG`, never the independent Prefect server/database.
 
 ### 5.1 `data/` packaging
 
@@ -567,13 +600,13 @@ Changed source data changes `source_content_digest` and therefore the key **imme
 - The idempotent database **load and publication tasks always execute**, cached or not — a cache hit skips recomputation, never publication.
 - A failed run leaves the previous successful report untouched and visible (§8.3): reporting rows change only inside a successful load transaction.
 
-### 9.6 Orchestration deployment — decision (approved)
+### 9.6 Orchestration deployment — amended production decision
 
 | Option | Verdict | Why |
 |---|---|---|
 | Prefect Cloud / work pools | **Rejected (final)** | External SaaS dependency and credential surface; contradicts the approved boundary |
-| Self-hosted permanent Prefect server + worker | **Rejected (final)** | Always-on containers + a second stateful store; `reporting.pipeline_runs` already provides durable state |
-| **Prefect-as-library + PostgreSQL queue + Coolify `*/5` dispatcher/runner (approved)** | **Adopt** | Matches every platform precedent; durable, recoverable, auditable in the system of record |
+| Self-hosted Prefect Server used as a second work queue | **Rejected (final)** | Work pools would create dual dispatch authority and conflict with `reporting.pipeline_runs` |
+| **In-process flows + dedicated private Prefect Server/PostgreSQL + TrackFlow queue (approved July 15)** | **Adopt** | Removes ephemeral subprocess-server churn while preserving PostgreSQL queue authority and image-only app rollback |
 
 ---
 

@@ -8,6 +8,111 @@ x-runtime: &runtime
     options: {max-size: "10m", max-file: "5"}
 
 services:
+  prefect-postgres:
+    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      POSTGRES_DB: prefect
+      POSTGRES_USER: prefect
+      POSTGRES_PASSWORD: ${PREFECT_DB_PASSWORD:?required}
+      PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
+    volumes:
+      - prefect-db:/var/lib/postgresql/data
+      - ./docker/prefect-postgres-init.sql:/docker-entrypoint-initdb.d/10-pg-trgm.sql:ro
+      - ./docker/prefect-postgres-backup-role.sh:/docker-entrypoint-initdb.d/20-backup-role.sh:ro
+    read_only: true
+    tmpfs: ["/tmp", "/var/run/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect && psql -U prefect -d prefect -tAc \"SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'\" | grep -qx 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "5"}
+    deploy:
+      resources:
+        limits: {cpus: "0.25", memory: 256M}
+
+  prefect-server:
+    <<: *runtime
+    image: ${PREFECT_SERVER_IMAGE:?required}
+    pull_policy: always
+    environment:
+      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:?required}@prefect-postgres:5432/prefect
+      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
+      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
+      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
+      PREFECT_HOME: /tmp/prefect
+      DO_NOT_TRACK: "1"
+    depends_on:
+      prefect-postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=5).read()"]
+      interval: 5s
+      timeout: 6s
+      retries: 60
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 512M}
+
+  # Approval-gated release guard. A missing table proves Prefect fell back from PostgreSQL.
+  prefect-postgres-guard:
+    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      PGPASSWORD: ${PREFECT_DB_PASSWORD:?required}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command:
+      [
+        "/bin/sh",
+        "-ec",
+        "test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_tables WHERE schemaname='public' AND tablename='flow_run'\")\" = 1 && test \"$(psql -h prefect-postgres -U prefect -d prefect -tAc \"SELECT count(*) FROM pg_extension WHERE extname='pg_trgm'\")\" = 1",
+      ]
+
+  prefect-version-guard:
+    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    environment:
+      PREFECT_SERVER_IMAGE_REF: ${PREFECT_SERVER_IMAGE:?required}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    command: [".venv/bin/python", "-m", "scripts.prefect_version_guard"]
+
+  prefect-db-backup:
+    <<: *runtime
+    build: {context: ., dockerfile: docker/prefect-db-backup.Dockerfile}
+    environment:
+      PGHOST: prefect-postgres
+      PGPORT: "5432"
+      PGDATABASE: prefect
+      PGUSER: prefect_backup
+      PGPASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
+      PREFECT_BACKUP_R2_BUCKET: ${PREFECT_BACKUP_R2_BUCKET:-}
+      PREFECT_BACKUP_R2_ENDPOINT: ${PREFECT_BACKUP_R2_ENDPOINT:-}
+      PREFECT_BACKUP_R2_ACCESS_KEY_ID: ${PREFECT_BACKUP_R2_ACCESS_KEY_ID:-}
+      PREFECT_BACKUP_R2_SECRET_ACCESS_KEY: ${PREFECT_BACKUP_R2_SECRET_ACCESS_KEY:-}
+      PREFECT_BACKUP_RETENTION_DAYS: ${PREFECT_BACKUP_RETENTION_DAYS:-7}
+      PREFECT_DB_DISK_WARNING_MB: ${PREFECT_DB_DISK_WARNING_MB:-1024}
+    depends_on:
+      prefect-postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "0.15", memory: 128M}
+
   identity:
     <<: *runtime
     image: ghcr.io/mcdaniel1994/trackflow-identity:${TRACKFLOW_IMAGE_TAG:?required}
@@ -111,6 +216,14 @@ services:
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       HOME: /tmp/trackflow
       PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
+      DATABASE_STATEMENT_TIMEOUT_MS: "15000"
+      REPORTING_HEARTBEAT_SECONDS: "60"
+      REPORTING_RUN_TIMEOUT_SECONDS: "1800"
+      REPORTING_STAGE_TIMEOUT_EXTRACT_SECONDS: "300"
+      REPORTING_STAGE_TIMEOUT_TRANSFORM_SECONDS: "300"
+      REPORTING_STAGE_TIMEOUT_LOAD_SECONDS: "300"
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
       PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
@@ -119,6 +232,10 @@ services:
       REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
       REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
       REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
+    depends_on:
+      prefect-server: {condition: service_healthy}
+      prefect-postgres-guard: {condition: service_completed_successfully}
+      prefect-version-guard: {condition: service_completed_successfully}
     read_only: true
     tmpfs: ["/tmp"]
     command:
@@ -151,6 +268,11 @@ services:
       BUSINESS_EVENT_RETENTION_WEEKS: ${BUSINESS_EVENT_RETENTION_WEEKS:-26}
       HOME: /tmp/trackflow
       PREFECT_HOME: /tmp/trackflow/prefect
+      PREFECT_API_URL: http://prefect-server:4200/api
+      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
+      PREFECT_RUN_RETENTION_DAYS: ${PREFECT_RUN_RETENTION_DAYS:-30}
+      DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
+      DATABASE_STATEMENT_TIMEOUT_MS: "15000"
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
       PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
@@ -202,3 +324,4 @@ services:
 
 volumes:
   identity-data:
+  prefect-db:

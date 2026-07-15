@@ -80,8 +80,12 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/runbooks/telemetry-inventory.md`.
   Production hardening lives in `data/pipelines/business_performance/worker.py`,
   `services/central-api/scripts/{maintenance_worker,production_migrate}.py`, the root Compose
-  files, and `.github/workflows/deploy-production.yml`. Implementation is complete; production
-  acceptance is still pending.
+  files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation now has
+  private Prefect Server/PostgreSQL wiring, a SQLite-fallback guard, independent claim renewal,
+  token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
+  a hard run watchdog, optional R2 recovery results, API-only retention, and an isolated read-only
+  database backup service, six server-derived operator states, and release startup guards verified
+  locally. Repository Phases 0-4 are complete; external production acceptance remains.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

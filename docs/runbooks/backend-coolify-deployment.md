@@ -69,11 +69,13 @@ Normal production releases use `.github/workflows/container-images.yml` and
    `sha-<40-lowercase-hex>` tag.
 4. Review and approve the waiting GitHub `production` Environment deployment.
 5. The workflow runs the target image's `central-api-migrate`, records before/after revisions,
-   verifies runtime grants, then mutates only the non-preview `TRACKFLOW_IMAGE_TAG`.
+   verifies runtime grants, statically checks the pinned Prefect client/server contract, then
+   mutates only the non-preview `TRACKFLOW_IMAGE_TAG`.
 6. It polls Coolify, then Back Office's Identity/Central readiness aggregate and expected
-   unauthenticated reporting protection. Deployment/readiness failure restores the prior image
-   without downgrading the database.
-7. Review the GitHub summary for SHA, revisions, readiness, smoke tests, and rollback state.
+   unauthenticated reporting protection. The reporting worker cannot start until the live Prefect
+   PostgreSQL-fallback and digest-mapped version guards pass. Deployment/readiness failure restores
+   the prior app image without changing Prefect Server or downgrading either database.
+7. Review the GitHub summary for SHA, revisions, Prefect guards, readiness, smoke tests, and rollback state.
 
 Before enabling the first run, create the GitHub `production` Environment with
 required reviewers. Store `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
@@ -105,9 +107,11 @@ the integration; do not use migrations or seeds as a credential test.
 ## Runtime topology
 
 Normal deployment starts `identity`, `central-api`, `backoffice`, `operations-feed`,
-`reporting-worker`, and `maintenance-worker`. Do not configure separate dispatcher, runner, prune,
-or size-guard cron jobs. Both worker services use one replica, runtime database credentials,
-read-only filesystems, `/tmp` tmpfs mounts, limits, and restart-on-failure.
+`reporting-worker`, `maintenance-worker`, private `prefect-server`/`prefect-postgres`, and the
+isolated `prefect-db-backup` service. The two one-shot Prefect guards must complete before the
+reporting worker starts. Do not configure separate dispatcher, runner, prune, backup, or size-guard
+cron jobs. Worker services use one replica, read-only filesystems, `/tmp` tmpfs mounts, limits, and
+restart-on-failure.
 
 ## Order
 

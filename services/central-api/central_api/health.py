@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,9 +13,9 @@ from sqlalchemy import text
 from sqlmodel import Session
 
 from .core.config import Settings
+from .domains.reporting.status import WORKER_STALE_AFTER, QueueSignals, derive_queue_state
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
-WORKER_STALE_SECONDS = 30
 REQUIRED_SKU_COLUMNS = {
     "id",
     "name",
@@ -93,15 +94,41 @@ def _check_runtime_reporting_access(session: Session, settings: Settings) -> Non
 
 
 def _check_reporting_worker(session: Session) -> None:
-    healthy = session.scalar(
+    worker = session.execute(
         text(
-            "SELECT heartbeat_at >= now() - make_interval(secs => :stale_seconds) "
+            "SELECT heartbeat_at, last_progress_at, orchestrator_healthy "
             "FROM reporting.worker_heartbeats WHERE worker_name = 'reporting'"
-        ),
-        {"stale_seconds": WORKER_STALE_SECONDS},
-    )
-    if healthy is not True:
+        )
+    ).mappings().one_or_none()
+    now = session.scalar(text("SELECT now()"))
+    if not isinstance(now, datetime):
         raise ReadinessFailure("reporting_worker")
+    if worker is None or worker["heartbeat_at"] is None or now - worker["heartbeat_at"] > WORKER_STALE_AFTER:
+        raise ReadinessFailure("reporting_worker")
+
+    running = session.execute(
+        text(
+            "SELECT current_stage, stage_started_at FROM reporting.pipeline_runs "
+            "WHERE pipeline_name = 'business_performance' AND status = 'running' "
+            "ORDER BY started_at LIMIT 1"
+        )
+    ).mappings().one_or_none()
+    queue_state = derive_queue_state(
+        QueueSignals(
+            heartbeat_at=worker["heartbeat_at"],
+            last_progress_at=worker["last_progress_at"],
+            orchestrator_healthy=worker["orchestrator_healthy"],
+            running_stage=running["current_stage"] if running is not None else None,
+            stage_started_at=running["stage_started_at"] if running is not None else None,
+        ),
+        now=now,
+    )
+    if queue_state == "unavailable":
+        raise ReadinessFailure("reporting_orchestrator")
+    if queue_state == "stuck" and running is not None:
+        raise ReadinessFailure("reporting_stage_stuck")
+    if queue_state == "stuck":
+        raise ReadinessFailure("reporting_progress")
 
 
 def check_readiness(session: Session, settings: Settings) -> None:

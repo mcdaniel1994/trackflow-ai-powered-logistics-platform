@@ -11,7 +11,9 @@
   incidents, and suppliers, with SQLModel, Alembic, and PostgreSQL; it verifies
   Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `compose.yaml` and `compose.coolify.yaml` define separate local and production
-  paths for Identity, Central API, and Back Office.
+  paths for Identity, Central API, Back Office, a private digest-pinned Prefect 3.7.8 Server,
+  dedicated PostgreSQL 16 orchestration state, reporting/maintenance workers, and an isolated
+  read-only Prefect database backup service.
 - The production stack is verified on Coolify at
   `https://backoffice.forgehub.cloud`. Back Office is the only public service;
   Identity and Central API remain private on the Coolify network. Supabase uses
@@ -22,8 +24,9 @@
   publishes Linux AMD64 commit-pinned images to GHCR.
 - `.github/workflows/deploy-production.yml` is the reusable and manually
   dispatchable, GitHub-Environment-gated path that preflights all three
-  immutable images, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, and polls the
-  deployment without running migrations, seeds, or automatic rollback. Coolify
+  immutable images, runs approval-gated migrations for releases, verifies the static Prefect
+  contract, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, polls readiness, and automatically
+  restores the prior app image on failure without downgrading databases. Coolify
   `4.1.2` and the GitHub Production environment are configured for this path;
   its first live approved run and rollback drill remain owner steps.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
@@ -79,6 +82,14 @@ trackflow/
 - `packages/shared` exposes TypeScript source directly. Next.js consumers transpile it with `transpilePackages`; future plain Node services may need a build step or service-side transpilation.
 - Public pages must comply with `docs/standards/visibility.md` sections 1-6 before merge.
 - Junecoast is the active visual palette across current TrackFlow UIs.
+- Engagement 6 business reporting uses TrackFlow PostgreSQL `reporting.pipeline_runs` as its sole
+  dispatch authority. Prefect has no work pool and owns only orchestration history/recovery state in
+  a separate database. The worker renews leases independently, records token-CAS correlation/stage
+  progress, fails closed on Prefect health, and is bounded by a hard watchdog. Optional R2 recovery
+  results and backups are non-authoritative and separately credentialed.
+- Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
+  `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
+  PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.
 
 ## Folder Boundaries
 
