@@ -14,6 +14,11 @@ API-only run retention, optional R2 recovery results, and a pinned read-only Pre
 service are implemented; the absent-R2 path and an isolated scratch restore are locally verified.
 The API and Back Office expose six server-derived queue states, and Compose/release checks gate
 PostgreSQL state plus digest-mapped client/server compatibility before the reporting worker starts.
+The first production startup on July 15 exposed Coolify translating PostgreSQL init-file bind mounts
+as directories. The repository hotfix bakes those files into the pinned database image, runs an
+idempotent bootstrap against every existing volume before Prefect starts, and separates container
+liveness from dependency-aware readiness. It is locally verified; approved production redeployment
+and external acceptance remain pending.
 External soak, production outage/restore, 48-hour headroom, and image-rollback acceptance gates
 remain owner-approved work. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office

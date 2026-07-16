@@ -35,10 +35,24 @@ def verify() -> tuple[VersionTuple, VersionTuple]:
     compose = (ROOT / "compose.coolify.yaml").read_text()
     required = (
         "PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://",
+        "prefect-postgres-bootstrap: {condition: service_completed_successfully}",
         "prefect-postgres-guard: {condition: service_completed_successfully}",
         "prefect-version-guard: {condition: service_completed_successfully}",
     )
-    if any(value not in compose for value in required) or "sqlite" in compose.lower():
+    forbidden = (
+        "./docker/prefect-postgres-init.sql:",
+        "./docker/prefect-postgres-backup-role.sh:",
+    )
+    postgres_dockerfile = (ROOT / "docker/prefect-postgres.Dockerfile").read_text()
+    central_api_dockerfile = (ROOT / "docker/central-api.Dockerfile").read_text()
+    if (
+        any(value not in compose for value in required)
+        or any(value in compose for value in forbidden)
+        or "sqlite" in compose.lower()
+        or not postgres_dockerfile.startswith("FROM postgres:16@sha256:")
+        or "docker/prefect-postgres-bootstrap.sh" not in postgres_dockerfile
+        or "/health/live" not in central_api_dockerfile
+    ):
         raise RuntimeError("Production Compose Prefect guard contract is invalid")
     return client, server
 

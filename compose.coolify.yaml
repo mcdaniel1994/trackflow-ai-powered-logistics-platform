@@ -9,7 +9,7 @@ x-runtime: &runtime
 
 services:
   prefect-postgres:
-    image: postgres:16@sha256:17e67d7b9890c99b055ba1e0d5c5be4ec27c9d3a72bda32db24a5e5d8a85af0c
+    build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
     environment:
@@ -19,12 +19,10 @@ services:
       PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
     volumes:
       - prefect-db:/var/lib/postgresql/data
-      - ./docker/prefect-postgres-init.sql:/docker-entrypoint-initdb.d/10-pg-trgm.sql:ro
-      - ./docker/prefect-postgres-backup-role.sh:/docker-entrypoint-initdb.d/20-backup-role.sh:ro
     read_only: true
     tmpfs: ["/tmp", "/var/run/postgresql"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect && psql -U prefect -d prefect -tAc \"SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'\" | grep -qx 1"]
+      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -34,6 +32,24 @@ services:
     deploy:
       resources:
         limits: {cpus: "0.25", memory: 256M}
+
+  # Idempotent deployment bootstrap repairs prerequisites on existing volumes.
+  prefect-postgres-bootstrap:
+    build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
+    environment:
+      PGHOST: prefect-postgres
+      PGPORT: "5432"
+      PGPASSWORD: ${PREFECT_DB_PASSWORD:?required}
+      POSTGRES_USER: prefect
+      POSTGRES_DB: prefect
+      PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
+    depends_on:
+      prefect-postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    restart: "no"
+    command: ["/usr/local/bin/prefect-postgres-bootstrap"]
 
   prefect-server:
     <<: *runtime
@@ -47,7 +63,7 @@ services:
       PREFECT_HOME: /tmp/prefect
       DO_NOT_TRACK: "1"
     depends_on:
-      prefect-postgres: {condition: service_healthy}
+      prefect-postgres-bootstrap: {condition: service_completed_successfully}
     read_only: true
     tmpfs: ["/tmp"]
     command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
@@ -106,7 +122,7 @@ services:
       PREFECT_BACKUP_RETENTION_DAYS: ${PREFECT_BACKUP_RETENTION_DAYS:-7}
       PREFECT_DB_DISK_WARNING_MB: ${PREFECT_DB_DISK_WARNING_MB:-1024}
     depends_on:
-      prefect-postgres: {condition: service_healthy}
+      prefect-postgres-bootstrap: {condition: service_completed_successfully}
     read_only: true
     tmpfs: ["/tmp"]
     deploy:

@@ -65,14 +65,29 @@ def test_central_api_image_includes_the_data_project() -> None:
 
 
 def test_dedicated_prefect_services_are_private_pinned_and_postgres_backed() -> None:
+    postgres_dockerfile = (REPO_ROOT / "docker/prefect-postgres.Dockerfile").read_text()
+    assert postgres_dockerfile.startswith("FROM postgres:16@sha256:")
+    assert "COPY --chmod=0444 docker/prefect-postgres-init.sql" in postgres_dockerfile
+    assert "COPY --chmod=0555 docker/prefect-postgres-backup-role.sh" in postgres_dockerfile
+
     for filename in ("compose.yaml", "compose.coolify.yaml"):
         compose_text = (REPO_ROOT / filename).read_text()
         postgres = _service_block(compose_text, "prefect-postgres")
+        bootstrap = _service_block(compose_text, "prefect-postgres-bootstrap")
         server = _service_block(compose_text, "prefect-server")
+        backup = _service_block(compose_text, "prefect-db-backup")
         reporting = _service_block(compose_text, "reporting-worker")
         maintenance = _service_block(compose_text, "maintenance-worker")
 
-        assert "postgres:16@sha256:" in postgres
+        assert "dockerfile: docker/prefect-postgres.Dockerfile" in postgres
+        assert "./docker/prefect-postgres-init.sql:" not in compose_text
+        assert "./docker/prefect-postgres-backup-role.sh:" not in compose_text
+        assert "pg_isready -U prefect -d prefect" in postgres
+        assert "pg_extension" not in postgres
+        assert "prefect-postgres: {condition: service_healthy}" in bootstrap
+        assert 'command: ["/usr/local/bin/prefect-postgres-bootstrap"]' in bootstrap
+        assert "prefect-postgres-bootstrap: {condition: service_completed_successfully}" in server
+        assert "prefect-postgres-bootstrap: {condition: service_completed_successfully}" in backup
         assert "PREFECT_API_DATABASE_CONNECTION_URL:" in server
         assert "postgresql+asyncpg://prefect:" in server
         assert "ports:" not in postgres
@@ -84,6 +99,22 @@ def test_dedicated_prefect_services_are_private_pinned_and_postgres_backed() -> 
 
     env_example = (REPO_ROOT / ".env.example").read_text()
     assert PREFECT_IMAGE_DIGEST in env_example
+
+
+def test_prefect_database_bootstrap_repairs_existing_volumes_idempotently() -> None:
+    script = (REPO_ROOT / "docker/prefect-postgres-bootstrap.sh").read_text()
+    assert "set -eu" in script
+    assert "--set=ON_ERROR_STOP=1" in script
+    assert "10-pg-trgm.sql" in script
+    assert "20-backup-role.sh" in script
+    assert "prefect_postgres_bootstrap=complete" in script
+
+
+def test_central_api_container_health_uses_liveness_not_dependency_readiness() -> None:
+    dockerfile = (REPO_ROOT / "docker/central-api.Dockerfile").read_text()
+    healthcheck = next(line for line in dockerfile.splitlines() if line.startswith("HEALTHCHECK"))
+    assert "/health/live" in healthcheck
+    assert "/health/ready" not in healthcheck
 
 
 def test_prefect_postgres_guard_rejects_sqlite_fallback() -> None:

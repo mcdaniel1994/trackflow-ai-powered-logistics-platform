@@ -2,11 +2,38 @@
 
 ## Status
 
-Production-verified on July 3, 2026 UTC (July 2 America/Chicago). Future production mutations
-still require the GitHub Production reviewer approval. The hardened release workflow now
+Base production deployment verified on July 3, 2026 UTC (July 2 America/Chicago). The first
+dedicated-Prefect production release on July 15 failed during Compose startup; the repository
+hotfix is implemented and awaiting an approved redeployment. Future production mutations still
+require the GitHub Production reviewer approval. The hardened release workflow now
 migrates, verifies grants, deploys declarative workers, polls dependency-aware readiness,
-smoke-tests unauthenticated protection, and restores the previous image tag on failure. Its first
-approved production run and live rollback drill remain pending.
+smoke-tests unauthenticated protection, and restores the previous image tag on failure.
+
+## July 15, 2026 Prefect startup incident
+
+The first dedicated-Prefect release reached Supabase migration `20260716_0010`, but the application
+stack did not become ready. Coolify materialized both relative file bind mounts intended for
+`/docker-entrypoint-initdb.d` as **directories**. PostgreSQL therefore started and accepted
+connections without creating `pg_trgm` or the `prefect_backup` role. Because the named data volume
+was already initialized, retries correctly logged `Skipping initialization` and could never repair
+those missing prerequisites. The extension-aware database health check stayed unhealthy, so the
+Prefect server, guards, and reporting worker remained blocked in `Created` state.
+
+The permanent safeguards are:
+
+- PostgreSQL bootstrap files are copied into a digest-pinned custom image; production startup no
+  longer relies on Coolify translating repository file bind mounts correctly.
+- A one-shot `prefect-postgres-bootstrap` service reapplies the idempotent extension and backup-role
+  setup on **every deployment**, including an already-initialized volume, before Prefect starts.
+- PostgreSQL container health proves only that PostgreSQL accepts connections. The bootstrap and
+  existing release guard separately prove the extension, role, and Prefect schema prerequisites.
+- The Central API image health check uses `/health/live`. The deployment workflow still checks
+  `/health/ready` after the complete dependency graph has started.
+- Regression tests reject init-script bind mounts, a missing bootstrap dependency, and use of
+  dependency-aware readiness as the container liveness probe.
+
+Do **not** delete or recreate `prefect-db` to recover this incident. The bootstrap is designed to
+repair that volume in place without touching Supabase or TrackFlow business data.
 
 ## Verified production record
 
@@ -52,7 +79,8 @@ approved production run and live rollback drill remain pending.
   but deployments are pinned to a commit.
 - Coolify runs Docker Compose interpolation with `build-time.env`. Every
   production variable referenced with `${NAME:?required}` must be available at
-  Buildtime and Runtime, even though this stack pulls prebuilt images. Keep both
+  Buildtime and Runtime. App services pull prebuilt images while supporting infrastructure images
+  may build from repository Dockerfiles. Keep both
   JWT values marked Multiline.
 - Keep Coolify native Git auto-deploy disabled. GitHub Actions publishes and
   preflights all three images before an approved deployment, and a native
@@ -108,7 +136,8 @@ the integration; do not use migrations or seeds as a credential test.
 
 Normal deployment starts `identity`, `central-api`, `backoffice`, `operations-feed`,
 `reporting-worker`, `maintenance-worker`, private `prefect-server`/`prefect-postgres`, and the
-isolated `prefect-db-backup` service. The two one-shot Prefect guards must complete before the
+isolated `prefect-db-backup` service. The one-shot PostgreSQL bootstrap must complete before Prefect
+Server or its backup service starts; the two one-shot Prefect guards must then complete before the
 reporting worker starts. Do not configure separate dispatcher, runner, prune, backup, or size-guard
 cron jobs. Worker services use one replica, read-only filesystems, `/tmp` tmpfs mounts, limits, and
 restart-on-failure.
@@ -146,6 +175,13 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 
 ## Troubleshooting
 
+- `prefect-postgres` is running and `pg_isready` succeeds, but `pg_trgm` or `prefect_backup` is
+  absent: inspect `prefect-postgres-bootstrap`. It must complete with the fixed token
+  `prefect_postgres_bootstrap=complete`. Do not wait for PostgreSQL's init directory to rerun and do
+  not delete the named volume.
+- A path under `/docker-entrypoint-initdb.d` appears as `drwx...` in a deployed container: stop and
+  treat it as a Compose/platform mount-translation defect. Required init files must be image-baked,
+  never production relative bind mounts.
 - `required variable TRACKFLOW_IMAGE_TAG is missing a value` before containers
   start means the variable is unavailable in Coolify's build phase. Enable both
   Buildtime and Runtime availability for every required Compose variable.
@@ -170,6 +206,12 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 Invalid tags and tags missing any manifest fail before mutation. Manual image rollback uses the
 same approval gate, skips migrations, and never downgrades the database. Every migration must
 preserve the previous image through expand/backfill/deploy/contract compatibility.
+
+An image rollback changes `TRACKFLOW_IMAGE_TAG`; it does **not** restore an earlier
+`compose.coolify.yaml`. If a release changes Compose topology and that topology is the failure,
+restoring the prior app image can fail in the same way. Recover by deploying a reviewed forward
+hotfix or by explicitly redeploying the prior repository revision through an owner-approved
+procedure. Never interpret a successful tag mutation as proof that Compose-level rollback occurred.
 
 No live automated rollback drill has run yet. With the accepted no-backup
 waiver, a database or Identity-volume loss is recovered by recreation rather

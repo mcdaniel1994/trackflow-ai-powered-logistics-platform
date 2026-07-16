@@ -12,13 +12,13 @@
   Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `compose.yaml` and `compose.coolify.yaml` define separate local and production
   paths for Identity, Central API, Back Office, a private digest-pinned Prefect 3.7.8 Server,
-  dedicated PostgreSQL 16 orchestration state, reporting/maintenance workers, and an isolated
-  read-only Prefect database backup service.
+  dedicated PostgreSQL 16 orchestration state, an image-baked idempotent database bootstrap,
+  reporting/maintenance workers, and an isolated read-only Prefect database backup service.
 - The production stack is verified on Coolify at
   `https://backoffice.forgehub.cloud`. Back Office is the only public service;
   Identity and Central API remain private on the Coolify network. Supabase uses
   separate runtime and migration roles through the IPv4 Supavisor Session
-  pooler, and the current schema is at Alembic revision `20260702_0003`.
+  pooler, and the current schema is at Alembic revision `20260716_0010`.
 - `.github/workflows/release-checks.yml` runs production-target lint, typing,
   tests/coverage, and builds before `.github/workflows/container-images.yml`
   publishes Linux AMD64 commit-pinned images to GHCR.
@@ -26,9 +26,12 @@
   dispatchable, GitHub-Environment-gated path that preflights all three
   immutable images, runs approval-gated migrations for releases, verifies the static Prefect
   contract, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, polls readiness, and automatically
-  restores the prior app image on failure without downgrading databases. Coolify
+  restores the prior app image on failure without downgrading databases. Image rollback does not
+  restore an older Compose topology, so Compose failures require a reviewed forward fix or an
+  explicitly approved prior-revision deployment. Coolify
   `4.1.2` and the GitHub Production environment are configured for this path;
-  its first live approved run and rollback drill remain owner steps.
+  its first live approved run exposed the July 15 Prefect init-mount defect; the repository hotfix
+  awaits approved redeployment and the rollback drill remains an owner step.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
@@ -90,6 +93,11 @@ trackflow/
 - Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
   `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
   PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.
+- Prefect PostgreSQL init files are copied into a digest-pinned custom image rather than mounted
+  from relative repository paths. A one-shot idempotent bootstrap runs after database liveness on
+  every deployment, repairs missing prerequisites on existing volumes, and gates Prefect Server and
+  backups. Central API container health uses `/health/live`; dependency-aware `/health/ready`
+  remains a release-level check after the full service graph starts.
 
 ## Folder Boundaries
 

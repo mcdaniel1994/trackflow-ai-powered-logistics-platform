@@ -25,5 +25,8 @@ def test_prefect_release_contract_is_static_and_live_guarded() -> None:
     compose = (root / "compose.coolify.yaml").read_text()
     assert "data/uv.lock" in script
     assert "PREFECT_SERVER_IMAGE" in script
+    assert "prefect-postgres-bootstrap: {condition: service_completed_successfully}" in compose
     assert "prefect-postgres-guard: {condition: service_completed_successfully}" in compose
     assert "prefect-version-guard: {condition: service_completed_successfully}" in compose
+    assert "./docker/prefect-postgres-init.sql:" not in compose
+    assert "./docker/prefect-postgres-backup-role.sh:" not in compose
