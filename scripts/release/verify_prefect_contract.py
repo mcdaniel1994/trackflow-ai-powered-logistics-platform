@@ -33,15 +33,31 @@ def verify() -> tuple[VersionTuple, VersionTuple]:
         raise RuntimeError("Pinned Prefect server must be the same major and not older than the client")
 
     compose = (ROOT / "compose.coolify.yaml").read_text()
+    worker = (ROOT / "data/pipelines/business_performance/worker.py").read_text()
     required = (
         "PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://",
         "prefect-postgres-bootstrap: {condition: service_completed_successfully}",
-        "prefect-postgres-guard: {condition: service_completed_successfully}",
-        "prefect-version-guard: {condition: service_completed_successfully}",
+        # The guards no longer gate startup, so the worker must enforce the same
+        # conditions itself before it can claim any work. Its credential is passed
+        # as discrete parts (a password may contain URL-reserved characters) and
+        # uses the CONNECT-only guard role, never the read-everything backup role.
+        "PREFECT_GUARD_DB_USER: prefect_guard",
+        "PREFECT_GUARD_DB_PASSWORD: ${PREFECT_GUARD_DB_PASSWORD",
+        "start_period:",
     )
     forbidden = (
         "./docker/prefect-postgres-init.sql:",
         "./docker/prefect-postgres-backup-role.sh:",
+        # `up -d` stays attached until a `service_completed_successfully`
+        # dependency exits. Gating the worker on the one-shot guards put them on
+        # Coolify's command boundary, where a slow guard was killed as exit 255
+        # with the containers removed by cleanup. Enforcement belongs in the
+        # worker's own startup guard, not in the deploy critical path.
+        "prefect-postgres-guard: {condition: service_completed_successfully}",
+        "prefect-version-guard: {condition: service_completed_successfully}",
+        # The guard credential must never be interpolated into a DSN string.
+        "PREFECT_GUARD_DATABASE_URL:",
+        "prefect_backup:${PREFECT_BACKUP_DB_PASSWORD",
     )
     postgres_dockerfile = (ROOT / "docker/prefect-postgres.Dockerfile").read_text()
     central_api_dockerfile = (ROOT / "docker/central-api.Dockerfile").read_text()
@@ -51,7 +67,9 @@ def verify() -> tuple[VersionTuple, VersionTuple]:
         or "sqlite" in compose.lower()
         or not postgres_dockerfile.startswith("FROM postgres:16@sha256:")
         or "docker/prefect-postgres-bootstrap.sh" not in postgres_dockerfile
+        or "docker/prefect-postgres-guard.sh" not in postgres_dockerfile
         or "/health/live" not in central_api_dockerfile
+        or "verify_startup_contract()" not in worker
     ):
         raise RuntimeError("Production Compose Prefect guard contract is invalid")
     return client, server

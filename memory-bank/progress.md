@@ -39,11 +39,17 @@
   worker prunes old terminal runs through the API only, and a pinned read-only backup service creates
   daily custom-format dumps with distinct `PREFECT_BACKUP_R2_*` credentials. The absent-R2 path and
   an isolated scratch restore are locally verified. The reporting API and Back Office now share six
-  server-derived queue states, and one-shot PostgreSQL/version guards block worker startup on SQLite
-  fallback or incompatible server/client versions. The July 15 first production startup exposed
+  server-derived queue states, and the reporting worker's own fail-closed startup guard blocks it on
+  SQLite fallback or incompatible server/client versions. The July 15 first production startup exposed
   Coolify translating PostgreSQL init-file bind mounts into directories; the hotfix now bakes those
   files into the pinned database image, repairs existing volumes through an idempotent one-shot
-  bootstrap, and keeps Central API container liveness independent of reporting readiness. Approved
+  bootstrap, and keeps Central API container liveness independent of reporting readiness. The hotfix
+  redeployment then ended as Coolify exit 255 — the SSH command boundary, not a guard rejection
+  (a real guard failure exits 1 in ~13s). `up -d` stays attached until every
+  `service_completed_successfully` dependency exits, so gating the worker on the one-shot guards put
+  them on the deploy critical path. The guards now report without gating startup, enforcement moved
+  into the worker, guards emit fixed tokens, and `scripts/release/measure_compose_startup.sh` makes
+  the attach time measurable (18s chain against ~3GB of per-deployment pulls). Approved
   redeployment plus external production soak, outage, restore,
   48-hour headroom, scheduled-run, and image-rollback acceptance measurements remain.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with

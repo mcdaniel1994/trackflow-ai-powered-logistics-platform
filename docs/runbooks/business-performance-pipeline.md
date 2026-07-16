@@ -162,16 +162,21 @@ Prefect server/database changes are independent infrastructure changes, not ordi
 They require owner approval and a maintenance window:
 
 1. Confirm the proposed server release supports PostgreSQL and is the same major as the intended
-   client. Add its exact image digest/version mapping to `prefect_version_guard.py`; never use a
-   floating tag.
+   client. Add its exact image digest/version mapping to `KNOWN_SERVER_DIGESTS` in
+   `data/pipelines/business_performance/prefect_version.py`; never use a floating tag. Both the
+   `prefect-version-guard` container and the reporting worker's startup guard read that one mapping,
+   so an unlisted digest fails closed in both.
 2. Produce and verify a fresh `prefect-backups/` dump. Record current server image digest, client
    lock version, database size, and `/api/health` result.
 3. Stop reporting and maintenance clients. Change only `PREFECT_SERVER_IMAGE` first and start
    `prefect-postgres` plus `prefect-server`. Prefect 3.7.8's observed `server start` path applies its
    schema migrations; for a future version, confirm that release's documented migration behavior
    before the window and use its explicit database-upgrade command if required.
-4. Require `/api/health`, `prefect-postgres-guard`, and `prefect-version-guard` to pass. Then deploy
-   any app image with the compatible Prefect client and start clients.
+4. Require `/api/health` plus the fixed success tokens from both guards —
+   `prefect_postgres_guard=complete` and `prefect_version_guard_complete`. The guards report but no
+   longer gate startup, so read their logs rather than inferring success from the stack coming up.
+   Then deploy any app image with the compatible Prefect client and start clients; each worker logs
+   `reporting_worker_startup_guard=complete` once its own fail-closed check passes.
 5. Run one manual report and verify correlation/stage fields. Keep `reporting.pipeline_runs` as the
    only work authority throughout.
 
