@@ -35,6 +35,110 @@ The permanent safeguards are:
 Do **not** delete or recreate `prefect-db` to recover this incident. The bootstrap is designed to
 repair that volume in place without touching Supabase or TrackFlow business data.
 
+## July 15, 2026 deployment exit 255 (bind-mount hotfix redeployment)
+
+The redeployment carrying the bootstrap hotfix started the stack correctly — `prefect-postgres`
+healthy, bootstrap exited 0, `prefect-server` healthy, Central API and Identity healthy, Back Office
+started, and both one-shot guards started. Coolify's Compose command then ended with **exit 255** and
+the resource went to `Exited`.
+
+**Exit 255 is not a guard rejection.** Local reproduction measured a genuine guard failure returning
+`up -d` exit **1** within 13s, with a clear `dependency failed to start` message. 255 is SSH's
+"command aborted" code, and Coolify runs its Compose command over SSH under a bounded timeout.
+
+The cause was structural, not a specific slow guard. `docker compose up -d` stays attached until
+every `depends_on` condition resolves — including each `service_completed_successfully` one-shot.
+`reporting-worker` gated on both guards, so the whole guard chain was charged against Coolify's
+command boundary. Reproduction confirmed the signature exactly: with a deliberately slow guard, the
+command is killed at the boundary and `reporting-worker` is left in `created` — which is why the
+production log records the guards starting but never mentions `reporting-worker` at all.
+
+Measured locally with `scripts/release/measure_compose_startup.sh` (see "Measuring startup" below).
+**These numbers are fresh volumes with images already present locally** — they do not include image
+pull or build:
+
+| Phase | Fresh volumes, images already local |
+|---|---|
+| `prefect-postgres` healthy | 5s |
+| bootstrap exit | <1s |
+| `prefect-server` healthy (first-boot Alembic migration) | 10s |
+| **total `up -d` attach (measured success path)** | **18s** |
+
+The chain itself is not slow. The budget is consumed by images: ~3GB across `prefecthq/prefect`
+(1.24GB), the Central API image (702MB) and the `postgres:16` build base (663MB), and `pull_policy:
+always` re-checks them on every deployment. Image time is charged to the same Coolify command, before
+the chain starts, and is not measured by the harness.
+
+Distinguish two numbers when reasoning about the budget:
+
+- **Measured success path — ~18s.** The chain, images already local.
+- **Worst-case health ceiling — ~150s.** `prefect-server`'s `start_period: 60s` plus
+  `interval: 5s x retries: 18` is how long Docker waits before declaring it unhealthy. `up -d` blocks
+  on it for `reporting-worker`.
+
+The 150s ceiling being under ~180s does **not** on its own prove a deployment fits Coolify's
+boundary: pull/build time comes first and is unbounded by anything here. Treat image size and
+`pull_policy: always` as the primary budget risk, not the health ceiling.
+
+The permanent safeguards are:
+
+- **The guards no longer gate `up -d`.** `reporting-worker` does not depend on them. They still run
+  and report on every deployment, but nothing blocks on their exit.
+- **`reporting-worker` enforces the identical conditions itself**, fail-closed, in a bounded startup
+  guard (`data/pipelines/business_performance/startup_guard.py`) before it can claim any work. A
+  rejection logs `reporting_worker_startup_guard=failed reason=<fixed>` and exits non-zero, so
+  `restart: on-failure` retries one container instead of failing the deployment.
+- **A dedicated `prefect_guard` role** backs that check. Credential isolation is preserved: the guard
+  needs only `pg_catalog`, which PUBLIC can read, so the role is granted `CONNECT` and nothing else
+  and cannot read Prefect state. It is deliberately **not** `prefect_backup` — that role holds
+  `SELECT ON ALL TABLES` and exists for the backup service; a credential handed to a long-running
+  application worker must not carry read access to every Prefect table. `PREFECT_GUARD_DB_PASSWORD`
+  is a distinct secret, and the worker receives host/port/database/user/password as discrete Compose
+  variables rather than an interpolated URL, so reserved characters in the password cannot corrupt it.
+- **`prefect-version-guard` no longer waits on `prefect-server`.** It is a static digest/version
+  comparison that never contacts the server; that dependency only added server-boot time.
+- **The PostgreSQL guard retries within a deadline** instead of firing once. `prefect-server` reports
+  healthy as soon as its API binds, which does not prove its migration created `flow_run`; a single
+  shot raced that window.
+- **Every guard emits a fixed token** (`prefect_postgres_guard=`, `prefect_version_guard=`) on both
+  success and failure, so a future failure names the exact guard rather than ending as opaque 255.
+- **The release now measures the guard outcome** via `scripts.verify_reporting_startup` against live
+  worker heartbeat state, replacing a hard-coded `PREFECT_GUARD_RESULT=passed`.
+
+Note that `exclude_from_hc` is **not** a remedy here. It is a Coolify key that Docker Compose rejects
+outright (`additional properties 'exclude_from_hc' not allowed`), so Coolify strips it before writing
+the deployable file. Compose never sees it and it cannot affect `depends_on` startup blocking.
+
+### Forensics caveat
+
+Coolify removes the deployment's containers during failed-deployment cleanup. After this failure no
+TrackFlow container, exited container, or Compose project remained, so container logs, exit codes and
+post-failure state were unrecoverable. **Absent containers are evidence of cleanup, not evidence that
+they were never created** — the deployment log is authoritative that they started. Do not spend time
+hunting for them; reproduce locally with the harness below instead.
+
+### Measuring startup
+
+`scripts/release/measure_compose_startup.sh` brings the stack up in an isolated Compose project,
+enforces a wall-clock budget matching Coolify's approximate boundary, and reports per-service exit
+codes, health, and event-derived phase timings. It is an operator tool, deliberately not wired into
+CI, where Docker startups would add minutes to every run.
+
+**It runs `down --volumes`.** Give it a *disposable* environment file with throwaway credentials —
+never production values, and never the repository `.env`, which it refuses outright. It also refuses
+the real project names (`trackflow-production`, `trackflow`, `trackflow-local`, the Coolify resource
+UUID), refuses a `DATABASE_URL` that is not clearly local/disposable, generates a unique project name
+per run, never prunes or removes images, and cleans up only the project it created.
+
+```bash
+cp .env.example probe.env   # then replace every credential with a throwaway value
+scripts/release/measure_compose_startup.sh --env-file probe.env --budget 180
+```
+
+Its "cold" mode means **fresh volumes with images already cached**, which is what the 18s figure
+above measures. It is not a cache-free deployment: to reason about a true first deploy, add image
+pull/build time, which the harness does not capture.
+
 ## Verified production record
 
 - Public entrypoint: `https://backoffice.forgehub.cloud`; Identity and Central
@@ -137,8 +241,10 @@ the integration; do not use migrations or seeds as a credential test.
 Normal deployment starts `identity`, `central-api`, `backoffice`, `operations-feed`,
 `reporting-worker`, `maintenance-worker`, private `prefect-server`/`prefect-postgres`, and the
 isolated `prefect-db-backup` service. The one-shot PostgreSQL bootstrap must complete before Prefect
-Server or its backup service starts; the two one-shot Prefect guards must then complete before the
-reporting worker starts. Do not configure separate dispatcher, runner, prune, backup, or size-guard
+Server or its backup service starts. The two one-shot Prefect guards report on every deployment but
+must **not** gate the reporting worker: `up -d` stays attached until a `service_completed_successfully`
+dependency exits, which is what ended the redeployment as exit 255. The worker enforces the same
+conditions fail-closed at its own startup instead. Do not configure separate dispatcher, runner, prune, backup, or size-guard
 cron jobs. Worker services use one replica, read-only filesystems, `/tmp` tmpfs mounts, limits, and
 restart-on-failure.
 
@@ -182,6 +288,19 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 - A path under `/docker-entrypoint-initdb.d` appears as `drwx...` in a deployed container: stop and
   treat it as a Compose/platform mount-translation defect. Required init files must be image-baked,
   never production relative bind mounts.
+- Coolify's Compose command ends with **exit 255** and the resource shows `Exited`: the command was
+  killed at Coolify's SSH boundary, not rejected by a guard — a real guard failure returns exit 1
+  quickly with `dependency failed to start`. Look for something new that `up -d` blocks on: a
+  `service_completed_successfully` dependency, a `service_healthy` dependency whose healthcheck
+  ceiling is long, or image pull/build time. Reproduce with
+  `scripts/release/measure_compose_startup.sh`; do not hunt for the containers, Coolify's cleanup has
+  already removed them.
+- `reporting-worker` restarts repeatedly logging `reporting_worker_startup_guard=failed reason=<slug>`:
+  its fail-closed startup guard is rejecting the deployment, and the slug names the cause.
+  `pg_trgm_missing` points at the bootstrap; `flow_run_table_missing` means Prefect never migrated
+  against this database (a SQLite fallback); `server_digest_not_approved` or `server_major_mismatch`
+  mean the pinned server image and the app's Prefect client disagree. The worker never claims work in
+  this state, which is intended — fix the cause rather than bypassing the guard.
 - `required variable TRACKFLOW_IMAGE_TAG is missing a value` before containers
   start means the variable is unavailable in Coolify's build phase. Enable both
   Buildtime and Runtime availability for every required Compose variable.

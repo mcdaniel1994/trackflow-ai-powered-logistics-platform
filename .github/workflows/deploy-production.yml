@@ -137,6 +137,18 @@ jobs:
           CAPTURE_PREVIOUS_IMAGE_TAG: "true"
         run: python scripts/release/coolify_release.py
 
+      # coolify_release.py polls until the deployment finishes, so by this point
+      # Compose has replaced the containers. Any heartbeat at or after this instant
+      # must come from the new reporting worker — the replaced one cannot write.
+      - name: Record post-deployment verification boundary
+        if: steps.coolify_deploy.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          boundary="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "REPORTING_STARTUP_MIN_HEARTBEAT_AT=$boundary" >> "$GITHUB_ENV"
+          echo "Verification boundary: $boundary"
+
       - name: Poll application health and unauthenticated protection
         id: release_verification
         if: steps.coolify_deploy.outcome == 'success'
@@ -160,9 +172,6 @@ jobs:
             exit 1
           fi
           echo "READINESS_RESULT=passed" >> "$GITHUB_ENV"
-          # reporting-worker cannot start until the PostgreSQL and live-version
-          # Compose guards complete, and Central API readiness requires its heartbeat.
-          echo "PREFECT_GUARD_RESULT=passed" >> "$GITHUB_ENV"
           echo "SMOKE_RESULT=failed" >> "$GITHUB_ENV"
           status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
             --max-time 10 "$BACKOFFICE_BASE_URL/api/reporting/pipeline-runs/latest")"
@@ -172,9 +181,39 @@ jobs:
           fi
           echo "SMOKE_RESULT=passed" >> "$GITHUB_ENV"
 
+      # Measures the guard outcome instead of asserting it. Compose no longer
+      # gates reporting-worker on the one-shot guards, so guard success is proven
+      # by the worker reaching its poll loop past its own fail-closed startup
+      # guard and heartbeating with a healthy orchestrator.
+      - name: Verify Prefect startup guards from live worker state
+        id: prefect_guard_verification
+        if: steps.release_verification.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "PREFECT_GUARD_RESULT=failed" >> "$GITHUB_ENV"
+          output="$RUNNER_TEMP/prefect-guard.log"
+          # The script owns its own bounded poll: the worker restarts on-failure and
+          # needs a heartbeat interval or two past the boundary before a verdict.
+          if ! docker run --rm --pull=always --read-only --tmpfs /tmp \
+            --env APP_ENV=production \
+            --env DATABASE_URL="$MIGRATION_DATABASE_URL" \
+            --env REPORTING_STARTUP_MIN_HEARTBEAT_AT="$REPORTING_STARTUP_MIN_HEARTBEAT_AT" \
+            --env REPORTING_STARTUP_TIMEOUT_SECONDS=300 \
+            "ghcr.io/mcdaniel1994/trackflow-central-api:$IMAGE_TAG" \
+            .venv/bin/python -m scripts.verify_reporting_startup > "$output" 2>&1
+          then
+            cat "$output"
+            echo "Reporting worker did not clear its Prefect startup guard." >&2
+            exit 1
+          fi
+          cat "$output"
+          echo "PREFECT_GUARD_RESULT=passed" >> "$GITHUB_ENV"
+
       - name: Restore previous image after deployment or health failure
         id: automatic_rollback
-        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure' || steps.prefect_guard_verification.outcome == 'failure'
         continue-on-error: true
         shell: bash
         run: |
@@ -194,7 +233,7 @@ jobs:
           echo "ROLLBACK_RESULT=succeeded" >> "$GITHUB_ENV"
 
       - name: Fail an unsuccessful release
-        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure' || steps.prefect_guard_verification.outcome == 'failure'
         shell: bash
         run: |
           if [[ "${{ steps.automatic_rollback.outcome }}" == "failure" ]]; then

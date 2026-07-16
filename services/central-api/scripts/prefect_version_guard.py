@@ -1,42 +1,42 @@
-"""Fail startup when the app's Prefect client is newer than its dedicated server."""
+"""Fail startup when the app's Prefect client is newer than its dedicated server.
+
+The compatibility rules live in `pipelines.business_performance.prefect_version`
+so the reporting worker's startup guard enforces the identical logic. This module
+is the container entrypoint over them.
+"""
 
 from __future__ import annotations
 
-import importlib.metadata
-import os
-import re
+import sys
 
-from packaging.version import Version
+from pipelines.business_performance.prefect_version import (
+    KNOWN_SERVER_DIGESTS,
+    GuardFailure,
+    client_version,
+    server_version,
+    verify_compatibility,
+)
 
-KNOWN_SERVER_DIGESTS = {
-    "d4d142f1426ed0e8d7f48b3cc730f7b0469dcbcaf720959bb678f4cec3e5c3cc": Version("3.7.8")
-}
-
-
-def server_version() -> Version:
-    image_ref = os.environ.get("PREFECT_SERVER_IMAGE_REF", "")
-    match = re.fullmatch(
-        r"prefecthq/prefect:([0-9]+\.[0-9]+\.[0-9]+)-python3\.11@sha256:([0-9a-f]{64})",
-        image_ref,
-    )
-    if match is None:
-        raise RuntimeError("Prefect server image reference is invalid")
-    tagged = Version(match.group(1))
-    mapped = KNOWN_SERVER_DIGESTS.get(match.group(2))
-    if mapped is None or mapped != tagged:
-        raise RuntimeError("Prefect server digest is not approved for its tagged version")
-    return mapped
-
-
-def verify_compatibility(*, client: Version, server: Version) -> None:
-    if server.major != client.major or server < client:
-        raise RuntimeError("Prefect server must be the same major and not older than the client")
+__all__ = [
+    "KNOWN_SERVER_DIGESTS",
+    "GuardFailure",
+    "client_version",
+    "main",
+    "server_version",
+    "verify_compatibility",
+]
 
 
 def main() -> None:
-    client = Version(importlib.metadata.version("prefect"))
-    server = server_version()
-    verify_compatibility(client=client, server=server)
+    try:
+        client = client_version()
+        server = server_version()
+        verify_compatibility(client=client, server=server)
+    except GuardFailure as failure:
+        # A fixed token so a failed deployment names the guard that rejected it
+        # instead of surfacing only an opaque non-zero exit.
+        print(f"prefect_version_guard=failed reason={failure.reason}")
+        sys.exit(1)
     print(f"prefect_version_guard_complete client={client} server={server}")
 
 

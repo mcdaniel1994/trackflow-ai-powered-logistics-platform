@@ -160,8 +160,21 @@ def _stop(stop: Event) -> Callable[[int, FrameType | None], None]:
 def main() -> None:
     """Run one single-concurrency worker until SIGTERM or SIGINT."""
     from .flows import prefect_executor
+    from .startup_guard import StartupGuardFailure, verify_startup_contract
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s", force=True)
+
+    # Compose no longer gates this container on the Prefect guards, so the same
+    # conditions are enforced here before any work can be claimed. Exiting
+    # non-zero restarts this worker under `restart: on-failure` rather than
+    # letting it process against a database Prefect never migrated.
+    try:
+        verify_startup_contract()
+    except StartupGuardFailure as failure:
+        logger.critical("reporting_worker_startup_guard=failed reason=%s", failure.reason)
+        raise SystemExit(1) from None
+    logger.info("reporting_worker_startup_guard=complete")
+
     stop = Event()
     signal.signal(signal.SIGTERM, _stop(stop))
     signal.signal(signal.SIGINT, _stop(stop))

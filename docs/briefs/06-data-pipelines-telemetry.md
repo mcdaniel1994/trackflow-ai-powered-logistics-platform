@@ -12,12 +12,20 @@ orchestrator health, orphan reconciliation, and a hard run watchdog are implemen
 Alembic revision `20260716_0010`. Optional recovery-state persistence/backups, operator UX, and
 API-only run retention, optional R2 recovery results, and a pinned read-only Prefect database backup
 service are implemented; the absent-R2 path and an isolated scratch restore are locally verified.
-The API and Back Office expose six server-derived queue states, and Compose/release checks gate
-PostgreSQL state plus digest-mapped client/server compatibility before the reporting worker starts.
+The API and Back Office expose six server-derived queue states, and the reporting worker gates its own
+startup on PostgreSQL state plus digest-mapped client/server compatibility.
 The first production startup on July 15 exposed Coolify translating PostgreSQL init-file bind mounts
 as directories. The repository hotfix bakes those files into the pinned database image, runs an
 idempotent bootstrap against every existing volume before Prefect starts, and separates container
-liveness from dependency-aware readiness. It is locally verified; approved production redeployment
+liveness from dependency-aware readiness.
+The hotfix redeployment then ended as Coolify exit 255: `docker compose up -d` stays attached until
+every `service_completed_successfully` dependency exits, so gating the reporting worker on the
+one-shot Prefect guards charged the guard chain to Coolify's command boundary. Local measurement puts
+the startup chain at 18s against ~3GB of per-deployment image pulls, and reproduces the production
+signature (guards in flight, worker left in `created`, command killed). The guards now report without
+gating startup, the worker enforces the identical conditions fail-closed in a bounded startup guard,
+every guard emits fixed success/failure tokens, and the release measures the guard outcome from live
+worker state instead of hard-coding it. It is locally verified; approved production redeployment
 and external acceptance remain pending.
 External soak, production outage/restore, 48-hour headroom, and image-rollback acceptance gates
 remain owner-approved work. The earlier
