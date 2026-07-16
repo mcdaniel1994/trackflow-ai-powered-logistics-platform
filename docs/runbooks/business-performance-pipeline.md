@@ -2,9 +2,11 @@
 
 ## Status and safety boundary
 
-Repository implementation and production hardening are complete and locally verified. Credential
-rotation, the GitHub Production migration secret, the first approved hardened deployment, and the
-rollback drill remain owner actions. Do not bypass the GitHub Production reviewer gate. Never
+Repository implementation and production hardening are complete and locally verified. The first
+approved hardened deployment exposed a Coolify init-script mount defect; an image-baked,
+idempotent PostgreSQL bootstrap hotfix is locally verified and awaits approved redeployment.
+External acceptance and the rollback drill remain owner actions. Do not bypass the GitHub
+Production reviewer gate. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
@@ -20,6 +22,7 @@ database backups must never become business-work authority; missing R2 cannot ch
 | `maintenance-worker` | `python -m scripts.maintenance_worker` | size guard 15m; prune 02:15 America/Chicago | runtime `DATABASE_URL`; Prefect API URL only |
 | `prefect-server` | `prefect server start` | always on | dedicated Prefect DB owner credential only |
 | `prefect-postgres` | PostgreSQL 16 | always on | Prefect owner credential; creates read-only backup role |
+| `prefect-postgres-bootstrap` | idempotent SQL/role bootstrap | once per deployment | Prefect owner and backup-role credentials |
 | `prefect-db-backup` | `python /app/prefect_db_backup.py` | immediately, then every 24 h | read-only Prefect DB role; distinct `PREFECT_BACKUP_R2_*` token |
 
 The dispatcher checks America/Chicago time and creates at most one scheduled request after 07:00
@@ -27,6 +30,13 @@ for each Dallas business date. Missed ticks recover on the next minute check. Th
 queue and its lease/claim-token transitions remain authoritative. The private Prefect Server has no
 ports, work pool, or dispatch authority and uses its own persistent PostgreSQL volume. Do not create
 duplicate Coolify scheduled jobs.
+
+PostgreSQL's native init directory runs only when the data directory is empty. TrackFlow therefore
+bakes its init files into the pinned PostgreSQL image and also runs `prefect-postgres-bootstrap`
+after database liveness on every deployment. The bootstrap uses `CREATE EXTENSION IF NOT EXISTS`
+and create-or-alter role logic, so it repairs an incomplete existing volume and is safe to rerun.
+Prefect Server and the backup service cannot start until it succeeds. Never replace this with
+relative production bind mounts under `/docker-entrypoint-initdb.d`.
 
 ## Local dry run
 
@@ -110,7 +120,7 @@ bucket and the `prefect-backups/` prefix where provider policy supports prefix s
 `PREFECT_BACKUP_R2_BUCKET`, `PREFECT_BACKUP_R2_ENDPOINT`,
 `PREFECT_BACKUP_R2_ACCESS_KEY_ID`, and `PREFECT_BACKUP_R2_SECRET_ACCESS_KEY` into
 `prefect-db-backup`. Never reuse the reporting-worker token. Set `PREFECT_BACKUP_DB_PASSWORD` to a
-distinct random value; the database initializer grants that role read-only access. Backups use
+distinct random value; the deployment bootstrap grants that role read-only access. Backups use
 custom `pg_dump` format, run daily, retain seven days, and emit only fixed-token status logs. With
 all backup R2 variables absent, the service logs `prefect_backups_disabled` and reporting continues.
 

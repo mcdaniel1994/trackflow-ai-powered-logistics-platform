@@ -7,8 +7,9 @@ must follow) and a **brief** (`docs/briefs/`, engagement scope).
 **Status:** The Vercel frontend procedure is partial, while the Coolify backend
 and Back Office deployment plus Supabase role/migration procedure are
 production-verified. Repository-side approval-gated SHA deployment and manual
-workflow rollback are implemented; their first live run and rollback drill
-remain outstanding.
+workflow rollback are implemented. The first dedicated-Prefect live run exposed a documented
+Coolify init-mount defect; its repository hotfix awaits approved redeployment, and the rollback
+drill remains outstanding.
 
 ---
 
@@ -25,12 +26,12 @@ remain outstanding.
 | Runbook | Status | Scope |
 |---|---|---|
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
-| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Hardened workflow implemented; first approved run pending | Approval-gated migration, SHA deployment, readiness/smoke verification, and automatic image rollback |
+| [backend-coolify-deployment.md](backend-coolify-deployment.md) | Prefect startup hotfix locally verified; approved redeploy pending | Approval-gated migration, SHA deployment, readiness/smoke verification, Compose incident recovery, and automatic image rollback |
 | [supabase-migrations.md](supabase-migrations.md) | Hardened command verified locally; production credential rotation pending | Two-role setup, database CREATE grant, automated grants, disposable-data waiver, and recovery |
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 | [telemetry-inventory.md](telemetry-inventory.md) | Living reference | Every telemetry signal: implemented today vs. Engagement 6 vs. deferred, with fields, storage, retention, access, and evidence |
 | [operations-feed.md](operations-feed.md) | Portfolio-production | The live operations feed worker, its single-writer/kill-switch safety, telemetry enablement, and the database-size guard that bounds Supabase Free |
-| [business-performance-pipeline.md](business-performance-pipeline.md) | Dedicated Prefect repository remediation verified; production acceptance pending | Reporting authority, Prefect durability, operator triage, upgrade, recovery, and rollback |
+| [business-performance-pipeline.md](business-performance-pipeline.md) | Prefect startup hotfix locally verified; production acceptance pending | Reporting authority, idempotent database bootstrap, Prefect durability, operator triage, upgrade, recovery, and rollback |
 
 ## Current Deployment Process (summary)
 
@@ -72,7 +73,7 @@ remain outstanding.
 - [x] Add rollback steps to the backend deployment runbook.
 - [x] Define and verify Identity, Central API, and Back Office health endpoints.
 - [x] Add repository-side approval-gated SHA deployment and workflow rollback.
-- [ ] Complete the first approved automated deployment and a separate live rollback drill.
+- [ ] Complete the approved Prefect hotfix redeployment and a separate live rollback drill.
 - [ ] Add external uptime monitoring and a monitoring runbook.
 - [ ] Write an incident-response runbook.
 - [ ] Document environment/secrets management.

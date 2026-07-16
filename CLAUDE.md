@@ -85,7 +85,9 @@ Then read the active engagement brief and the README for every folder being modi
   token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
   a hard run watchdog, optional R2 recovery results, API-only retention, and an isolated read-only
   database backup service, six server-derived operator states, and release startup guards verified
-  locally. Repository Phases 0-4 are complete; external production acceptance remains.
+  locally. A July 15 Coolify startup incident is remediated with an image-baked, idempotent
+  PostgreSQL bootstrap and liveness-only container health checks. Repository Phases 0-4 plus the
+  startup hotfix are complete; approved redeployment and external production acceptance remain.
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

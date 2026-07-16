@@ -61,7 +61,9 @@ database, image schema floor, inventory columns, reporting grants, and worker he
 The maintenance image also runs API-only Prefect terminal-run retention; the separate
 `prefect-db-backup` image owns `pg_dump` and backup R2 access so Central API never receives either.
 Reporting status uses one shared derivation for readiness and the API's six `queue_state` values;
-Compose blocks worker startup until PostgreSQL-state and Prefect version guards pass.
+Compose blocks worker startup until an image-baked, idempotent Prefect PostgreSQL bootstrap plus
+the PostgreSQL-state and Prefect version guards pass. Container health uses `/health/live`; the
+dependency-aware `/health/ready` probe remains the full-stack release gate.
 
 ## Quality gates
 

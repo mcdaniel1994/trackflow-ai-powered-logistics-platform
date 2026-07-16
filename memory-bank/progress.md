@@ -40,15 +40,18 @@
   daily custom-format dumps with distinct `PREFECT_BACKUP_R2_*` credentials. The absent-R2 path and
   an isolated scratch restore are locally verified. The reporting API and Back Office now share six
   server-derived queue states, and one-shot PostgreSQL/version guards block worker startup on SQLite
-  fallback or incompatible server/client versions. External production soak, outage, restore,
+  fallback or incompatible server/client versions. The July 15 first production startup exposed
+  Coolify translating PostgreSQL init-file bind mounts into directories; the hotfix now bakes those
+  files into the pinned database image, repairs existing volumes through an idempotent one-shot
+  bootstrap, and keeps Central API container liveness independent of reporting readiness. Approved
+  redeployment plus external production soak, outage, restore,
   48-hour headroom, scheduled-run, and image-rollback acceptance measurements remain.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
   `/health/ready`, and automatically restores the previous immutable image after deploy or
   readiness failure. Credential rotation, the GitHub
-  Production secret, one approved deployment, and the controlled rollback drill remain owner
-  acceptance actions.
+  Production secret and the controlled rollback drill remain owner acceptance actions.
   Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
   carriers tables, and AI telemetry remain explicitly deferred.
 
@@ -88,8 +91,8 @@
   `main` builds proceed to an approval-gated, SHA-pinned Coolify deployment.
   The Coolify `4.1.2` and GitHub Production environment prerequisites are
   configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
-  follow-ups; the first live automated deployment and rollback drill have not
-  run.
+  follow-ups; the first live automated deployment exposed the documented Prefect startup defect,
+  its hotfix redeployment is pending, and the rollback drill has not run.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

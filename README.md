@@ -37,6 +37,9 @@ orchestrator health, a hard run watchdog, optional R2 recovery results, API-only
 isolated daily database backups, server-derived operator states, and release startup guards.
 `reporting.pipeline_runs` remains the sole dispatch authority. Production soak, restore, outage,
 memory-headroom, and rollback acceptance gates remain owner-approved external work.
+The July 15 first production startup exposed a Coolify init-script mount defect; the repository now
+uses an image-baked, idempotent Prefect PostgreSQL bootstrap and container liveness independent of
+worker readiness. The hotfix is locally verified and production redeployment remains approval-gated.
 It adds trustworthy telemetry, live inventory operations, durable weekly business reporting,
 always-on reporting and maintenance workers, approval-gated migrations, dependency-aware
 readiness, and automatic immutable-image rollback.
@@ -194,7 +197,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Dedicated Prefect remediation in progress — service/database wiring verified locally |
+| 6 | Data pipelines & telemetry | 🚧 Prefect startup hotfix locally verified — production redeploy/acceptance pending |
 | 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
 | 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
 | 9 | Workflow automation (n8n) | ⏳ Upcoming |
