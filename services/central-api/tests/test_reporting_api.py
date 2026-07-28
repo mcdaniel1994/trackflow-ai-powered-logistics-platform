@@ -24,6 +24,9 @@ from central_api.domains.reporting.service import ReportingService
 MONDAY = date(2026, 7, 13)
 NEXT_MONDAY = date(2026, 7, 20)
 BASE_TIME = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
+CUTOVER_MONDAY = date(2026, 7, 27)
+CUTOVER_NOW = datetime(2026, 7, 28, 20, 0, tzinfo=UTC)
+CUTOVER_CUTOFF = datetime(2026, 7, 28, 19, 0, tzinfo=UTC)
 
 
 def _client(session: Session, name: str) -> Client:
@@ -162,13 +165,144 @@ def test_weekly_report_empty_states_and_authentication(
 ) -> None:
     assert client.get("/reporting/weekly-warehouse-client-performance").status_code == 401
     empty = client.get("/reporting/weekly-warehouse-client-performance", headers=auth_headers)
-    assert empty.json() == {"week_start": None, "incomplete": False, "entries": []}
+    assert empty.json() == {
+        "week_start": None,
+        "incomplete": False,
+        "entries": [],
+        "state": None,
+        "source_cutoff_at": None,
+        "published_at": None,
+    }
     requested = client.get(
         "/reporting/weekly-warehouse-client-performance",
         params={"week_start": MONDAY.isoformat()},
         headers=auth_headers,
     )
-    assert requested.json() == {"week_start": MONDAY.isoformat(), "incomplete": False, "entries": []}
+    assert requested.json() == {
+        "week_start": MONDAY.isoformat(),
+        "incomplete": False,
+        "entries": [],
+        "state": None,
+        "source_cutoff_at": None,
+        "published_at": None,
+    }
+
+
+def _activate_cutover(engine: Engine) -> UUID:
+    client_id = uuid4()
+    with engine.begin() as connection:
+        connection.execute(
+            text("INSERT INTO clients (id, display_name) VALUES (:id, 'Cutover Client')"),
+            {"id": client_id},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reporting.hourly_activity_rollups "
+                "(bucket_start, warehouse, client_id, inbound_movement_count, inbound_units, "
+                "dispatch_order_count, dispatch_units, loss_movement_count, loss_units, "
+                "stockout_count, discrepancy_count, source_cutoff_at, computed_at, pipeline_version) "
+                "VALUES (:bucket, 'LA', :client, 1, 12, 2, 5, 0, 0, 1, 1, "
+                ":cutoff, :published, 'cutover-test')"
+            ),
+            {
+                "bucket": datetime(2026, 7, 27, 1, tzinfo=UTC),
+                "client": client_id,
+                "cutoff": CUTOVER_CUTOFF,
+                "published": CUTOVER_NOW,
+            },
+        )
+        connection.execute(
+            text(
+                "UPDATE reporting.rollup_state SET pipeline_version = 'cutover-test', "
+                "last_cutoff_at = :cutoff, last_published_at = :published, "
+                "last_reconciled_at = :published, active_pipeline_version = 'cutover-test', "
+                "active_cutoff_at = :cutoff, active_published_at = :published WHERE id = 1"
+            ),
+            {"cutoff": CUTOVER_CUTOFF, "published": CUTOVER_NOW},
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reporting.worker_heartbeats "
+                "(worker_name, heartbeat_at, last_progress_at, orchestrator_healthy) "
+                "VALUES ('reporting', :heartbeat, :heartbeat, true)"
+            ),
+            {"heartbeat": CUTOVER_NOW - timedelta(seconds=5)},
+        )
+    return client_id
+
+
+def test_cutover_reads_active_week_from_hourly_and_historical_weekly(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client_id = _activate_cutover(engine)
+    with Session(engine) as session:
+        historical_client = _client(session, "Historical Client")
+        _report(session, historical_client, MONDAY)
+        session.commit()
+    monkeypatch.setenv("REPORTING_ROLLUP_CUTOVER_ENABLED", "true")
+    monkeypatch.setattr("central_api.domains.reporting.service.utc_now", lambda: CUTOVER_NOW)
+
+    active = client.get("/reporting/weekly-warehouse-client-performance", headers=auth_headers)
+    assert active.status_code == 200
+    payload = active.json()
+    assert payload["week_start"] == CUTOVER_MONDAY.isoformat()
+    assert payload["incomplete"] is True
+    assert payload["state"] == "current"
+    assert payload["source_cutoff_at"] == CUTOVER_CUTOFF.isoformat().replace("+00:00", "Z")
+    assert payload["entries"][0] == {
+        "warehouse": "los_angeles",
+        "client_id": str(client_id),
+        "client_name": "Cutover Client",
+        "inbound_units_count": 12,
+        "outbound_orders_count": 2,
+        "stockout_events_count": 1,
+        "discrepancy_events_count": 1,
+        "discrepancy_rate": 0.5,
+    }
+
+    historical = client.get(
+        "/reporting/weekly-warehouse-client-performance",
+        params={"week_start": MONDAY.isoformat()},
+        headers=auth_headers,
+    )
+    assert historical.status_code == 200
+    assert historical.json()["entries"][0]["client_name"] == "Historical Client"
+
+
+def test_cutover_fails_closed_and_force_stale_serves_only_verified_snapshot(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    admin_headers: dict[str, str],
+    engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _activate_cutover(engine)
+    monkeypatch.setenv("REPORTING_ROLLUP_CUTOVER_ENABLED", "true")
+    monkeypatch.setattr("central_api.domains.reporting.service.utc_now", lambda: CUTOVER_NOW)
+    with engine.begin() as connection:
+        connection.execute(
+            text("UPDATE reporting.worker_heartbeats SET orchestrator_healthy = false WHERE worker_name = 'reporting'")
+        )
+
+    unavailable = client.get("/reporting/weekly-warehouse-client-performance", headers=auth_headers)
+    assert unavailable.status_code == 503
+    assert unavailable.json()["error"]["code"] == "REPORTING_CONTROL_PLANE_UNAVAILABLE"
+    rejected_run = client.post("/reporting/pipeline-runs", json={}, headers=admin_headers)
+    assert rejected_run.status_code == 503
+    assert rejected_run.json()["error"]["code"] == "REPORTING_CONTROL_PLANE_UNAVAILABLE"
+
+    monkeypatch.setenv("REPORTING_FORCE_STALE", "true")
+    stale = client.get("/reporting/weekly-warehouse-client-performance", headers=auth_headers)
+    assert stale.status_code == 200
+    assert stale.json()["state"] == "stale"
+
+    monkeypatch.setenv("REPORTING_COMPUTATION_ENABLED", "false")
+    disabled = client.get("/reporting/weekly-warehouse-client-performance", headers=auth_headers)
+    assert disabled.status_code == 503
+    assert disabled.json()["error"]["code"] == "REPORTING_COMPUTATION_DISABLED"
 
 
 def test_latest_runs_distinguishes_latest_success_and_queue_without_internals(

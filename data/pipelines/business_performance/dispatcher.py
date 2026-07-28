@@ -9,7 +9,6 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Engine
 
 from .queue import engine_from_environment, enqueue_scheduled, recover_stale_runs
-from .rollups import hourly_rollups_enabled
 
 DALLAS_TIMEZONE = ZoneInfo("America/Chicago")
 REFRESH_TIMES = (time(hour=7), time(hour=19))
@@ -34,7 +33,7 @@ def dispatch_tick(engine: Engine, *, now: datetime | None = None) -> DispatchRes
     local = dallas_business_time(tick_at)
     recovered = recover_stale_runs(engine, now=tick_at)
     created = False
-    refresh_times = REFRESH_TIMES if hourly_rollups_enabled() else REFRESH_TIMES[:1]
+    refresh_times = REFRESH_TIMES
     eligible = [
         refresh_time
         for refresh_time in refresh_times

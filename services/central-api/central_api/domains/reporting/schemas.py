@@ -22,6 +22,9 @@ class WeeklyPerformanceResponse(BaseModel):
     week_start: date | None
     incomplete: bool
     entries: list[WeeklyPerformanceEntry]
+    state: Literal["current", "stale"] | None = None
+    source_cutoff_at: datetime | None = None
+    published_at: datetime | None = None
 
 
 class PipelineRunLatest(BaseModel):
@@ -34,6 +37,8 @@ class PipelineRunLatest(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     attempt: int
+    rows_extracted: int | None
+    rows_transformed: int | None
     rows_loaded: int | None
     error_code: str | None
     next_attempt_at: datetime | None
@@ -90,6 +95,14 @@ class PipelineRunsResponse(BaseModel):
     worker: ReportingWorkerHealth
     next_scheduled_refresh: NextScheduledRefresh
     attempts: list[PipelineRunAttemptRead]
+    reporting_state: Literal["current", "stale", "degraded", "not_activated"]
+    source_cutoff_at: datetime | None
+    published_at: datetime | None
+    current_stage: Literal["extract", "transform", "load"] | None
+    stage_started_at: datetime | None
+    latest_error_code: str | None
+    latest_attempt: int | None
+    results_current: bool
 
 
 class PipelineRunRequest(BaseModel):

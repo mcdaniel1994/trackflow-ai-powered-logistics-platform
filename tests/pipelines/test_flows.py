@@ -158,6 +158,7 @@ def test_prefect_flow_extracts_transforms_loads_and_finalizes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("REPORTING_ROLLUP_CUTOVER_ENABLED", "true")
     client_id = _seed_activity(pipeline_engine)
     enqueue_cli(
         pipeline_engine,
@@ -198,9 +199,61 @@ def test_prefect_flow_extracts_transforms_loads_and_finalizes(
     assert run == {
         "status": "succeeded",
         "rows_extracted": 2,
-        "rows_transformed": 1,
+        "rows_transformed": 168,
         "rows_loaded": 1,
     }
+
+
+def test_retired_legacy_flow_remains_regression_tested_but_is_not_the_executor(
+    pipeline_engine: Engine,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Keep the dormant rollback-era code covered without making it selectable."""
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    client_id = _seed_activity(pipeline_engine)
+    enqueue_cli(
+        pipeline_engine,
+        requested_week_start=WEEK,
+        now=datetime.now(UTC) - timedelta(seconds=1),
+    )
+
+    def retired_executor(
+        _engine: Engine,
+        claim: RunClaim,
+        _abort: Event | None = None,
+    ) -> flows.RunMetrics:
+        return flows.weekly_warehouse_client_performance(
+            claim,
+            pipeline_version="retired-regression-only",
+        )
+
+    with prefect_test_harness():
+        result = run_once(pipeline_engine, retired_executor)
+    assert result.status == RunnerStatus.SUCCEEDED
+
+    with pipeline_engine.connect() as connection:
+        report = (
+            connection.execute(
+                text(
+                    "SELECT warehouse, client_id, week_start, inbound_units_count, "
+                    "outbound_orders_count FROM reporting.weekly_warehouse_client_performance"
+                )
+            )
+            .mappings()
+            .one()
+        )
+    assert report == {
+        "warehouse": "los_angeles",
+        "client_id": client_id,
+        "week_start": WEEK,
+        "inbound_units_count": 12,
+        "outbound_orders_count": 1,
+    }
+    assert (
+        "weekly_warehouse_client_performance"
+        not in flows.prefect_executor.__code__.co_names
+    )
 
 
 def test_prefect_shadow_rollup_writes_hourly_only_and_records_attempt_evidence(
@@ -229,17 +282,20 @@ def test_prefect_shadow_rollup_writes_hourly_only_and_records_attempt_evidence(
         weekly_count = int(
             connection.scalar(
                 text(
-                    "SELECT count(*) FROM "
-                    "reporting.weekly_warehouse_client_performance"
+                    "SELECT count(*) FROM reporting.weekly_warehouse_client_performance"
                 )
             )
         )
-        attempt = connection.execute(
-            text(
-                "SELECT source_cutoff_at, rows_scanned, rollup_rows_written "
-                "FROM reporting.pipeline_run_attempts"
+        attempt = (
+            connection.execute(
+                text(
+                    "SELECT source_cutoff_at, rows_scanned, rollup_rows_written "
+                    "FROM reporting.pipeline_run_attempts"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
     assert hourly_count == 7 * 24
     assert weekly_count == 0
     assert attempt["source_cutoff_at"] is not None
@@ -326,7 +382,7 @@ def test_idempotent_load_removes_only_stale_rows_in_target_week(
     [
         (TransformError("bad source"), False, "VALIDATE_FAILED"),
         (CacheConfigurationError("partial config"), False, "VALIDATE_FAILED"),
-        (SQLAlchemyError("db down"), True, "DB_UNAVAILABLE"),
+        (SQLAlchemyError("db down"), True, "EXTRACT_FAILED"),
         (RuntimeError("load failed"), True, "EXTRACT_FAILED"),
     ],
 )

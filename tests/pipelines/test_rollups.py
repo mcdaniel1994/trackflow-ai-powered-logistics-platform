@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -14,11 +15,13 @@ from pipelines.business_performance.queue import RunClaim, claim_next, enqueue_c
 from pipelines.business_performance.rollups import (
     ReconciliationResult,
     RollupValidationError,
+    activate_reconciled_rollups,
     capture_rollup_window,
     compute_hourly_rollups,
     hourly_rollups_enabled,
     publish_hourly_rollups,
     reconcile_hourly_rollups,
+    rollup_cutover_enabled,
 )
 
 WEEK = date(2026, 12, 28)
@@ -144,6 +147,10 @@ def test_flag_defaults_off(monkeypatch: pytest.MonkeyPatch) -> None:
     assert hourly_rollups_enabled() is False
     monkeypatch.setenv("REPORTING_HOURLY_ROLLUPS_ENABLED", "true")
     assert hourly_rollups_enabled() is True
+    monkeypatch.delenv("REPORTING_ROLLUP_CUTOVER_ENABLED", raising=False)
+    assert rollup_cutover_enabled() is False
+    monkeypatch.setenv("REPORTING_ROLLUP_CUTOVER_ENABLED", "true")
+    assert rollup_cutover_enabled() is True
 
 
 def test_empty_default_window_publishes_cursor_without_rows(
@@ -157,17 +164,23 @@ def test_empty_default_window_publishes_cursor_without_rows(
     assert window.rows_scanned == 0
     rows = compute_hourly_rollups(pipeline_engine, window)
     assert rows == []
-    assert publish_hourly_rollups(
-        pipeline_engine,
-        claim,
-        window,
-        rows,
-        now=CUTOFF,
-    ) == 0
+    assert (
+        publish_hourly_rollups(
+            pipeline_engine,
+            claim,
+            window,
+            rows,
+            now=CUTOFF,
+        )
+        == 0
+    )
     with pipeline_engine.connect() as connection:
-        assert connection.scalar(
-            text("SELECT last_cutoff_at FROM reporting.rollup_state WHERE id = 1")
-        ) == CUTOFF
+        assert (
+            connection.scalar(
+                text("SELECT last_cutoff_at FROM reporting.rollup_state WHERE id = 1")
+            )
+            == CUTOFF
+        )
 
 
 def test_reset_boundary_fails_closed(
@@ -186,6 +199,7 @@ def test_reset_boundary_fails_closed(
         )
     with pytest.raises(RollupValidationError, match="no completed"):
         capture_rollup_window(pipeline_engine, claim, now=CUTOFF)
+
 
 def test_rollup_time_validation_and_cli_are_bounded(
     monkeypatch: pytest.MonkeyPatch,
@@ -325,8 +339,94 @@ def test_reference_rollup_is_dense_separates_dispatch_and_loss_and_reconciles(
     ) == len(rows)
     with pipeline_engine.connect() as connection:
         assert int(
-            connection.scalar(text("SELECT count(*) FROM reporting.hourly_activity_rollups"))
+            connection.scalar(
+                text("SELECT count(*) FROM reporting.hourly_activity_rollups")
+            )
         ) == len(rows)
+
+
+def test_activation_publishes_complete_week_and_preserves_last_verified_on_mismatch(
+    pipeline_engine: Engine,
+) -> None:
+    active_client, _inactive_client, sku_id = _seed_dimensions(pipeline_engine)
+    _insert_activity(pipeline_engine, active_client, sku_id)
+    claim = _claim(pipeline_engine)
+    window = capture_rollup_window(pipeline_engine, claim, now=CUTOFF)
+    rows = compute_hourly_rollups(pipeline_engine, window)
+    publish_hourly_rollups(pipeline_engine, claim, window, rows, now=CUTOFF)
+
+    activated_at = CUTOFF + timedelta(seconds=2)
+    activated = activate_reconciled_rollups(
+        pipeline_engine,
+        claim,
+        window,
+        now=activated_at,
+    )
+    assert activated.reconciliation.exact is True
+    assert activated.weekly_rows_written == 2
+    with pipeline_engine.connect() as connection:
+        active = connection.execute(
+            text(
+                "SELECT active_pipeline_version, active_cutoff_at, active_published_at "
+                "FROM reporting.rollup_state WHERE id = 1"
+            )
+        ).one()
+        weekly = connection.execute(
+            text(
+                "SELECT inbound_units_count, outbound_orders_count, "
+                "stockout_events_count, discrepancy_events_count "
+                "FROM reporting.weekly_warehouse_client_performance "
+                "WHERE week_start = :week AND client_id = :client"
+            ),
+            {"week": WEEK, "client": active_client},
+        ).one()
+    assert active == ("engagement-6-phase-6.3", CUTOFF, activated_at)
+    assert weekly == (12, 1, 1, 1)
+
+    with pipeline_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO stock_entries "
+                "(sku_id, quantity, reference, warehouse, created_at, user_uuid) "
+                "VALUES (:sku, 9, 'post-activation-mismatch', 'LA', :at, :user)"
+            ),
+            {
+                "sku": sku_id,
+                "at": CUTOFF - timedelta(hours=2),
+                "user": str(uuid4()),
+            },
+        )
+    candidate = compute_hourly_rollups(pipeline_engine, window)
+    candidate[0] = replace(
+        candidate[0],
+        inbound_units=candidate[0].inbound_units + 1,
+    )
+    with pytest.raises(RollupValidationError, match="reconciliation failed"):
+        activate_reconciled_rollups(
+            pipeline_engine,
+            claim,
+            window,
+            rows=candidate,
+            now=activated_at + timedelta(minutes=1),
+        )
+    with pipeline_engine.connect() as connection:
+        unchanged = connection.execute(
+            text(
+                "SELECT active_pipeline_version, active_cutoff_at, active_published_at "
+                "FROM reporting.rollup_state WHERE id = 1"
+            )
+        ).one()
+        preserved_units = int(
+            connection.scalar(
+                text(
+                    "SELECT sum(inbound_units) FROM reporting.hourly_activity_rollups "
+                    "WHERE client_id = :client"
+                ),
+                {"client": active_client},
+            )
+        )
+    assert unchanged == active
+    assert preserved_units == 12
 
 
 def test_fixed_cutoff_snapshot_excludes_mid_run_insert_then_trailing_recompute_repairs(

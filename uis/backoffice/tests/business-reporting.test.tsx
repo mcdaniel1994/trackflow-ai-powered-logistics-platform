@@ -112,7 +112,7 @@ describe("business reporting dashboard", () => {
 
     await user.click(screen.getByRole("button", { name: "Force refresh" }));
     await waitFor(() => expect(reportingMocks.requestPipelineRun).toHaveBeenCalledWith({ force_refresh: true }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringMatching(/recomputes directly from source records/i));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringMatching(/rollup work from the durable source ledger/i));
   });
 
   it("validates Monday selection and loads an explicit week", async () => {
@@ -167,8 +167,14 @@ describe("business reporting dashboard", () => {
 
   it("surfaces a safe loading failure", async () => {
     reportingMocks.getWeeklyPerformance.mockRejectedValue({ message: "Reporting service is temporarily unavailable.", status: 503 });
+    reportingMocks.getPipelineRunsStatus.mockResolvedValue({
+      ...status,
+      reporting_state: "degraded",
+      results_current: false,
+    });
     render(<BusinessReportingView />);
-    expect(await screen.findByRole("alert")).toHaveTextContent("Reporting service is temporarily unavailable.");
+    expect(await screen.findByText("Reporting service is temporarily unavailable.")).toHaveAttribute("role", "alert");
+    expect(screen.getByText(/degraded — showing status for the last verified snapshot/i)).toBeInTheDocument();
   });
 
   it("warns when queued work has no healthy worker", async () => {

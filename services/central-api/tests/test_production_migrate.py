@@ -63,8 +63,8 @@ def test_production_migration_upgrades_grants_and_reruns_idempotently(role_datab
     first = production_migrate.migrate()
     second = production_migrate.migrate()
     assert first.before_revision == "20260714_0008"
-    assert first.after_revision == "20260728_0012"
-    assert second.before_revision == second.after_revision == "20260728_0012"
+    assert first.after_revision == "20260728_0013"
+    assert second.before_revision == second.after_revision == "20260728_0013"
 
     migration_engine = create_engine(migration_url)
     with migration_engine.begin() as connection:

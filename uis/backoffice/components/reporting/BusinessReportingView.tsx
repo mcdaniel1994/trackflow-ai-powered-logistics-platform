@@ -102,7 +102,10 @@ function ReportTable({ label, rows }: { label: string; rows: WeeklyPerformanceEn
 function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now: number | null }) {
   const latest = status.latest;
   const successful = status.latest_successful;
-  const stale = successful && now ? now - new Date(successful.finished_at).getTime() > 26 * 60 * 60 * 1000 : false;
+  const legacyStale = successful && now ? now - new Date(successful.finished_at).getTime() > 26 * 60 * 60 * 1000 : false;
+  const stale = status.reporting_state
+    ? status.reporting_state !== "current"
+    : legacyStale;
 
   return (
     <section className="grid gap-3 rounded-xl border border-mist bg-white p-4 shadow-sm md:grid-cols-3" aria-label="Pipeline status">
@@ -122,6 +125,17 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
         {latest?.status === "failed" && latest.error_code ? (
           <p role="alert" className="mt-2 text-xs font-bold text-rose-700">Failure: {latest.error_code}</p>
         ) : null}
+        {status.current_stage ? (
+          <p className="mt-1 text-xs text-neutral-600">
+            Stage: <span className="font-bold">{status.current_stage}</span> since {formatTimestamp(status.stage_started_at)}
+          </p>
+        ) : null}
+        {latest && (latest.rows_extracted != null || latest.rows_transformed != null || latest.rows_loaded != null) ? (
+          <p className="mt-1 text-xs text-neutral-600">
+            Progress: {latest.rows_extracted ?? 0} extracted · {latest.rows_transformed ?? 0} transformed ·{" "}
+            {latest.rows_loaded ?? 0} published
+          </p>
+        ) : null}
         <p
           role={status.queue_state === "stuck" || status.queue_state === "unavailable" ? "alert" : undefined}
           className={`mt-2 text-xs font-bold ${status.queue_state === "stuck" || status.queue_state === "unavailable" ? "text-rose-700" : "text-neutral-600"}`}
@@ -132,7 +146,16 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
       <div>
         <p className="text-xs font-black uppercase tracking-wide text-neutral-500">Last successful refresh</p>
         <p className="mt-2 text-sm font-black text-navy-deep">{formatTimestamp(successful?.finished_at)}</p>
-        {stale ? <p className="mt-1 text-xs font-bold text-coral">Stale — the daily refresh may have been missed.</p> : null}
+        {status.source_cutoff_at ? (
+          <p className="mt-1 text-xs text-neutral-600">Source cutoff: {formatTimestamp(status.source_cutoff_at)}</p>
+        ) : null}
+        {stale ? (
+          <p className="mt-1 text-xs font-bold text-coral">
+            {status.reporting_state === "degraded"
+              ? "Degraded — showing status for the last verified snapshot."
+              : "Stale — the scheduled refresh may have been missed."}
+          </p>
+        ) : null}
       </div>
       <div>
         <p className="text-xs font-black uppercase tracking-wide text-neutral-500">Next scheduled refresh</p>
@@ -154,18 +177,29 @@ export function BusinessReportingView() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const { data, error, loading, lastUpdated } = useAutoRefresh<{
-    report: WeeklyPerformanceReport;
+    report: WeeklyPerformanceReport | null;
+    reportError: string;
     status: PipelineRunsStatus;
   }>(
-    () => Promise.all([getWeeklyPerformance(selectedWeek || undefined), getPipelineRunsStatus()]).then(
-      ([report, status]) => ({ report, status }),
-    ),
+    async () => {
+      const [reportResult, statusResult] = await Promise.allSettled([
+        getWeeklyPerformance(selectedWeek || undefined),
+        getPipelineRunsStatus(),
+      ]);
+      if (statusResult.status === "rejected") throw statusResult.reason;
+      return {
+        report: reportResult.status === "fulfilled" ? reportResult.value : null,
+        reportError:
+          reportResult.status === "rejected" ? reportingError(reportResult.reason).message : "",
+        status: statusResult.value,
+      };
+    },
     [selectedWeek, refreshKey],
     { mapError: (caught) => reportingError(caught).message },
   );
 
   function applyWeek() {
-    const nextWeek = draftWeek || data?.report.week_start || "";
+    const nextWeek = draftWeek || data?.report?.week_start || "";
     if (!isMonday(nextWeek)) {
       setWeekError("Choose a Monday to load an ISO reporting week.");
       return;
@@ -176,7 +210,7 @@ export function BusinessReportingView() {
 
   async function trigger(forceRefresh: boolean) {
     const explanation = forceRefresh
-      ? "Force refresh creates distinct work and recomputes directly from source records. Continue?"
+      ? "Force refresh creates distinct rollup work from the durable source ledger. Continue?"
       : "Run now queues a durable refresh. An identical pending request may be reused. Continue?";
     if (!window.confirm(explanation)) return;
     setSubmitting(true);
@@ -236,7 +270,11 @@ export function BusinessReportingView() {
 
       {runMessage ? <p role="status" className="rounded-lg border border-teal/40 bg-teal/10 p-3 text-sm font-bold text-navy">{runMessage}</p> : null}
       {runError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{runError}</p> : null}
-      {error ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p> : null}
+      {error || data?.reportError ? (
+        <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {error || data?.reportError}
+        </p>
+      ) : null}
       {loading ? <p className="text-sm text-neutral-600">Loading business reporting…</p> : null}
 
       {data ? <PipelineStatusStrip status={data.status} now={lastUpdated} /> : null}
@@ -259,6 +297,13 @@ export function BusinessReportingView() {
               </span>
             )}
           </div>
+          {report.source_cutoff_at ? (
+            <p className={`mt-3 text-xs font-bold ${report.state === "stale" ? "text-coral" : "text-neutral-600"}`}>
+              {report.state === "stale" ? "Stale verified snapshot" : "Verified source snapshot"} through{" "}
+              {formatTimestamp(report.source_cutoff_at)}
+              {report.published_at ? `; published ${formatTimestamp(report.published_at)}` : ""}.
+            </p>
+          ) : null}
         </section>
       ) : null}
 

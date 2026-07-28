@@ -27,6 +27,12 @@ PREFECT_HEALTH_TIMEOUT_SECONDS = 5.0
 DEFAULT_RUN_TIMEOUT_SECONDS = 1800.0
 DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_LOG_BACKUP_COUNT = 9
+COMPUTATION_FEATURE_FLAG = "REPORTING_COMPUTATION_ENABLED"
+
+
+def computation_enabled() -> bool:
+    """Return the production computation kill switch; defaults enabled."""
+    return os.environ.get(COMPUTATION_FEATURE_FLAG, "true").strip().lower() == "true"
 
 
 def _safe_failure(operation: str, exc: Exception) -> None:
@@ -126,6 +132,9 @@ def run_worker(
                     orchestrator_healthy=healthy,
                 )
                 if not healthy:
+                    stop.wait(poll_interval_seconds)
+                    continue
+                if not computation_enabled():
                     stop.wait(poll_interval_seconds)
                     continue
                 claim = claim_next(engine)

@@ -1,6 +1,6 @@
 """Read-only reporting queries; pipeline queue writes stay in the data package."""
 
-from datetime import date
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from sqlalchemy import RowMapping, text
@@ -55,6 +55,47 @@ class ReportingRepository:
         ).mappings()
         return [WeeklyPerformanceEntry.model_validate(dict(row)) for row in rows]
 
+    def current_week_entries(
+        self,
+        week_start: date,
+        cutoff: datetime,
+    ) -> list[WeeklyPerformanceEntry]:
+        """Serve the incomplete active week from its verified hourly snapshot."""
+        start = datetime.combine(week_start, time.min, tzinfo=UTC)
+        rows = self.session.execute(
+            text(
+                "SELECT CASE hourly.warehouse WHEN 'LA' THEN 'los_angeles' ELSE 'zaragoza' END "
+                "AS warehouse, hourly.client_id, client.display_name AS client_name, "
+                "sum(hourly.inbound_units)::bigint AS inbound_units_count, "
+                "sum(hourly.dispatch_order_count)::bigint AS outbound_orders_count, "
+                "sum(hourly.stockout_count)::bigint AS stockout_events_count, "
+                "sum(hourly.discrepancy_count)::bigint AS discrepancy_events_count, "
+                "CASE WHEN sum(hourly.dispatch_order_count) = 0 THEN 0 "
+                "ELSE sum(hourly.discrepancy_count)::numeric / "
+                "sum(hourly.dispatch_order_count) END AS discrepancy_rate "
+                "FROM reporting.hourly_activity_rollups AS hourly "
+                "JOIN clients AS client ON client.id = hourly.client_id "
+                "WHERE hourly.bucket_start >= :start AND hourly.bucket_start < :cutoff "
+                "AND hourly.source_cutoff_at <= :cutoff "
+                "GROUP BY hourly.warehouse, hourly.client_id, client.display_name "
+                "ORDER BY warehouse, client.display_name, hourly.client_id"
+            ),
+            {"start": start, "cutoff": cutoff},
+        ).mappings()
+        return [WeeklyPerformanceEntry.model_validate(dict(row)) for row in rows]
+
+    def rollup_state(self) -> RowMapping:
+        return (
+            self.session.execute(
+                text(
+                    "SELECT active_pipeline_version, active_cutoff_at, active_published_at "
+                    "FROM reporting.rollup_state WHERE id = 1"
+                )
+            )
+            .mappings()
+            .one()
+        )
+
     def is_incomplete(self, week_start: date) -> bool:
         return bool(
             self.session.execute(
@@ -77,15 +118,20 @@ class ReportingRepository:
         return LatestSuccessfulRun.model_validate(values)
 
     def latest_run(self) -> PipelineRunLatest | None:
-        row = self.session.execute(
-            text(
-                "SELECT id AS run_id, status, trigger_type, requested_by, scheduled_business_date, "
-                "requested_at, started_at, finished_at, attempt, rows_loaded, error_code, next_attempt_at "
-                "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
-                "ORDER BY requested_at DESC, id DESC LIMIT 1"
-            ),
-            {"pipeline_name": PIPELINE_NAME},
-        ).mappings().one_or_none()
+        row = (
+            self.session.execute(
+                text(
+                    "SELECT id AS run_id, status, trigger_type, requested_by, scheduled_business_date, "
+                    "requested_at, started_at, finished_at, attempt, rows_extracted, rows_transformed, "
+                    "rows_loaded, error_code, next_attempt_at "
+                    "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
+                    "ORDER BY requested_at DESC, id DESC LIMIT 1"
+                ),
+                {"pipeline_name": PIPELINE_NAME},
+            )
+            .mappings()
+            .one_or_none()
+        )
         # Only the allowlisted status fields above cross the API boundary; queue
         # leases, cache nonces, object-store details, and internal summaries do not.
         return self._latest(row)
@@ -102,16 +148,20 @@ class ReportingRepository:
         return [QueuedPipelineRun.model_validate(dict(row)) for row in rows]
 
     def latest_successful_run(self) -> LatestSuccessfulRun | None:
-        row = self.session.execute(
-            text(
-                "SELECT id AS run_id, finished_at, target_weeks, rows_loaded, "
-                "source_watermark AS source_cutoff_at "
-                "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
-                "AND status = 'succeeded' AND finished_at IS NOT NULL "
-                "ORDER BY finished_at DESC, requested_at DESC, id DESC LIMIT 1"
-            ),
-            {"pipeline_name": PIPELINE_NAME},
-        ).mappings().one_or_none()
+        row = (
+            self.session.execute(
+                text(
+                    "SELECT id AS run_id, finished_at, target_weeks, rows_loaded, "
+                    "source_watermark AS source_cutoff_at "
+                    "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
+                    "AND status = 'succeeded' AND finished_at IS NOT NULL "
+                    "ORDER BY finished_at DESC, requested_at DESC, id DESC LIMIT 1"
+                ),
+                {"pipeline_name": PIPELINE_NAME},
+            )
+            .mappings()
+            .one_or_none()
+        )
         return self._successful(row)
 
     def latest_attempts(self, *, limit: int = 10) -> list[PipelineRunAttemptRead]:
@@ -133,20 +183,28 @@ class ReportingRepository:
         return [PipelineRunAttemptRead.model_validate(dict(row)) for row in rows]
 
     def worker_signals(self) -> RowMapping | None:
-        return self.session.execute(
-            text(
-                "SELECT heartbeat_at, last_progress_at, orchestrator_healthy "
-                "FROM reporting.worker_heartbeats "
-                "WHERE worker_name = 'reporting'"
+        return (
+            self.session.execute(
+                text(
+                    "SELECT heartbeat_at, last_progress_at, orchestrator_healthy "
+                    "FROM reporting.worker_heartbeats "
+                    "WHERE worker_name = 'reporting'"
+                )
             )
-        ).mappings().one_or_none()
+            .mappings()
+            .one_or_none()
+        )
 
     def running_signals(self) -> RowMapping | None:
-        return self.session.execute(
-            text(
-                "SELECT current_stage, stage_started_at FROM reporting.pipeline_runs "
-                "WHERE pipeline_name = :pipeline_name AND status = 'running' "
-                "ORDER BY started_at LIMIT 1"
-            ),
-            {"pipeline_name": PIPELINE_NAME},
-        ).mappings().one_or_none()
+        return (
+            self.session.execute(
+                text(
+                    "SELECT current_stage, stage_started_at FROM reporting.pipeline_runs "
+                    "WHERE pipeline_name = :pipeline_name AND status = 'running' "
+                    "ORDER BY started_at LIMIT 1"
+                ),
+                {"pipeline_name": PIPELINE_NAME},
+            )
+            .mappings()
+            .one_or_none()
+        )
