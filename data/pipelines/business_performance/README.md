@@ -15,7 +15,12 @@ reconciliation, and runtime-budget evidence. Phase 6.3 is deployed through `2026
 owner-accepted by explicit exception after rollback drill one passed; drill two and the seven-day
 observation were waived, not executed. Phase 6.4 direct-executor work is approved to begin, while
 the production swap, resource-limit changes, final Prefect removal, and time-gate exceptions remain
-separately owner-gated.
+separately owner-gated. `direct_executor.py` now implements the same engine/claim/abort contract
+with unconditional stage CAS, abort checks, transient-only bounded retries, and token-verified
+publication. It is exercised locally against Prefect at one fixed cutoff but is not selected by the
+worker; production remains on Prefect. The shared SQL path passes the existing disposable
+2.12-million-row performance gate; this does not replace the required production measurement and
+clean-run windows.
 The active executor now always computes completed UTC-hour rollups at 07:00 and 19:00
 America/Chicago and recomputes an unconditional trailing 72 hours; the legacy raw Python/R2
 transform is no longer reachable from the executor. `REPORTING_ROLLUP_CUTOVER_ENABLED` still

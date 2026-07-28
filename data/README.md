@@ -34,6 +34,11 @@ SQL retries, an explicit computation kill switch, and verified-stale serving mod
 verified and deployed through `20260728_0013`. Rollback drill one passed; the owner accepted Phase
 6.3 by explicit exception and waived drill two and the seven-day observation without executing
 them. Phase 6.4 measured re-budgeting and direct-executor work are approved to begin.
+The first local slice adds an unselected direct SQL executor with unconditional stage CAS,
+transient-only bounded retries, abort handling, and fixed-cutoff Prefect/direct parity coverage.
+The shared SQL path also passes the disposable 2.12-million-row budget gate. Production selection
+and topology are unchanged; measurement windows have not started. Evidence:
+`docs/planning/engagement-6.4-phase-review-2026-07-28.md`.
 
 Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
 generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline

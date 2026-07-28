@@ -73,7 +73,9 @@
   computation-disable and seven-day gates were waived by owner exception. Phase 6.4 measured
   48-hour studies and direct-executor work are approved to begin. Production executor swap,
   resource-limit changes, final Prefect topology removal, Prefect restore, scheduled-run, and
-  image-rollback exercises remain separately owner-gated.
+  image-rollback exercises remain separately owner-gated. Local direct-executor implementation is
+  now underway behind the unchanged `RunExecutor` contract, with production selection unchanged
+  and no 48-hour or seven-day Phase 6.4 evidence yet started.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
@@ -117,7 +119,8 @@ implementing any of the items below.
   `20260728_0013`; controlled rollout steps 1-6 and rollback drill one passed. The owner accepted
   Phase 6.3 by explicit exception on 2026-07-28, waiving rollback drill two and the seven-day
   observation without executing them. Phase 6.4 is approved to begin subject to its own production
-  mutation and time-gate approvals.
+  mutation and time-gate approvals. Its first local slice adds the unselected direct SQL executor
+  and fixed-cutoff Prefect/direct parity coverage; measurement windows remain unstarted.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted

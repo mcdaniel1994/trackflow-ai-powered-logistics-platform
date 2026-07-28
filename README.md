@@ -185,6 +185,8 @@ TrackFlow reflects real-world logistics challenges:
 - Phase 6.4 is approved to begin with measured resource studies and a direct SQL executor behind
   the existing queue-owned contract. Production executor swap, resource-limit mutations, final
   Prefect topology removal, and any Phase 6.4 time-gate exception remain separately approval-gated.
+  Local implementation has begun with an unselected direct executor and fixed-cutoff parity tests;
+  production still uses Prefect, and no measurement window is represented as started or complete.
 - Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
   offline Random Forest baseline, five-fold chronological evaluation, and versioned
   metrics/model/report/chart artifacts.
@@ -236,7 +238,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phase 6.1 closed by owner exception, Phase 6.2 accepted, Phase 6.3 accepted by owner exception with drill two and observation waived; Phase 6.4 approved to begin |
+| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phase 6.1 closed by owner exception, Phase 6.2 accepted, Phase 6.3 accepted by owner exception with drill two and observation waived; Phase 6.4 local direct-executor implementation started, production unchanged |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
 | 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |

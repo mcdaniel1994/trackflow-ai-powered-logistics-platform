@@ -21,6 +21,11 @@ Phase 6.4. The computation-disable drill and seven-day observation were waived, 
 executed. Phase 6.4 production executor swap, resource-limit mutations, final Prefect removal, and
 time-gate exceptions remain separately owner-gated. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
+The Phase 6.4 direct executor exists only as locally verified, unselected code. The production
+worker and startup/health path remain Prefect-backed until the separately approved executor swap.
+The shared SQL path passes the disposable 2.12-million-row performance gate. No 48-hour study or
+seven-day Phase 6.4 clean-run evidence has started. Local evidence is recorded in
+`docs/planning/engagement-6.4-phase-review-2026-07-28.md`.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
 system of record. The private Prefect Server and its dedicated PostgreSQL database retain only

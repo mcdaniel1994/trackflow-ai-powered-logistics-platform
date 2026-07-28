@@ -100,6 +100,10 @@ trackflow/
   executor captures completed-hour UTC cutoffs, independently aggregates raw sources in SQL,
   recomputes a trailing 72 hours, and publishes under claim verification. Phase 6.3 activated the
   reconciled rollup path in production and removed the legacy transform from active execution.
+- Phase 6.4 local work adds an unselected direct SQL executor under the same engine/claim/abort
+  contract. It records stages under unconditional claim-token CAS, preserves transient-only bounded
+  retries and publication verification, and has fixed-cutoff parity coverage. The production worker
+  still selects Prefect pending separate approval.
 - Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
   `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
   PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.

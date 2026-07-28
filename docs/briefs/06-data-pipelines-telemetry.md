@@ -18,7 +18,10 @@ Phase 6.3 as-is and approved beginning Phase 6.4 by explicit exception. The comp
 drill and required seven-day observation were waived by that decision; neither was passed or
 executed. Phase 6.4 measured re-budgeting and direct-SQL executor work may begin, while the
 production executor swap, resource-limit changes, final Prefect topology removal, and any Phase
-6.4 time-gate exception remain separately owner-gated.
+6.4 time-gate exception remain separately owner-gated. Local Phase 6.4 implementation has begun
+with a direct SQL executor under the existing run contract and fixed-cutoff parity coverage. It is
+not selected by the production worker; no resource study or Phase 6.4 observation gate is claimed
+as started or complete.
 Independent sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline
 evaluation. Five chronological folds diagnose overfitting and unstable temporal validation; the
 offline artifact is not approved for serving or operational decisions.

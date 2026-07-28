@@ -98,7 +98,9 @@ Then read the active engagement brief and the README for every folder being modi
   on July 28 and approved beginning Phase 6.4; the computation-disable drill and seven-day
   production observation were waived, not passed or executed. Phase 6.4 may proceed locally, but
   production executor swap, resource-limit mutations, final Prefect removal, and time-gate
-  exceptions remain separately owner-gated.
+  exceptions remain separately owner-gated. Local Phase 6.4 implementation has begun with an
+  unselected direct SQL executor and fixed-cutoff Prefect/direct parity coverage; production still
+  uses Prefect, and no time-based Phase 6.4 evidence has started.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;
