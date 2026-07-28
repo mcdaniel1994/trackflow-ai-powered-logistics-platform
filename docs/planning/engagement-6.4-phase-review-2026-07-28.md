@@ -2,13 +2,19 @@
 
 ## Status
 
-Phase 6.4 has started locally under the owner-approved reporting-reliability specification. The
-production executor remains Prefect-backed. No production executor swap, resource-limit mutation,
-or Prefect topology removal has occurred.
+Phase 6.4 implementation and same-day local verification are complete under the owner-approved
+reporting-reliability specification. On 2026-07-28 the owner explicitly:
 
-The required 48-hour steady-state study, separate deployment studies, 48-hour post-change
-comparisons, production path exercises, and seven-day clean-run period have **not started**. No
-time-based evidence is compressed, inferred, or represented as complete.
+- waived the 48-hour steady-state study, separate deployment resource study, every 48-hour
+  post-change comparison, and the seven-day clean-run period;
+- directed that each waived gate be recorded as **waived, not passed or executed**;
+- approved the production executor swap from Prefect to direct SQL after same-day verification;
+  and
+- did not approve a resource-limit change or final Prefect removal.
+
+The production Compose selection is prepared in this change, but the production deployment and
+post-deployment path verification have not yet occurred. Prefect services, guards, backup, and
+runtime dependencies remain intact as a rollback path pending a separate final removal approval.
 
 ## Local direct-executor slice
 
@@ -24,50 +30,53 @@ time-based evidence is compressed, inferred, or represented as complete.
 - three total attempts with 10-second delays only for the approved transient-connectivity
   allowlist.
 
-The production worker still imports `prefect_executor`; the direct executor is deliberately
-unselected pending separate production-swap approval.
+`REPORTING_EXECUTOR` is an allowlisted lazy selector. Code defaults to `prefect`; local Compose
+preserves that default, while production Compose selects `direct_sql` under the explicit owner
+approval. In direct mode the worker does not run Prefect startup guards, poll Prefect health, or
+reconcile Prefect flow runs. Queue heartbeats remain healthy because the selected in-process
+executor is available; durable queue stale recovery remains unchanged.
 
 ## Local verification
 
 | Gate | Result |
 |---|---:|
-| Direct-executor focused tests | 17 passed |
-| Complete data test suite | 150 passed, 1 opt-in test skipped |
-| Data coverage | 90.42% overall; direct executor 97% |
+| Executor/worker/CLI focused tests | 17 passed |
+| Complete data test suite | 154 passed, 1 opt-in test skipped |
+| Data coverage | 90.32% overall; direct executor 97% |
+| Central API deployment-contract tests | 13 passed |
 | Ruff | Passed |
 | Strict mypy | Passed |
-| Data package build | Passed |
+| Data + Central API package builds | Passed |
+| Compose local + production render | Passed |
 | Disposable 2× projected-volume SQL rollup gate | Passed |
 
 The focused tests prove unconditional stage CAS without Prefect context, missing-claim refusal,
 abort handling between stages, transient-only bounded retries, safe failure mapping, and identical
 Prefect/direct rollup and weekly output at the same fixed cutoff.
 
+The complete suite covers scheduled/manual dispatch, bounded retry/backoff, independent lease
+renewal, claim-token loss, process-death/restart recovery at every stage, stale-lease recovery,
+terminal-attempt behavior, and fixed-cutoff Prefect/direct publication parity.
+
 The opt-in disposable PostgreSQL performance test loaded 2,120,000 source/event rows and retained
 the approved budgets:
 
-- full aggregate: 1.401 seconds;
-- full publication: 1.523 seconds;
+- full aggregate: 1.569 seconds;
+- full publication: 1.717 seconds;
 - regular 72-hour aggregate: 0.061 seconds;
 - reconciliation: 1.019 seconds;
-- report read: 0.036 seconds; and
-- test-process peak RSS: 315,998,208 bytes, below 80% of the current 768 MiB worker limit.
+- report read: 0.038 seconds; and
+- test-process peak RSS: 316,178,432 bytes, below 80% of the current 768 MiB worker limit.
 
-This test measures the shared SQL rollup path used by both executors. A complete Phase 6.4 review
-still requires end-to-end executor performance evidence at the specified volume, the production
-measurement studies, approved production swap and path exercises, the seven-day clean run, and the
-separately approved final topology removal.
+This test measures the shared SQL rollup path used by both executors. The owner waived the
+time-based measurement gates rather than treating this same-day evidence as a substitute.
 
-## Remaining approval and time gates
+## Remaining production gates
 
-- Start and retain the uninterrupted 48-hour steady-state raw series and summary.
-- Measure each deployment separately from steady state.
-- Make at most one approved resource-limit change at a time, followed by its own 48-hour
-  comparison; apply only the 60%/80% rules.
-- Obtain explicit approval before selecting the direct executor in production.
-- Exercise scheduled/manual execution, retry/backoff, lease renewal, worker restart, and
-  stale-lease recovery after that approved swap.
-- Complete the seven-day clean-run period without compression or an unapproved exception.
+- Merge and deploy the approved direct-SQL selection.
+- Verify the new worker heartbeat and reporting readiness after the deployment boundary.
+- Exercise the approved production path to the extent separately authorized and record actual
+  outcomes; local proofs are not represented as production exercises.
 - Obtain separate explicit approval before removing Prefect services, guards, backup, or the
   runtime dependency.
 - File the required Prefect retirement note only with the final approved topology change.

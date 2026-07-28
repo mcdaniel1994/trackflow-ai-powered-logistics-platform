@@ -18,13 +18,16 @@ live-reconciled, and owner-accepted. Phase 6.3 is deployed through `20260728_001
 controlled run published six verified report rows, and the control-plane/safe-stale rollback drill
 passed. The owner accepted Phase 6.3 as-is by explicit exception on July 28 and approved beginning
 Phase 6.4. The computation-disable drill and seven-day observation were waived, not passed or
-executed. Phase 6.4 production executor swap, resource-limit mutations, final Prefect removal, and
-time-gate exceptions remain separately owner-gated. Never
+executed. The owner also waived the Phase 6.4 48-hour studies and seven-day clean run, explicitly
+without passing or executing them, and separately approved the production direct-SQL executor
+swap. No resource-limit change is approved; final Prefect removal remains separately owner-gated. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
-The Phase 6.4 direct executor exists only as locally verified, unselected code. The production
-worker and startup/health path remain Prefect-backed until the separately approved executor swap.
-The shared SQL path passes the disposable 2.12-million-row performance gate. No 48-hour study or
-seven-day Phase 6.4 clean-run evidence has started. Local evidence is recorded in
+The Phase 6.4 direct executor and allowlisted selector are locally verified. Production Compose
+selects `direct_sql`; code and local Compose retain Prefect as the default. In direct mode the
+worker skips Prefect startup/health/orphan-flow coupling while preserving PostgreSQL queue,
+heartbeat, lease, retry, and stale-recovery ownership. The shared SQL path passes the disposable
+2.12-million-row performance gate. The waived time gates are not represented as evidence. Local
+evidence and the remaining deployment-verification boundary are recorded in
 `docs/planning/engagement-6.4-phase-review-2026-07-28.md`.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business

@@ -242,3 +242,43 @@ def test_worker_drives_explicit_claim_lifecycle(
         dispatch_interval_seconds=0.001,
     )
     assert stop.is_set()
+
+
+def test_direct_worker_claims_without_prefect_health_or_reconciliation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stop = Event()
+    claim = RunClaim(
+        uuid4(), uuid4(), "scheduled", date(2026, 7, 13), (date(2026, 7, 13),), 1
+    )
+    heartbeats: list[dict[str, object]] = []
+    monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
+    monkeypatch.setattr(
+        worker,
+        "record_worker_heartbeat",
+        lambda _engine, **kwargs: heartbeats.append(kwargs),
+    )
+    monkeypatch.setattr(worker, "claim_next", lambda _engine: claim)
+    monkeypatch.setattr(
+        worker,
+        "execute_claim_with_renewal",
+        lambda *_args: ClaimOutcome(RunnerStatus.SUCCEEDED),
+    )
+
+    def finalize(*_args: object) -> RunnerResult:
+        stop.set()
+        return RunnerResult(RunnerStatus.SUCCEEDED, str(claim.run_id))
+
+    monkeypatch.setattr(worker, "finalize_claim", finalize)
+    worker.run_worker(
+        object(),
+        lambda *_args: None,
+        stop=stop,
+        orchestrator_health=lambda: True,
+        reconcile_prefect_runs=False,
+        poll_interval_seconds=0.001,
+        heartbeat_interval_seconds=0.001,
+        dispatch_interval_seconds=0.001,
+    )
+    assert stop.is_set()
+    assert any(item.get("orchestrator_healthy") is True for item in heartbeats)

@@ -96,11 +96,11 @@ Then read the active engagement brief and the README for every folder being modi
   Phase 6.3 is deployed through additive revision `20260728_0013`; its reconciled cutover and
   control-plane/safe-stale drill passed. The owner accepted Phase 6.3 as-is by explicit exception
   on July 28 and approved beginning Phase 6.4; the computation-disable drill and seven-day
-  production observation were waived, not passed or executed. Phase 6.4 may proceed locally, but
-  production executor swap, resource-limit mutations, final Prefect removal, and time-gate
-  exceptions remain separately owner-gated. Local Phase 6.4 implementation has begun with an
-  unselected direct SQL executor and fixed-cutoff Prefect/direct parity coverage; production still
-  uses Prefect, and no time-based Phase 6.4 evidence has started.
+  production observation were waived, not passed or executed. Phase 6.4's 48-hour studies and
+  seven-day clean run were also waived, not passed or executed. The
+  production direct-SQL executor swap is separately owner-approved and prepared after same-day
+  queue/recovery/parity/volume verification, with no resource-limit change. Deployment
+  verification and final Prefect removal remain open; removal requires separate approval.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

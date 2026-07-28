@@ -41,8 +41,8 @@ def test_prefect_release_contract_is_static_and_live_guarded() -> None:
     assert "prefect-version-guard: {condition: service_completed_successfully}" not in compose
 
 
-def test_release_measures_prefect_guard_outcome_rather_than_asserting_it() -> None:
-    """The guard result must come from live worker state, not a hard-coded echo."""
+def test_release_measures_reporting_worker_outcome_rather_than_asserting_it() -> None:
+    """Selected-executor startup must come from live worker state, not a hard-coded echo."""
     root = Path(__file__).resolve().parents[2]
     workflow = (root / ".github/workflows/deploy-production.yml").read_text()
     verifier = (root / "services/central-api/scripts/verify_reporting_startup.py").read_text()
