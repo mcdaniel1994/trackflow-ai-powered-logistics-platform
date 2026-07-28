@@ -1,0 +1,110 @@
+{
+  "algorithm": "RandomForestRegressor",
+  "artifact_hashes_sha256": {
+    "sales_forecast_metrics.v1.json": "501b34a63189ef4f209a43e3754901abeb5c25d11e328d53aee9f074ad19c811",
+    "sales_forecast_model.v1.pkl": "28307cfcef18ee65548157cdcd1aa9e70c0279497ce61714cb08a8480b8aba16",
+    "sales_forecast_model_card.v1.md": "2e36b85e3c7bd734f1e6c1ebe51ad8503e283cc0ad279bd0b1919ef4841a333a",
+    "sales_forecast_predictions.v1.csv": "9b9845f450d06988e2dfe9a0759acf3ed77a09e32ef0a6c97cbebf4f2792485a",
+    "sales_forecast_predictions.v1.png": "7e048c855f0aa7ccbb9579548095477fd638a0b2ad35adab9fe433dc2908beb6"
+  },
+  "dataset": {
+    "generated": true,
+    "generator_seed": 42,
+    "path": "data/raw/trackflow_sales.csv",
+    "sha256": "db18966a665e70ea85f5c979c1574b95615520872bab51035d676915284a8433"
+  },
+  "estimator_parameters": {
+    "bootstrap": true,
+    "max_depth": 6,
+    "max_features": 0.75,
+    "min_samples_leaf": 2,
+    "n_estimators": 400,
+    "n_jobs": 1,
+    "random_state": 42
+  },
+  "feature_definitions": [
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "month_sin",
+      "source": "calendar_month"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "month_cos",
+      "source": "calendar_month"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "quarter",
+      "source": "calendar_month"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "is_peak_month",
+      "source": "calendar_month"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "is_february_trough",
+      "source": "calendar_month"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": null,
+      "name": "time_index",
+      "source": "calendar_sequence"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": 1,
+      "name": "revenue_lag_1_eur",
+      "source": "revenue_eur"
+    },
+    {
+      "knowable_in_advance": true,
+      "lag_months": 12,
+      "name": "revenue_lag_12_eur",
+      "source": "revenue_eur"
+    }
+  ],
+  "feature_names": [
+    "month_sin",
+    "month_cos",
+    "quarter",
+    "is_peak_month",
+    "is_february_trough",
+    "time_index",
+    "revenue_lag_1_eur",
+    "revenue_lag_12_eur"
+  ],
+  "forecast_protocol": "strict_origin_time_recursive_per_tree",
+  "prediction_band": {
+    "lower_percentile": 10,
+    "meaning": "ensemble_spread_not_calibrated_interval",
+    "upper_percentile": 90
+  },
+  "random_seed": 42,
+  "scaling": "not_applied_tree_ensembles_are_scale_invariant",
+  "schema_version": 1,
+  "split": {
+    "test_end": "2025-12-01",
+    "test_rows": 24,
+    "test_start": "2024-01-01",
+    "train_end": "2023-12-01",
+    "train_post_lag_rows": 84,
+    "train_source_rows": 96,
+    "train_start": "2016-01-01"
+  },
+  "versions": {
+    "matplotlib": "3.11.1",
+    "numpy": "1.26.4",
+    "python": "3.12.13",
+    "scikit-learn": "1.9.0",
+    "scipy": "1.17.1"
+  }
+}

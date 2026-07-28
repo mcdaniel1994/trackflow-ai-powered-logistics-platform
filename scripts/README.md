@@ -17,3 +17,20 @@ uv run --project services/central-api python scripts/seed_incidents.py \
 
 The command prints aggregate inserted/skipped/invalid counts only. Access to the
 real CSV requires explicit authorization under the sensitive-dataset rule.
+
+## Offline sales forecasting
+
+Validate the deterministic, generated revenue dataset:
+
+```bash
+uv run --project data python scripts/generate_trackflow_sales.py --check
+```
+
+Train and formally evaluate the Phase 6.5 offline Random Forest, writing versioned artifacts to
+`data/eval/`:
+
+```bash
+uv run --project data --extra forecasting python scripts/train_sales_forecast.py --evaluate
+```
+
+The forecasting extra is intentionally absent from production runtime installation.

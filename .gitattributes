@@ -1,0 +1,2 @@
+data/raw/trackflow_sales.csv text eol=crlf
+data/eval/sales_forecast_predictions.v1.csv text eol=crlf
