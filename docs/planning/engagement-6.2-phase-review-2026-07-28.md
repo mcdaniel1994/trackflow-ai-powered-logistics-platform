@@ -119,7 +119,10 @@ The revised opt-in performance gate now uses the observed 18,844-hour × six-dim
 
 The corrected full data suite passes 127 tests with one opt-in performance test skipped and 90.25%
 coverage. The explicit performance gate passes separately; Ruff, strict mypy, package build,
-Compose validation, and 11 release-safety tests also pass.
+Compose validation, and 15 release-safety tests also pass. The release helper retries only
+idempotent Coolify environment/status reads after transient network failures: three 45-second
+attempts with 2-second and 4-second backoff. Environment mutation and the deployment webhook remain
+single-shot, and logs expose only fixed reason codes.
 
 ## Production acceptance still required
 
