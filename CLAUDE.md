@@ -94,8 +94,11 @@ Then read the active engagement brief and the README for every folder being modi
   remaining controlled exercises were omitted. Phase 6.2 durable hourly SQL rollups are deployed
   through `20260728_0012` and owner-accepted after corrected publication and exact reconciliation.
   Phase 6.3 is deployed through additive revision `20260728_0013`; its reconciled cutover and
-  control-plane/safe-stale drill passed. The computation-disable drill and seven-day production
-  observation remain pending.
+  control-plane/safe-stale drill passed. The owner accepted Phase 6.3 as-is by explicit exception
+  on July 28 and approved beginning Phase 6.4; the computation-disable drill and seven-day
+  production observation were waived, not passed or executed. Phase 6.4 may proceed locally, but
+  production executor swap, resource-limit mutations, final Prefect removal, and time-gate
+  exceptions remain separately owner-gated.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

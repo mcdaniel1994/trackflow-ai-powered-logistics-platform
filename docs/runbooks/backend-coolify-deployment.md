@@ -351,5 +351,7 @@ procedure. Never interpret a successful tag mutation as proof that Compose-level
 Phase 6.3 rollback drill one ran successfully on July 28: the reporting control plane was stopped,
 safe report/manual-refresh 503 responses were verified, explicit stale serving preserved the last
 verified snapshot, and the same immutable SHA was redeployed after restoring the flag. This did not
-exercise `image-rollback`; that drill remains pending. With the accepted no-backup waiver, a
+exercise `image-rollback`; that drill remains pending. The owner later waived the separate Phase
+6.3 computation-disable drill and seven-day observation and accepted the phase by explicit
+exception; neither waived gate was passed or executed. With the accepted no-backup waiver, a
 database or Identity-volume loss is recovered by recreation rather than restore.

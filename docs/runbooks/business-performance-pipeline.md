@@ -16,7 +16,10 @@ Production reviewer gate. Phase 6.2 durable hourly SQL rollups are deployed thro
 the 60-second budget without committing partial state; the set-based correction was redeployed,
 live-reconciled, and owner-accepted. Phase 6.3 is deployed through `20260728_0013`; its first
 controlled run published six verified report rows, and the control-plane/safe-stale rollback drill
-passed. The computation-disable drill and seven-day observation remain owner actions. Never
+passed. The owner accepted Phase 6.3 as-is by explicit exception on July 28 and approved beginning
+Phase 6.4. The computation-disable drill and seven-day observation were waived, not passed or
+executed. Phase 6.4 production executor swap, resource-limit mutations, final Prefect removal, and
+time-gate exceptions remain separately owner-gated. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
@@ -315,7 +318,8 @@ database. R2 objects are disposable and may be deleted without a database rollba
 - Reporting-result and backup R2 credentials are not provisioned; the verified absent-R2 path is
   non-blocking.
 - The production Prefect restore drill is not executed.
-- Phase 6.3 rollback drill two and the immutable-image rollback drill are not executed. Drill one
-  passed without changing snapshot lineage or queueing unexpected work.
+- Phase 6.3 rollback drill two was waived by owner exception and was not executed. Drill one passed
+  without changing snapshot lineage or queueing unexpected work. The immutable-image rollback
+  drill remains unexecuted.
 - The persisted reporting-log settings are owner-approved and repository-wired; production
   permissions/retention and the Coolify notification destination still require live verification.

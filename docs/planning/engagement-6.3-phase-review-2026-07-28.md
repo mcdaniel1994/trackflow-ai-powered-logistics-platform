@@ -4,9 +4,11 @@
 
 Phase 6.3 is implemented and deployed through additive Alembic revision `20260728_0013`.
 The reconciled weekly cutover and controlled production rollout steps 1-6 have passed, including
-rollback drill one. Phase 6.3 is **not production-accepted**: rollback drill two and the required
-seven-day observation remain owner-gated work. Phase 6.4 remains blocked until both are complete
-and the owner explicitly accepts Phase 6.3.
+rollback drill one. On 2026-07-28 the owner explicitly accepted Phase 6.3 as-is and approved
+beginning Phase 6.4 as an exception to the remaining acceptance gates. Rollback drill two and the
+required seven-day observation were **waived, not passed or executed**. This exception authorizes
+Phase 6.4 to begin; it does not authorize a production executor swap, resource-limit mutation,
+final Prefect topology removal, or a Phase 6.4 time-gate exception.
 
 Phase 6.2 is production-accepted. Its corrected production run committed 1,266 hourly rows at the
 fixed `2026-07-28T19:00:00Z` cutoff, reconciled exactly across 12 dimensions in approximately
@@ -73,8 +75,8 @@ The integration fixtures prove:
 | 4. Controlled production run | Passed | Run `f0c53414-7c0e-4a57-b456-0cf632ad2698`, attempt 1, succeeded |
 | 5. Reconciliation and read budgets | Passed | 106,643 source rows, 432 hourly rows, six report rows; exact reconciliation and approved read budgets passed |
 | 6. Rollback drill one | Passed | Safe 503 without Prefect, explicit stale snapshot serving, unrelated-route isolation, and full restoration verified |
-| 7. Rollback drill two | Pending owner approval | Not started; requires a separate approval |
-| 8. Seven-day observation | Pending | Has not started |
+| 7. Rollback drill two | Waived by owner exception | Not started or executed; no passing evidence exists |
+| 8. Seven-day observation | Waived by owner exception | Not started or executed; no observation evidence exists |
 
 ### Production snapshot and run
 
@@ -115,5 +117,12 @@ container while leaving the application and reporting worker running.
 - Final operator verification showed `LIVE`, `IDLE`, the same six-row verified source snapshot,
   and the same cutoff/publication. Both stale-override records were `false`.
 
-Phase 6.3 is accepted only after steps 7-8 have passing evidence and the owner explicitly accepts
-the phase. Rollback drill two was not started, and Phase 6.4 remains blocked.
+## Owner acceptance exception
+
+The owner accepted Phase 6.3 as-is on 2026-07-28 and approved beginning Phase 6.4. This is a
+recorded exception to the normal gate requiring passing evidence for steps 7-8. Rollback drill two
+and the seven-day observation remain unexecuted and must never be described as passed.
+
+The exception does not broaden production authority. The Phase 6.4 production executor swap,
+resource-limit mutations, final Prefect topology removal, and any request to shorten or waive
+Phase 6.4 measurement or observation windows require separate explicit owner approval.

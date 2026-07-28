@@ -24,8 +24,9 @@
   transient-only inner retries, computation-disable/verified-stale rollback modes, and operator
   status/UI. Its first controlled run published a verified six-row snapshot, and rollback drill one
   passed with safe 503, explicit stale serving, unrelated-route isolation, unchanged snapshot
-  lineage, and no unexpected queue work. Rollback drill two and the required seven-day observation
-  remain pending.
+  lineage, and no unexpected queue work. On 2026-07-28 the owner accepted Phase 6.3 as-is by
+  explicit exception and approved beginning Phase 6.4. Rollback drill two and the required
+  seven-day observation were waived by that decision; they were not passed or executed.
   Independent Phases 6.5.a–b are
   owner-accepted and complete as an offline
   evaluation: the relocated,
@@ -68,16 +69,18 @@
   them on the deploy critical path. The guards now report without gating startup, enforcement moved
   into the worker, guards emit fixed tokens, and `scripts/release/measure_compose_startup.sh` makes
   the attach time measurable (18s chain against ~3GB of per-deployment pulls). Approved
-  redeployment is complete. The Phase 6.3 control-plane outage/restore drill passed; external
-  production soak, Prefect restore, 48-hour headroom, scheduled-run, computation-disable, and
-  image-rollback acceptance measurements remain.
+  redeployment is complete. The Phase 6.3 control-plane outage/restore drill passed; its
+  computation-disable and seven-day gates were waived by owner exception. Phase 6.4 measured
+  48-hour studies and direct-executor work are approved to begin. Production executor swap,
+  resource-limit changes, final Prefect topology removal, Prefect restore, scheduled-run, and
+  image-rollback exercises remain separately owner-gated.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
   `/health/ready`, and automatically restores the previous immutable image after deploy or
   readiness failure. The GitHub Production secret is configured; credential rotation remains an
-  owner action. Rollback drill one is complete; the separate computation-disable drill remains an
-  owner acceptance action.
+  owner action. Rollback drill one is complete; the separate computation-disable drill was waived,
+  not executed, under the Phase 6.3 owner exception.
   Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
   carriers tables, and AI telemetry remain explicitly deferred.
 
@@ -111,9 +114,10 @@ implementing any of the items below.
 - Engagement 6.1-6.4 - reporting reliability remediation. Owner-approved
   specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is closed by documented
   owner exception. Phase 6.2 is production-accepted. Phase 6.3 is deployed through
-  `20260728_0013`; controlled rollout steps 1-6 and rollback drill one passed. Rollback drill two
-  and the seven-day observation remain; Phase 6.4 remains blocked until explicit Phase 6.3
-  acceptance.
+  `20260728_0013`; controlled rollout steps 1-6 and rollback drill one passed. The owner accepted
+  Phase 6.3 by explicit exception on 2026-07-28, waiving rollback drill two and the seven-day
+  observation without executing them. Phase 6.4 is approved to begin subject to its own production
+  mutation and time-gate approvals.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
@@ -144,8 +148,9 @@ implementing any of the items below.
   configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
   follow-ups; the first live automated deployment exposed the documented Prefect startup defect,
   while the July 28 immutable deployment verified its hotfix and Phase 6.1. The owner omitted the
-  remaining Phase 6.1 exercises. Phase 6.3 rollback drill one has now run successfully; drill two
-  remains pending separate owner approval.
+  remaining Phase 6.1 exercises. Phase 6.3 rollback drill one ran successfully; the owner later
+  waived drill two and the seven-day observation and accepted the phase by explicit exception.
+  Phase 6.4 production mutations and time-gate exceptions remain separately approval-gated.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

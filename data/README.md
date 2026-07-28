@@ -31,7 +31,9 @@ fixed cutoffs, trailing 72-hour recomputation, exact reconciliation, and a 12-ho
 It is deployed through Alembic `20260728_0012` and production-accepted. Phase 6.3 adds atomic
 reconciled weekly publication, weekly/history plus hourly/current-week reads, transient-only inner
 SQL retries, an explicit computation kill switch, and verified-stale serving mode. It is locally
-verified through `20260728_0013` and awaits controlled production rollout.
+verified and deployed through `20260728_0013`. Rollback drill one passed; the owner accepted Phase
+6.3 by explicit exception and waived drill two and the seven-day observation without executing
+them. Phase 6.4 measured re-budgeting and direct-executor work are approved to begin.
 
 Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
 generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline

@@ -9,8 +9,10 @@ and Back Office deployment plus Supabase role/migration procedure are
 production-verified. Repository-side approval-gated SHA deployment and manual
 workflow rollback are implemented. The first dedicated-Prefect live run exposed a documented
 Coolify init-mount defect; its repository hotfix and Phase 6.1 were successfully deployed on July
-28. The owner omitted the remaining Phase 6.1 exercises. Phase 6.2 is production-accepted, and
-Phase 6.3 rollback drill one passed; rollback drill two and the observation window remain.
+28. The owner omitted the remaining Phase 6.1 exercises. Phase 6.2 is production-accepted. Phase
+6.3 rollback drill one passed, after which the owner accepted the phase by explicit exception and
+waived rollback drill two and the observation window without executing them. Phase 6.4 is approved
+to begin, but its production mutations and time-gate exceptions remain separately owner-gated.
 
 ---
 
@@ -32,7 +34,7 @@ Phase 6.3 rollback drill one passed; rollback drill two and the observation wind
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 | [telemetry-inventory.md](telemetry-inventory.md) | Living reference | Every telemetry signal: implemented today vs. Engagement 6 vs. deferred, with fields, storage, retention, access, and evidence |
 | [operations-feed.md](operations-feed.md) | Portfolio-production | The live operations feed worker, its single-writer/kill-switch safety, telemetry enablement, and the database-size guard that bounds Supabase Free |
-| [business-performance-pipeline.md](business-performance-pipeline.md) | Phase 6.3 deployed; drill one passed, drill two and observation pending | Reporting authority, SQL rollups/reconciliation, idempotent database bootstrap, Prefect durability, operator triage, upgrade, recovery, and rollback |
+| [business-performance-pipeline.md](business-performance-pipeline.md) | Phase 6.3 owner-accepted by exception; Phase 6.4 approved to begin | Reporting authority, SQL rollups/reconciliation, idempotent database bootstrap, Prefect durability, operator triage, upgrade, recovery, and rollback |
 
 ## Current Deployment Process (summary)
 
@@ -53,8 +55,9 @@ Phase 6.3 rollback drill one passed; rollback drill two and the observation wind
 
 ## Known Gaps (no runbook yet — do not fabricate)
 
-- The Phase 6.3 computation-disable rollback drill and the immutable-image rollback drill remain;
-  the control-plane/safe-stale production drill passed on July 28.
+- The Phase 6.3 computation-disable rollback drill was waived by owner exception and was not
+  executed. The immutable-image rollback drill remains; the control-plane/safe-stale production
+  drill passed on July 28.
 - External uptime monitoring and centralized log shipping.
 - Incident response (who responds, escalation, comms).
 - Environment/secrets management procedure.
@@ -77,7 +80,8 @@ Phase 6.3 rollback drill one passed; rollback drill two and the observation wind
 - [x] Complete the approved Prefect hotfix redeployment.
 - [x] Deploy and live-reconcile the Phase 6.2 shadow rollups.
 - [x] Complete Phase 6.3 rollback drill one: control-plane outage and verified-stale serving.
-- [ ] Complete Phase 6.3 rollback drill two after separate owner approval.
+- [x] Record Phase 6.3 rollback drill two and observation as waived, not passed, by owner exception.
+- [ ] Complete Phase 6.4 measurement windows and executor verification without compressing evidence.
 - [ ] Add external uptime monitoring and a monitoring runbook.
 - [ ] Write an incident-response runbook.
 - [ ] Document environment/secrets management.

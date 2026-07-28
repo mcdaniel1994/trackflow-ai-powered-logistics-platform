@@ -13,7 +13,7 @@ Each brief is owned by an internal stakeholder and frames the problem, scope, an
 | 03 | [Talent Pipeline Tracker](03-talent-pipeline-tracker.md) | Ana Whitfield, Head of Warehouse Operations | ✅ Delivered | `uis/backoffice/app/talent/` (original `apps/talent-pipeline-tracker/` retired June 2026 — [retirement note](../archive/talent-pipeline-tracker-retirement.md)) |
 | 04 | [AI-Driven Engineering Infrastructure](04-ai-driven-engineering.md) | Andrés Kim, CTO | ✅ Delivered | `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, `services/` |
 | 05 | [Backend Inventory Management](05-backend-inventory-management.md) | Andrés Kim, CTO | ✅ Delivered | `services/central-api/` |
-| 06 | [Data Pipelines & Telemetry](06-data-pipelines-telemetry.md) | Andrés Kim, CTO | 🚧 6.1 closed by owner exception; 6.2 production-accepted; 6.3 deployed with rollback drill one passed, drill two and observation pending; independent 6.5.a–b complete offline | `data/`, `services/central-api/`, `services/identity/`, `uis/backoffice/`, `.github/workflows/` |
+| 06 | [Data Pipelines & Telemetry](06-data-pipelines-telemetry.md) | Andrés Kim, CTO | 🚧 6.1 closed by owner exception; 6.2 production-accepted; 6.3 owner-accepted by exception with drill two and observation waived (not passed); 6.4 approved to begin; independent 6.5.a–b complete offline | `data/`, `services/central-api/`, `services/identity/`, `uis/backoffice/`, `.github/workflows/` |
 
 ## Conventions
 

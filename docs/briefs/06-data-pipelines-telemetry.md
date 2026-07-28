@@ -13,8 +13,12 @@ sub-60-second durable attempt, and the owner accepted the phase on 2026-07-28. P
 through additive revision `20260728_0013`: reconciled weekly activation, hourly current-week reads,
 transient-only inner retries, safe 503/stale rollback modes, and additive operator status are live.
 The first six-row verified weekly snapshot published, and the control-plane/safe-stale rollback
-drill passed without unexpected work or unrelated-route failure. The computation-disable drill and
-required seven-day observation remain pending, so Phase 6.3 is not yet production-accepted.
+drill passed without unexpected work or unrelated-route failure. On 2026-07-28 the owner accepted
+Phase 6.3 as-is and approved beginning Phase 6.4 by explicit exception. The computation-disable
+drill and required seven-day observation were waived by that decision; neither was passed or
+executed. Phase 6.4 measured re-budgeting and direct-SQL executor work may begin, while the
+production executor swap, resource-limit changes, final Prefect topology removal, and any Phase
+6.4 time-gate exception remain separately owner-gated.
 Independent sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline
 evaluation. Five chronological folds diagnose overfitting and unstable temporal validation; the
 offline artifact is not approved for serving or operational decisions.
