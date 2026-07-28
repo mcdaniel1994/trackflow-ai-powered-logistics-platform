@@ -292,6 +292,11 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
 
 ## Troubleshooting
 
+- `coolify_release_failed ... reason=coolify_get_transient_exhausted`: the release helper could not
+  read Coolify application or deployment state after three 45-second attempts with 2-second and
+  4-second backoff. It is safe to retry only when the workflow also reports that no image mutation
+  occurred. Confirm the Coolify dashboard/API is responsive first. Environment PATCH requests and
+  the deployment webhook are deliberately single-shot and are never automatically retried.
 - `prefect-postgres` is running and `pg_isready` succeeds, but `pg_trgm` or `prefect_backup` is
   absent: inspect `prefect-postgres-bootstrap`. It must complete with the fixed token
   `prefect_postgres_bootstrap=complete`. Do not wait for PostgreSQL's init directory to rerun and do

@@ -19,10 +19,17 @@ _IDENTIFIER = re.compile(r"^[A-Za-z0-9_-]+$")
 _SUCCESS = {"finished", "success", "succeeded", "completed"}
 _FAILURE = {"failed", "failure", "cancelled", "canceled", "cancelled-by-user", "canceled-by-user", "error"}
 _PENDING = {"queued", "pending", "in_progress", "in-progress", "running", ""}
+_GET_ATTEMPTS = 3
+_GET_TIMEOUT_SECONDS = 45
+_GET_BACKOFF_SECONDS = (2, 4)
 
 
 class ReleaseError(RuntimeError):
     """A fixed, non-sensitive Coolify release failure."""
+
+    def __init__(self, message: str, *, reason: str = "release_error") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -37,7 +44,14 @@ class CoolifyClient:
         self.token = token
         self.webhook = webhook
 
-    def request_json(self, url: str, *, method: str = "GET", payload: object | None = None) -> Any:
+    def request_json(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        payload: object | None = None,
+        retry_transient_get: bool = False,
+    ) -> Any:
         data = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
         request = urllib.request.Request(
             url,
@@ -45,14 +59,40 @@ class CoolifyClient:
             method=method,
             headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
         )
-        try:
-            with urllib.request.urlopen(request, timeout=20) as response:  # noqa: S310 - validated HTTPS below
-                return json.load(response)
-        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise ReleaseError("Coolify request failed") from exc
+        attempts = _GET_ATTEMPTS if method == "GET" and retry_transient_get else 1
+        for attempt in range(attempts):
+            try:
+                with urllib.request.urlopen(  # noqa: S310 - validated HTTPS below
+                    request,
+                    timeout=_GET_TIMEOUT_SECONDS,
+                ) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as exc:
+                transient = 500 <= exc.code < 600
+                if not transient or attempt + 1 >= attempts:
+                    reason = "coolify_get_transient_exhausted" if transient else "coolify_http_error"
+                    raise ReleaseError("Coolify request failed", reason=reason) from exc
+            except (urllib.error.URLError, TimeoutError) as exc:
+                if attempt + 1 >= attempts:
+                    reason = (
+                        "coolify_get_transient_exhausted"
+                        if attempts > 1
+                        else "coolify_request_failed"
+                    )
+                    raise ReleaseError("Coolify request failed", reason=reason) from exc
+            except json.JSONDecodeError as exc:
+                raise ReleaseError(
+                    "Coolify response is invalid",
+                    reason="coolify_invalid_json",
+                ) from exc
+            time.sleep(_GET_BACKOFF_SECONDS[attempt])
+        raise AssertionError("unreachable")
 
     def environments(self, application_uuid: str) -> list[dict[str, Any]]:
-        value = self.request_json(f"{self.api_base}/applications/{application_uuid}/envs")
+        value = self.request_json(
+            f"{self.api_base}/applications/{application_uuid}/envs",
+            retry_transient_get=True,
+        )
         if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
             raise ReleaseError("Coolify environment response is invalid")
         return value
@@ -82,7 +122,10 @@ class CoolifyClient:
         raise ReleaseError("Coolify deployment identifier is invalid")
 
     def deployment_status(self, deployment_uuid: str) -> str:
-        value = self.request_json(f"{self.api_base}/deployments/{deployment_uuid}")
+        value = self.request_json(
+            f"{self.api_base}/deployments/{deployment_uuid}",
+            retry_transient_get=True,
+        )
         if not isinstance(value, dict):
             raise ReleaseError("Coolify deployment response is invalid")
         data = value.get("data")
@@ -220,7 +263,11 @@ def entrypoint() -> None:
         )
         print("coolify_deployment_complete")
     except Exception as exc:
-        print(f"coolify_release_failed error_type={type(exc).__name__}", file=sys.stderr)
+        reason = exc.reason if isinstance(exc, ReleaseError) else "unexpected_error"
+        print(
+            f"coolify_release_failed error_type={type(exc).__name__} reason={reason}",
+            file=sys.stderr,
+        )
         raise SystemExit(1) from None
 
 
