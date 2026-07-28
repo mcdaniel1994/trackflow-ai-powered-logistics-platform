@@ -19,10 +19,13 @@
   Alembic `20260728_0011` and closed by explicit owner exception after the remaining controlled
   exercises were omitted on 2026-07-28. Phase 6.2 additive revision `20260728_0012` is deployed
   and owner-accepted after its corrected 1,266-row publication, exact 12-dimension reconciliation,
-  and 35.573-second durable attempt. Phase 6.3 is locally implemented through additive revision
+  and 35.573-second durable attempt. Phase 6.3 is deployed through additive revision
   `20260728_0013`, with atomic reconciled weekly activation, hourly current-week reads,
   transient-only inner retries, computation-disable/verified-stale rollback modes, and operator
-  status/UI; it awaits controlled production rollout and the required seven-day observation.
+  status/UI. Its first controlled run published a verified six-row snapshot, and rollback drill one
+  passed with safe 503, explicit stale serving, unrelated-route isolation, unchanged snapshot
+  lineage, and no unexpected queue work. Rollback drill two and the required seven-day observation
+  remain pending.
   Independent Phases 6.5.a–b are
   owner-accepted and complete as an offline
   evaluation: the relocated,
@@ -65,14 +68,16 @@
   them on the deploy critical path. The guards now report without gating startup, enforcement moved
   into the worker, guards emit fixed tokens, and `scripts/release/measure_compose_startup.sh` makes
   the attach time measurable (18s chain against ~3GB of per-deployment pulls). Approved
-  redeployment plus external production soak, outage, restore,
-  48-hour headroom, scheduled-run, and image-rollback acceptance measurements remain.
+  redeployment is complete. The Phase 6.3 control-plane outage/restore drill passed; external
+  production soak, Prefect restore, 48-hour headroom, scheduled-run, computation-disable, and
+  image-rollback acceptance measurements remain.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
   `/health/ready`, and automatically restores the previous immutable image after deploy or
-  readiness failure. Credential rotation, the GitHub
-  Production secret and the controlled rollback drill remain owner acceptance actions.
+  readiness failure. The GitHub Production secret is configured; credential rotation remains an
+  owner action. Rollback drill one is complete; the separate computation-disable drill remains an
+  owner acceptance action.
   Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
   carriers tables, and AI telemetry remain explicitly deferred.
 
@@ -105,9 +110,10 @@ implementing any of the items below.
 
 - Engagement 6.1-6.4 - reporting reliability remediation. Owner-approved
   specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is closed by documented
-  owner exception. Phase 6.2 is production-accepted. Phase 6.3 is locally verified through
-  `20260728_0013` and awaits its controlled production rollout, fault drills, and seven-day
-  observation; Phase 6.4 remains blocked until that acceptance is complete.
+  owner exception. Phase 6.2 is production-accepted. Phase 6.3 is deployed through
+  `20260728_0013`; controlled rollout steps 1-6 and rollback drill one passed. Rollback drill two
+  and the seven-day observation remain; Phase 6.4 remains blocked until explicit Phase 6.3
+  acceptance.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
@@ -138,7 +144,8 @@ implementing any of the items below.
   configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
   follow-ups; the first live automated deployment exposed the documented Prefect startup defect,
   while the July 28 immutable deployment verified its hotfix and Phase 6.1. The owner omitted the
-  remaining Phase 6.1 exercises; the live rollback drill has not run.
+  remaining Phase 6.1 exercises. Phase 6.3 rollback drill one has now run successfully; drill two
+  remains pending separate owner approval.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

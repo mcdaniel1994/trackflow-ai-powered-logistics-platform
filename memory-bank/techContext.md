@@ -33,7 +33,8 @@
   `4.1.2` and the GitHub Production environment are configured for this path;
   its first live approved run exposed the July 15 Prefect init-mount defect; the repository hotfix
   and Phase 6.1 were deployed successfully on July 28. The owner omitted the remaining controlled
-  Phase 6.1 exercises; the rollback drill remains an owner step.
+  Phase 6.1 exercises. Phase 6.3 control-plane/safe-stale rollback drill one passed; the
+  computation-disable and immutable-image rollback drills remain owner steps.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 

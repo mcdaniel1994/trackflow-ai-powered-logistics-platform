@@ -9,14 +9,15 @@ Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to omit the r
 exercises and proceed; Phase 6.1 is closed by that documented exception, not by passing evidence.
 Phase 6.2 durable hourly SQL rollups are deployed through additive revision `20260728_0012`; the
 set-based correction completed a 1,266-row publication, exact 12-dimension reconciliation, and
-sub-60-second durable attempt, and the owner accepted the phase on 2026-07-28. Phase 6.3 is locally
-implemented through additive revision `20260728_0013`: reconciled weekly activation, hourly
-current-week reads, transient-only inner retries, safe 503/stale rollback modes, and additive
-operator status are verified locally but not yet deployed or accepted in production. Independent
-sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline evaluation.
-Five chronological folds diagnose overfitting and unstable temporal validation; the offline
-artifact is not approved for serving or operational decisions. The weekly business report has still
-never published in production.
+sub-60-second durable attempt, and the owner accepted the phase on 2026-07-28. Phase 6.3 is deployed
+through additive revision `20260728_0013`: reconciled weekly activation, hourly current-week reads,
+transient-only inner retries, safe 503/stale rollback modes, and additive operator status are live.
+The first six-row verified weekly snapshot published, and the control-plane/safe-stale rollback
+drill passed without unexpected work or unrelated-route failure. The computation-disable drill and
+required seven-day observation remain pending, so Phase 6.3 is not yet production-accepted.
+Independent sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline
+evaluation. Five chronological folds diagnose overfitting and unstable temporal validation; the
+offline artifact is not approved for serving or operational decisions.
 
 Dedicated Prefect production remediation Phases 0-4 are implemented and locally
 verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
@@ -41,12 +42,12 @@ gating startup, the worker enforces the identical conditions fail-closed in a bo
 every guard emits fixed success/failure tokens, and the release measures the guard outcome from live
 worker state instead of hard-coding it. The immutable July 28 deployment verified this path in
 production; controlled external acceptance remains pending.
-External soak, production outage/restore, 48-hour headroom, and image-rollback acceptance gates
-remain owner-approved work. The earlier
+External soak, Prefect restore, 48-hour headroom, computation-disable, and image-rollback
+acceptance gates remain owner-approved work. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
 reporting surface, declarative reporting/maintenance workers, production migration verifier,
-readiness probes, and automatic image rollback are implemented and locally verified through
-Alembic revision `20260728_0012` locally (`20260728_0011` in production). Coolify no longer needs separate cron configuration. The
+readiness probes, and automatic image rollback are implemented and deployed through
+Alembic revision `20260728_0013`. Coolify no longer needs separate cron configuration. The
 approval-gated migration workflow and replacement `MIGRATION_DATABASE_URL` are configured. KPI
 consumers are Thomas Harry (CEO) and Ana
 Whitfield (Head of Warehouse Operations).

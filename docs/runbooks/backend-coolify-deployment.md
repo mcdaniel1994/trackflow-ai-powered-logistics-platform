@@ -348,6 +348,8 @@ restoring the prior app image can fail in the same way. Recover by deploying a r
 hotfix or by explicitly redeploying the prior repository revision through an owner-approved
 procedure. Never interpret a successful tag mutation as proof that Compose-level rollback occurred.
 
-No live automated rollback drill has run yet. With the accepted no-backup
-waiver, a database or Identity-volume loss is recovered by recreation rather
-than restore.
+Phase 6.3 rollback drill one ran successfully on July 28: the reporting control plane was stopped,
+safe report/manual-refresh 503 responses were verified, explicit stale serving preserved the last
+verified snapshot, and the same immutable SHA was redeployed after restoring the flag. This did not
+exercise `image-rollback`; that drill remains pending. With the accepted no-backup waiver, a
+database or Identity-volume loss is recovered by recreation rather than restore.

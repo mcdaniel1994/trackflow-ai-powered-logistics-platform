@@ -10,12 +10,13 @@ execution from maintenance. The Phase 6.1 image and migration were deployed succ
 exception is recorded without representing them as passed. The owner
 approved the persisted-log defaults on 2026-07-28: 10 MiB rotation with nine backups, 14-day
 retention, a 250 MiB directory ceiling, and a persistent `reporting-logs` volume mounted at
-`/var/log/trackflow/reporting`. External acceptance and the rollback drill remain owner actions.
-Do not bypass the GitHub
+`/var/log/trackflow/reporting`. Do not bypass the GitHub
 Production reviewer gate. Phase 6.2 durable hourly SQL rollups are deployed through
 `20260728_0012` and enabled in production. The first 113,064-row full-history publication exceeded
-the 60-second budget without committing partial state; the set-based correction awaits redeployment
-and live reconciliation. Never
+the 60-second budget without committing partial state; the set-based correction was redeployed,
+live-reconciled, and owner-accepted. Phase 6.3 is deployed through `20260728_0013`; its first
+controlled run published six verified report rows, and the control-plane/safe-stale rollback drill
+passed. The computation-disable drill and seven-day observation remain owner actions. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
@@ -314,7 +315,7 @@ database. R2 objects are disposable and may be deleted without a database rollba
 - Reporting-result and backup R2 credentials are not provisioned; the verified absent-R2 path is
   non-blocking.
 - The production Prefect restore drill is not executed.
-- The first hardened production deployment completed; the weekly computation still has no
-  successful publication and the rollback drill is not executed.
+- Phase 6.3 rollback drill two and the immutable-image rollback drill are not executed. Drill one
+  passed without changing snapshot lineage or queueing unexpected work.
 - The persisted reporting-log settings are owner-approved and repository-wired; production
   permissions/retention and the Coolify notification destination still require live verification.
