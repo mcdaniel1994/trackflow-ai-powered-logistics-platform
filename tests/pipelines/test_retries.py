@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy.exc import OperationalError
 
 from pipelines.business_performance.retries import (
@@ -48,4 +49,24 @@ def test_nontransient_database_failure_is_not_retried() -> None:
         assert raised is failure
     else:
         raise AssertionError("nontransient failure was swallowed")
+    assert calls == 1
+
+
+def test_explicit_socket_and_text_allowlist_paths_and_exhaustion() -> None:
+    assert is_transient_connectivity_failure(ConnectionRefusedError()) is True
+    assert (
+        is_transient_connectivity_failure(
+            OSError("server closed the connection unexpectedly")
+        )
+        is True
+    )
+    calls = 0
+
+    def timeout() -> None:
+        nonlocal calls
+        calls += 1
+        raise TimeoutError
+
+    with pytest.raises(TimeoutError):
+        run_with_transient_retries(timeout, delays=(), sleeper=lambda _delay: None)
     assert calls == 1
