@@ -1,11 +1,14 @@
-# Engagement 6.3 Local Review Evidence — 2026-07-28
+# Engagement 6.3 Phase Review Evidence — 2026-07-28
 
 ## Status
 
-Phase 6.3 is implemented and locally verified through additive Alembic revision
-`20260728_0013`. It is **not production-accepted**. The cutover flag defaults off, no production
-state has been changed, and Phase 6.4 remains blocked until the Phase 6.3 production exercises and
-seven-day observation are complete.
+Phase 6.3 is implemented and deployed through additive Alembic revision `20260728_0013`.
+The reconciled weekly cutover and controlled production rollout steps 1-6 have passed, including
+rollback drill one. On 2026-07-28 the owner explicitly accepted Phase 6.3 as-is and approved
+beginning Phase 6.4 as an exception to the remaining acceptance gates. Rollback drill two and the
+required seven-day observation were **waived, not passed or executed**. This exception authorizes
+Phase 6.4 to begin; it does not authorize a production executor swap, resource-limit mutation,
+final Prefect topology removal, or a Phase 6.4 time-gate exception.
 
 Phase 6.2 is production-accepted. Its corrected production run committed 1,266 hourly rows at the
 fixed `2026-07-28T19:00:00Z` cutoff, reconciled exactly across 12 dimensions in approximately
@@ -62,30 +65,64 @@ The integration fixtures prove:
 - unchanged legacy response behavior while cutover remains disabled; and
 - additive migration/schema constraints and production migration reruns.
 
-## Controlled production rollout — approval required
+## Controlled production rollout
 
-No production step below is authorized by this local review.
+| Step | Result | Evidence |
+|---|---|---|
+| 1. Deploy cutover-off release | Passed | Immutable SHA `b834fcd8b81d4904bb10fffcee363c8ccee58e2e`; additive revision `20260728_0013` |
+| 2. Verify baseline | Passed | Liveness and core readiness stayed healthy; reporting worker heartbeat and Prefect health were current |
+| 3. Enable reconciled cutover | Passed | `REPORTING_ROLLUP_CUTOVER_ENABLED=true`, computation enabled, stale override false |
+| 4. Controlled production run | Passed | Run `f0c53414-7c0e-4a57-b456-0cf632ad2698`, attempt 1, succeeded |
+| 5. Reconciliation and read budgets | Passed | 106,643 source rows, 432 hourly rows, six report rows; exact reconciliation and approved read budgets passed |
+| 6. Rollback drill one | Passed | Safe 503 without Prefect, explicit stale snapshot serving, unrelated-route isolation, and full restoration verified |
+| 7. Rollback drill two | Waived by owner exception | Not started or executed; no passing evidence exists |
+| 8. Seven-day observation | Waived by owner exception | Not started or executed; no observation evidence exists |
 
-1. Merge and deploy the immutable release with
-   `REPORTING_ROLLUP_CUTOVER_ENABLED=false`,
-   `REPORTING_COMPUTATION_ENABLED=true`, and `REPORTING_FORCE_STALE=false`.
-2. Verify migration `20260728_0013`, public liveness/core readiness/reporting status, worker
-   heartbeat/orchestrator health, and unchanged served weekly response behavior.
-3. Enable `REPORTING_ROLLUP_CUTOVER_ENABLED=true` and redeploy once.
-4. Queue one controlled run. Record its fixed cutoff, hourly and weekly row counts, attempt duration,
-   active version/publication time, and first successful weekly response.
-5. Re-run exact live raw-versus-hourly reconciliation at that active cutoff and measure the current
-   and historical report reads against the approved budget.
-6. Exercise rollback path one: force the reporting control plane unavailable, confirm report reads
-   return the stable safe 503 and unrelated Back Office routes produce zero 5xx/404, then enable
-   `REPORTING_FORCE_STALE=true` and confirm the prior cutoff/publication is served and labelled stale.
-   Restore the control plane and set the flag false.
-7. Exercise rollback path two: set `REPORTING_COMPUTATION_ENABLED=false`, confirm the worker
-   heartbeats without claiming work and report reads/manual refresh return
-   `REPORTING_COMPUTATION_DISABLED`, then restore the flag true.
-8. Begin the required seven-day observation with alerts for missed cadence plus grace, stage
-   deadline, repeated retry, reconciliation failure, database soft threshold, and independent Back
-   Office route failure.
+### Production snapshot and run
 
-Phase 6.3 is accepted only after all eight steps have recorded passing evidence. Phase 6.4 cannot
-begin before the seven-day observation and explicit owner acceptance.
+- The active source cutoff is `2026-07-28T20:00:00Z`.
+- The active snapshot publication time is `2026-07-28T20:27:22.505196Z`.
+- The successful run finished at `2026-07-28T20:27:24.481784Z` with one durable attempt,
+  106,643 rows extracted, 432 rows transformed, and six rows published.
+- The authenticated Back Office serves the six-row verified snapshot and labels the active week
+  incomplete because the source ledger reset mid-week.
+
+### Rollback drill one
+
+The owner approved only rollback drill one. The drill stopped the production Prefect Server
+container while leaving the application and reporting worker running.
+
+- The worker heartbeat remained current while its orchestrator status changed to unhealthy.
+- Authenticated report reads and a normal manual refresh both returned HTTP 503 with
+  `REPORTING_CONTROL_PLANE_UNAVAILABLE`.
+- `/api/health/live` and `/api/health/ready` remained HTTP 200. The Back Office landing,
+  inventory, telemetry, carrier scoring, incidents, suppliers, talent, and profile routes all
+  remained HTTP 200, with no unrelated 5xx or 404 response.
+- With only `REPORTING_FORCE_STALE=true`, the report returned HTTP 200 with six rows, state
+  `stale`, and the unchanged cutoff/publication metadata above. The Back Office explicitly labelled
+  the result as a stale verified snapshot.
+- Prefect Server was restored, then only the production stale override was returned to `false`.
+  Preview remained `false`.
+- Normal release deployments before and after the flag change used the same immutable SHA.
+  GitHub Actions runs
+  [30399438040](https://github.com/mcdaniel1994/trackflow-ai-powered-logistics-platform/actions/runs/30399438040)
+  and
+  [30400067885](https://github.com/mcdaniel1994/trackflow-ai-powered-logistics-platform/actions/runs/30400067885)
+  passed their migration, deployment, liveness, readiness, and separate reporting checks. Their
+  image-rollback steps were skipped.
+- Final read-only database verification found migration `20260728_0013`, a healthy orchestrator
+  with a two-second worker heartbeat, zero running or queued/retryable work, the same active
+  cutoff/publication, and the same successful run with exactly one attempt. This proves the drill
+  neither queued unexpected work nor reactivated the legacy transform.
+- Final operator verification showed `LIVE`, `IDLE`, the same six-row verified source snapshot,
+  and the same cutoff/publication. Both stale-override records were `false`.
+
+## Owner acceptance exception
+
+The owner accepted Phase 6.3 as-is on 2026-07-28 and approved beginning Phase 6.4. This is a
+recorded exception to the normal gate requiring passing evidence for steps 7-8. Rollback drill two
+and the seven-day observation remain unexecuted and must never be described as passed.
+
+The exception does not broaden production authority. The Phase 6.4 production executor swap,
+resource-limit mutations, final Prefect topology removal, and any request to shorten or waive
+Phase 6.4 measurement or observation windows require separate explicit owner approval.

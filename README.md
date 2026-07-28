@@ -36,9 +36,9 @@ workers, approval-gated migrations, dependency-aware readiness, automatic immuta
 and a private, digest-pinned Prefect Server backed by its own PostgreSQL database.
 `reporting.pipeline_runs` is the sole dispatch authority.
 
-**The weekly business report is not yet working.** As of July 28, 2026 the reporting worker,
-Prefect, and hourly rollup path are healthy in production, but
-`reporting.weekly_warehouse_client_performance` is empty — no weekly report has published yet.
+**The weekly business report is working in production.** As of July 28, 2026 the reporting worker,
+Prefect, and reconciled hourly/weekly rollup path are healthy, and the authenticated Back Office
+serves the first verified six-row weekly snapshot.
 Two owner-approved specifications now cover the remaining work:
 [`spec.md`](docs/planning/remaining_planning/spec.md) for reporting reliability (Phases 6.1–6.4) and
 [`spec-6.5-sales-forecasting.md`](docs/planning/remaining_planning/spec-6.5-sales-forecasting.md)
@@ -48,9 +48,11 @@ and owner-accepted as an offline evaluation: the formal chronological evaluation
 overfitting and does not approve the artifact for operational use. Phase 6.1 is deployed at
 `13bba2e` / Alembic `20260728_0011`. Phase 6.2 schema/image is deployed through additive revision
 `20260728_0012` and is owner-accepted after its corrected publication, exact reconciliation, and
-runtime budget passed. Phase 6.3 is locally verified through additive revision `20260728_0013`;
-its reconciled weekly cutover, safe degradation drills, and seven-day production observation have
-not yet been approved or executed. The 6.5 offline artifact is not deployed.
+runtime budget passed. Phase 6.3 is deployed through additive revision `20260728_0013`; its
+reconciled cutover, first controlled run, and safe-stale rollback drill passed. On July 28, the
+owner accepted Phase 6.3 as-is and approved beginning Phase 6.4 by explicit exception. The
+computation-disable drill and required seven-day production observation were waived, not passed or
+executed. The 6.5 offline artifact is not deployed.
 Production soak, restore, outage,
 memory-headroom, and rollback acceptance gates remain owner-approved external work.
 
@@ -171,21 +173,27 @@ TrackFlow reflects real-world logistics challenges:
 ### 🚧 Engagement 6 / 6.5 — Data, Telemetry & Forecasting *(in progress)*
 
 - Production telemetry, live synthetic-but-canonical operations, and the durable weekly reporting
-  queue remain in service; the weekly report itself has never successfully published.
+  queue remain in service; the weekly report now serves its first verified six-row snapshot.
 - Phase 6.1 adds durable per-attempt failure evidence, separate liveness/core
   readiness/reporting verification, safe timeout ordering, and an owner-gated destructive reset.
 - Phase 6.2 adds durable hourly SQL rollups, fixed cutoffs, trailing 72-hour recomputation, exact
   reconciliation, and 12-hour cadence; its production gate is accepted.
 - Phase 6.3 adds atomic reconciled weekly activation, weekly/history plus hourly/current reads,
   transient-only inner retries, and explicit safe-503 or verified-stale rollback modes. It is
-  locally verified and awaiting controlled production rollout.
+  deployed; rollback drill one passed. The owner accepted the phase by explicit exception and
+  waived drill two and the seven-day observation without representing either gate as passed.
+- Phase 6.4 is approved to begin with measured resource studies and a direct SQL executor behind
+  the existing queue-owned contract. Production executor swap, resource-limit mutations, final
+  Prefect topology removal, and any Phase 6.4 time-gate exception remain separately approval-gated.
+  Local implementation has begun with an unselected direct executor and fixed-cutoff parity tests;
+  production still uses Prefect, and no measurement window is represented as started or complete.
 - Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
   offline Random Forest baseline, five-fold chronological evaluation, and versioned
   metrics/model/report/chart artifacts.
 - The formal evaluation diagnoses overfitting and unstable temporal validation, so the artifact is
   explicitly not approved for serving or operational decisions. Engagement 6.5 is owner-accepted
   as a complete offline evaluation; Phase 6.1 is closed by documented owner exception, and Phase
-  6.2 is production-accepted; 6.3 awaits controlled production rollout and observation.
+  6.2 is production-accepted; 6.3 is owner-accepted by documented exception.
 
 📁 Locations: `data/`, `services/central-api/`, `uis/backoffice/`, and `.github/workflows/`
 
@@ -230,7 +238,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 closed by owner exception; Phase 6.2 deployed through `20260728_0012`, set-based shadow correction/reconciliation pending |
+| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phase 6.1 closed by owner exception, Phase 6.2 accepted, Phase 6.3 accepted by owner exception with drill two and observation waived; Phase 6.4 local direct-executor implementation started, production unchanged |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
 | 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |

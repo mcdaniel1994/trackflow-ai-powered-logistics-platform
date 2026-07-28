@@ -33,7 +33,11 @@
   `4.1.2` and the GitHub Production environment are configured for this path;
   its first live approved run exposed the July 15 Prefect init-mount defect; the repository hotfix
   and Phase 6.1 were deployed successfully on July 28. The owner omitted the remaining controlled
-  Phase 6.1 exercises; the rollback drill remains an owner step.
+  Phase 6.1 exercises. Phase 6.3 control-plane/safe-stale rollback drill one passed. The owner then
+  accepted Phase 6.3 by explicit exception and waived its computation-disable drill and seven-day
+  observation without executing them. Phase 6.4 is approved to begin; production executor swap,
+  resource-limit mutations, final Prefect removal, and the immutable-image rollback drill remain
+  separately owner-gated.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
@@ -93,10 +97,13 @@ trackflow/
   progress, fails closed on Prefect health, and is bounded by a hard watchdog. Optional R2 recovery
   results and backups are non-authoritative and separately credentialed.
 - Phase 6.2 adds `reporting.hourly_activity_rollups` and singleton `rollup_state`. Its Prefect-owned
-  shadow executor captures completed-hour UTC cutoffs, independently aggregates raw sources in SQL,
-  recomputes a trailing 72 hours, and publishes under claim verification. The
-  `REPORTING_HOURLY_ROLLUPS_ENABLED` flag defaults off; production remains on the legacy path until
-  shadow deployment and exact live reconciliation.
+  executor captures completed-hour UTC cutoffs, independently aggregates raw sources in SQL,
+  recomputes a trailing 72 hours, and publishes under claim verification. Phase 6.3 activated the
+  reconciled rollup path in production and removed the legacy transform from active execution.
+- Phase 6.4 local work adds an unselected direct SQL executor under the same engine/claim/abort
+  contract. It records stages under unconditional claim-token CAS, preserves transient-only bounded
+  retries and publication verification, and has fixed-cutoff parity coverage. The production worker
+  still selects Prefect pending separate approval.
 - Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
   `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
   PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.
