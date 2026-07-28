@@ -17,10 +17,11 @@
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
   in progress. Reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
   Alembic `20260728_0011` and closed by explicit owner exception after the remaining controlled
-  exercises were omitted on 2026-07-28. Phase 6.2 durable hourly SQL rollups, fixed cutoffs,
-  trailing-window recomputation, exact reconciliation, and 12-hour shadow cadence are locally
-  verified through additive revision `20260728_0012`; the flag defaults off and production
-  deployment/live reconciliation remain. Independent Phases 6.5.a–b are owner-accepted and complete as an offline
+  exercises were omitted on 2026-07-28. Phase 6.2 additive revision `20260728_0012` is deployed
+  and the production shadow flag is enabled. Its first 113,064-row full-history publication exposed
+  a row-by-row upsert budget failure without partial publication; a set-based correction is locally
+  verified and awaits redeployment/live reconciliation. Independent Phases 6.5.a–b are
+  owner-accepted and complete as an offline
   evaluation: the relocated,
   deterministic 120-month generated dataset feeds an offline strict-recursive Random Forest
   baseline with versioned metrics/model/chart/report artifacts. Five chronological folds produce
@@ -101,8 +102,9 @@ implementing any of the items below.
 
 - Engagement 6.1-6.4 - reporting reliability remediation. Owner-approved
   specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is closed by documented
-  owner exception. Phase 6.2 is locally implemented and verified through `20260728_0012`; its
-  production shadow acceptance remains. Phases 6.3-6.4 have not started.
+  owner exception. Phase 6.2 schema/image is deployed through `20260728_0012`; its set-based
+  production-cardinality correction awaits redeployment and exact live reconciliation.
+  Phases 6.3-6.4 have not started.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted

@@ -237,9 +237,24 @@ _UPSERT = text(
     "(bucket_start, warehouse, client_id, inbound_movement_count, inbound_units, "
     "dispatch_order_count, dispatch_units, loss_movement_count, loss_units, "
     "stockout_count, discrepancy_count, source_cutoff_at, computed_at, pipeline_version) "
-    "VALUES (:bucket_start, :warehouse, :client_id, :inbound_movement_count, :inbound_units, "
-    ":dispatch_order_count, :dispatch_units, :loss_movement_count, :loss_units, "
-    ":stockout_count, :discrepancy_count, :source_cutoff_at, :computed_at, :pipeline_version) "
+    "SELECT payload.bucket_start, payload.warehouse, payload.client_id, "
+    "payload.inbound_movement_count, payload.inbound_units, "
+    "payload.dispatch_order_count, payload.dispatch_units, "
+    "payload.loss_movement_count, payload.loss_units, "
+    "payload.stockout_count, payload.discrepancy_count, "
+    ":source_cutoff_at, :computed_at, :pipeline_version "
+    "FROM unnest("
+    "CAST(:bucket_starts AS timestamptz[]), CAST(:warehouses AS text[]), "
+    "CAST(:client_ids AS uuid[]), CAST(:inbound_movement_counts AS bigint[]), "
+    "CAST(:inbound_units AS bigint[]), CAST(:dispatch_order_counts AS bigint[]), "
+    "CAST(:dispatch_units AS bigint[]), CAST(:loss_movement_counts AS bigint[]), "
+    "CAST(:loss_units AS bigint[]), CAST(:stockout_counts AS bigint[]), "
+    "CAST(:discrepancy_counts AS bigint[])"
+    ") AS payload("
+    "bucket_start, warehouse, client_id, inbound_movement_count, inbound_units, "
+    "dispatch_order_count, dispatch_units, loss_movement_count, loss_units, "
+    "stockout_count, discrepancy_count"
+    ") "
     "ON CONFLICT (bucket_start, warehouse, client_id) DO UPDATE SET "
     "inbound_movement_count = EXCLUDED.inbound_movement_count, "
     "inbound_units = EXCLUDED.inbound_units, "
@@ -266,20 +281,27 @@ def publish_hourly_rollups(
 ) -> int:
     """Publish idempotently and advance the singleton cursor in the same transaction."""
     computed_at = now or datetime.now(UTC)
-    payloads = [
-        {
-            **row.__dict__,
-            "source_cutoff_at": window.source_cutoff_at,
-            "computed_at": computed_at,
-            "pipeline_version": pipeline_version,
-        }
-        for row in rows
-    ]
+    payload = {
+        "bucket_starts": [row.bucket_start for row in rows],
+        "warehouses": [row.warehouse for row in rows],
+        "client_ids": [str(row.client_id) for row in rows],
+        "inbound_movement_counts": [row.inbound_movement_count for row in rows],
+        "inbound_units": [row.inbound_units for row in rows],
+        "dispatch_order_counts": [row.dispatch_order_count for row in rows],
+        "dispatch_units": [row.dispatch_units for row in rows],
+        "loss_movement_counts": [row.loss_movement_count for row in rows],
+        "loss_units": [row.loss_units for row in rows],
+        "stockout_counts": [row.stockout_count for row in rows],
+        "discrepancy_counts": [row.discrepancy_count for row in rows],
+        "source_cutoff_at": window.source_cutoff_at,
+        "computed_at": computed_at,
+        "pipeline_version": pipeline_version,
+    }
     with engine.begin() as connection:
         _statement_timeout(connection)
         verify_claim_for_publication(connection, claim)
-        if payloads:
-            connection.execute(_UPSERT, payloads)
+        if rows:
+            connection.execute(_UPSERT, payload)
         connection.execute(
             text(
                 "UPDATE reporting.rollup_state SET pipeline_version = :pipeline_version, "

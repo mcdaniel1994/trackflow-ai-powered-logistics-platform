@@ -22,19 +22,22 @@ from pipelines.business_performance.rollups import (
 
 PROJECTED_SIX_MONTH_MOVEMENTS = 1_050_000
 TOTAL_MOVEMENTS = PROJECTED_SIX_MONTH_MOVEMENTS * 2
+OBSERVED_PRODUCTION_DENSE_ROWS = 113_064
 WORKER_LIMIT_BYTES = 768 * 1024 * 1024
 
 
 def _seed_projection(engine: Engine, *, start: datetime, end: datetime) -> None:
-    client_id = uuid4()
+    client_ids = [uuid4() for _ in range(3)]
+    client_id = client_ids[0]
     user_id = str(uuid4())
     total_hours = int((end - start).total_seconds() // 3600)
     with engine.begin() as connection:
         connection.execute(
-            text(
-                "INSERT INTO clients (id, display_name) VALUES (:id, 'Rollup Performance')"
-            ),
-            {"id": client_id},
+            text("INSERT INTO clients (id, display_name) VALUES (:id, :display_name)"),
+            [
+                {"id": seeded_client, "display_name": f"Rollup Performance {index}"}
+                for index, seeded_client in enumerate(client_ids, start=1)
+            ],
         )
         sku_ids = connection.execute(
             text(
@@ -47,6 +50,22 @@ def _seed_projection(engine: Engine, *, start: datetime, end: datetime) -> None:
             {"client": client_id},
         ).all()
         sku_by_warehouse = {str(warehouse): int(sku_id) for sku_id, warehouse in sku_ids}
+        for index, inactive_client in enumerate(client_ids[1:], start=2):
+            connection.execute(
+                text(
+                    "INSERT INTO skus "
+                    "(name, sku, client_id, min_stock_threshold, category, warehouse) VALUES "
+                    "(:la_name, :la_sku, :client, 1, 'fashion', 'LA'), "
+                    "(:zgz_name, :zgz_sku, :client, 1, 'fashion', 'ZGZ')"
+                ),
+                {
+                    "la_name": f"Performance LA {index}",
+                    "la_sku": f"PERF-LA-{index}",
+                    "zgz_name": f"Performance ZGZ {index}",
+                    "zgz_sku": f"PERF-ZGZ-{index}",
+                    "client": inactive_client,
+                },
+            )
         per_source = TOTAL_MOVEMENTS // 2
         connection.execute(
             text(
@@ -138,8 +157,8 @@ def test_rollup_budgets_at_twice_projected_six_month_volume(
         pytest.skip("set REPORTING_PERFORMANCE_TEST=1 for the production-volume gate")
 
     request.addfinalizer(lambda: _clear_projection(pipeline_engine))
-    start = datetime(2026, 1, 1, tzinfo=UTC)
-    cutoff = datetime(2026, 7, 1, tzinfo=UTC)
+    start = datetime(2024, 6, 3, 14, tzinfo=UTC)
+    cutoff = datetime(2026, 7, 28, 18, tzinfo=UTC)
     _seed_projection(pipeline_engine, start=start, end=cutoff)
     enqueue_cli(pipeline_engine, now=cutoff - timedelta(seconds=1))
     claim = claim_next(pipeline_engine, now=cutoff)
@@ -208,6 +227,7 @@ def test_rollup_budgets_at_twice_projected_six_month_volume(
         f"read_seconds={read_seconds:.3f} max_rss_bytes={_max_rss_bytes()}"
     )
     assert written == len(rows)
+    assert written == OBSERVED_PRODUCTION_DENSE_ROWS
     assert regular_rows
     assert reconciliation.exact
     assert report_rows

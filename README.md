@@ -46,9 +46,10 @@ for sales forecasting (6.5), which runs in parallel. The owner closed Phase 6.1 
 exception after choosing to omit its remaining controlled exercises. Independent Phases 6.5.a and 6.5.b are complete
 and owner-accepted as an offline evaluation: the formal chronological evaluation diagnoses
 overfitting and does not approve the artifact for operational use. Phase 6.1 is deployed at
-`13bba2e` / Alembic `20260728_0011`. Phase 6.2 hourly SQL rollups are implemented and locally
-verified through additive revision `20260728_0012`, with the shadow flag off by default; they are
-not yet deployed or production-reconciled. The 6.5 offline artifact is not deployed.
+`13bba2e` / Alembic `20260728_0011`. Phase 6.2 schema/image is deployed through additive revision
+`20260728_0012` and its production flag is enabled. The first 113,064-row shadow publication
+exceeded its budget without a partial commit; the set-based correction is locally verified and
+awaits redeployment and exact reconciliation. The 6.5 offline artifact is not deployed.
 Production soak, restore, outage,
 memory-headroom, and rollback acceptance gates remain owner-approved external work.
 
@@ -180,7 +181,7 @@ TrackFlow reflects real-world logistics challenges:
 - The formal evaluation diagnoses overfitting and unstable temporal validation, so the artifact is
   explicitly not approved for serving or operational decisions. Engagement 6.5 is owner-accepted
   as a complete offline evaluation; Phase 6.1 is closed by documented owner exception, and Phase
-  6.2 is locally complete but not deployed or production-reconciled.
+  6.2 awaits redeployment of its production-cardinality correction and live reconciliation.
 
 📁 Locations: `data/`, `services/central-api/`, `uis/backoffice/`, and `.github/workflows/`
 
@@ -225,7 +226,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 closed by owner exception; Phase 6.2 locally verified through `20260728_0012`, production shadow acceptance pending |
+| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 closed by owner exception; Phase 6.2 deployed through `20260728_0012`, set-based shadow correction/reconciliation pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
 | 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
