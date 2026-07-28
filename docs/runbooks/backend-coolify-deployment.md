@@ -4,7 +4,8 @@
 
 Base production deployment verified on July 3, 2026 UTC (July 2 America/Chicago). The first
 dedicated-Prefect production release on July 15 failed during Compose startup; the repository
-hotfix is implemented and awaiting an approved redeployment. Future production mutations still
+hotfix is implemented and awaiting an approved redeployment. Reporting-reliability Phase 6.1 is
+also implemented and locally verified through `20260728_0011`, but has not been deployed. Future production mutations still
 require the GitHub Production reviewer approval. The hardened release workflow now
 migrates, verifies grants, deploys declarative workers, polls dependency-aware readiness,
 smoke-tests unauthenticated protection, and restores the previous image tag on failure.
@@ -27,8 +28,11 @@ The permanent safeguards are:
   setup on **every deployment**, including an already-initialized volume, before Prefect starts.
 - PostgreSQL container health proves only that PostgreSQL accepts connections. The bootstrap and
   existing release guard separately prove the extension, role, and Prefect schema prerequisites.
-- The Central API image health check uses `/health/live`. The deployment workflow still checks
-  `/health/ready` after the complete dependency graph has started.
+- The Central API image health check uses `/health/live`. Core `/health/ready` proves database,
+  schema, and runtime-role safety only; reporting state is deliberately excluded.
+- Back Office `/api/health/live` proves the Next.js process can answer, `/api/health/ready`
+  aggregates Identity plus Central API core readiness, and `/api/health/reporting` exposes the
+  separate bounded reporting verification.
 - Regression tests reject init-script bind mounts, a missing bootstrap dependency, and use of
   dependency-aware readiness as the container liveness probe.
 
@@ -203,11 +207,13 @@ Normal production releases use `.github/workflows/container-images.yml` and
 5. The workflow runs the target image's `central-api-migrate`, records before/after revisions,
    verifies runtime grants, statically checks the pinned Prefect client/server contract, then
    mutates only the non-preview `TRACKFLOW_IMAGE_TAG`.
-6. It polls Coolify, then Back Office's Identity/Central readiness aggregate and expected
-   unauthenticated reporting protection. The reporting worker cannot start until the live Prefect
-   PostgreSQL-fallback and digest-mapped version guards pass. Deployment/readiness failure restores
-   the prior app image without changing Prefect Server or downgrading either database.
-7. Review the GitHub summary for SHA, revisions, Prefect guards, readiness, smoke tests, and rollback state.
+6. It polls Coolify, then gates rollback only on Back Office/Identity/Central core readiness and
+   expected unauthenticated protection. The reporting worker enforces its Prefect PostgreSQL and
+   digest-mapped version contract before claiming work.
+7. It probes `/api/health/reporting` separately, always uploads bounded JSON evidence, and reports
+   degradation without rolling back an otherwise healthy app.
+8. Review the GitHub summary for SHA, revisions, Prefect guards, core readiness, reporting
+   verification, smoke tests, and rollback state.
 
 Before enabling the first run, create the GitHub `production` Environment with
 required reviewers. Store `COOLIFY_TOKEN`, `COOLIFY_WEBHOOK`,
@@ -259,7 +265,8 @@ restart-on-failure.
    securely record its stable UUID.
 6. For initial setup only, run `seed-inventory` with that UUID, then `seed-suppliers`. Never run
    `seed-incidents` in production.
-7. Verify `/health/live`, `/health/ready`, `/health`, and the Back Office aggregate.
+7. Verify Central API `/health/live` and core `/health/ready`, plus Back Office
+   `/api/health/live`, `/api/health/ready`, and the separate `/api/health/reporting` evidence.
 8. Verify HTTPS login, `Secure; HttpOnly` cookies, CSRF writes, reset email,
    inventory, incidents, suppliers, and all health endpoints.
 9. Confirm internet requests cannot reach Identity or Central API.

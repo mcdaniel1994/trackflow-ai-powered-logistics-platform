@@ -1,0 +1,10 @@
+Copyright (c) 2026 TrackFlow. All Rights Reserved.
+
+This repository and its contents are proprietary and confidential. No part of
+this codebase may be copied, modified, distributed, sublicensed, or used in
+any form without the prior written permission of TrackFlow, except as
+permitted by an explicit written agreement.
+
+Third-party open-source dependencies used by this project remain licensed
+under their own respective terms. See THIRD_PARTY_LICENSES.md for a summary
+of non-permissively-licensed dependencies and attribution notices.

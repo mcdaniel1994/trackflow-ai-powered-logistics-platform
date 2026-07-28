@@ -10,7 +10,6 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import HTTPException, Request
 from jose import jwt
-
 from trackflow_auth import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,

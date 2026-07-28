@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import func, text
@@ -170,17 +170,18 @@ def test_guard_under_soft_limit_takes_no_action(
     assert reset_called["value"] is False
 
 
-def test_guard_at_hard_limit_resets_and_reenables(
+def test_guard_at_hard_limit_refuses_unattended_reset_and_pauses_feed(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     feed_settings = _feed_settings(settings, operations_feed_user_uuid=SERVICE_UUID)
     monkeypatch.setattr(db_size_guard, "get_settings", lambda: feed_settings)
     monkeypatch.setattr(db_size_guard, "database_size_mb", lambda _session: 460.0)
-    checkpoint_called = {"value": False}
+    reset_called = {"value": False}
+    monkeypatch.setattr(db_size_guard, "prune_telemetry", lambda *_args: {})
     monkeypatch.setattr(
         db_size_guard,
-        "run_reporting_checkpoint",
-        lambda: checkpoint_called.__setitem__("value", True) or True,
+        "reset_ledger",
+        lambda *_args, **_kwargs: reset_called.__setitem__("value", True),
     )
     with Session(engine) as session:
         set_feed_enabled(session, enabled=True, note="pre-test")
@@ -188,46 +189,85 @@ def test_guard_at_hard_limit_resets_and_reenables(
     db_size_guard.guard_once()
 
     with Session(engine) as session:
-        # Reset paused then re-enabled the feed, and rebuilt a consistent, populated ledger.
+        assert feed_enabled(session) is False
+        assert reset_called["value"] is False
+
+
+def test_guard_consumes_owner_approval_once_and_resets(
+    engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    feed_settings = _feed_settings(settings, operations_feed_user_uuid=SERVICE_UUID)
+    monkeypatch.setattr(db_size_guard, "get_settings", lambda: feed_settings)
+    monkeypatch.setattr(db_size_guard, "database_size_mb", lambda _session: 460.0)
+    monkeypatch.setattr(db_size_guard, "prune_telemetry", lambda *_args: {})
+    checkpoint_called = {"value": False}
+    monkeypatch.setattr(
+        db_size_guard,
+        "run_reporting_checkpoint",
+        lambda: checkpoint_called.__setitem__("value", True) or True,
+    )
+    with Session(engine) as session:
+        set_feed_enabled(
+            session,
+            enabled=False,
+            note=db_size_guard.RESET_APPROVAL_NOTE,
+        )
+
+    db_size_guard.guard_once()
+
+    with Session(engine) as session:
         assert feed_enabled(session) is True
         assert int(session.scalar(sa_select(func.count()).select_from(sku_table)) or 0) > 0
         assert int(session.scalar(sa_select(func.count()).select_from(entry_table)) or 0) > 0
         assert _all_stock_nonnegative(session)
         assert checkpoint_called["value"] is True
-        incomplete = session.execute(
-            text("SELECT week_start, reason FROM reporting.incomplete_weeks")
-        ).all()
-        assert len(incomplete) == 1
-        assert incomplete[0].reason == "ledger_reset"
+        note = session.scalar(text("SELECT note FROM operations_feed_control WHERE id = 1"))
+        assert note == "db_size_guard: owner-approved reset complete"
+        assert db_size_guard.consume_reset_approval(session) is False
 
 
-def test_reset_marks_full_window_when_checkpoint_fails(
+def test_failed_checkpoint_blocks_reset_and_keeps_feed_paused(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     feed_settings = _feed_settings(settings, operations_feed_user_uuid=SERVICE_UUID)
     reset_at = datetime(2026, 7, 15, 14, 30, tzinfo=UTC)
+
     def failed_checkpoint() -> bool:
         raise RuntimeError("injected checkpoint failure")
 
     monkeypatch.setattr(db_size_guard, "run_reporting_checkpoint", failed_checkpoint)
     with Session(engine) as session:
-        set_feed_enabled(session, enabled=True, note="pre-test")
-        db_size_guard.reset_ledger(session, SERVICE_UUID, feed_settings, reset_at=reset_at)
+        operations_feed.ensure_baseline(session, SERVICE_UUID)
+        before_entries = int(session.scalar(sa_select(func.count()).select_from(entry_table)) or 0)
+        set_feed_enabled(
+            session,
+            enabled=False,
+            note=db_size_guard.RESET_APPROVAL_CONSUMED_NOTE,
+        )
+        with pytest.raises(db_size_guard.ResetBlocked):
+            db_size_guard.reset_ledger(session, SERVICE_UUID, feed_settings, reset_at=reset_at)
 
     with Session(engine) as session:
-        assert feed_enabled(session) is True
+        assert feed_enabled(session) is False
+        assert int(session.scalar(sa_select(func.count()).select_from(entry_table)) or 0) == before_entries
         assert session.execute(
             text("SELECT last_reset_at FROM reporting.source_ledger_state WHERE id = 1")
-        ).scalar_one() == reset_at
-        incomplete = dict(
-            session.execute(
-                text(
-                    "SELECT week_start, reason FROM reporting.incomplete_weeks ORDER BY week_start"
-                )
-            ).all()
-        )
-        expected_weeks = {
-            reset_at.date() - timedelta(days=reset_at.weekday(), weeks=offset)
-            for offset in range(db_size_guard.DEFAULT_RECOMPUTE_WEEKS)
-        }
-        assert incomplete == {week: "reset_checkpoint_failed" for week in expected_weeks}
+        ).scalar_one() is None
+
+
+def test_soft_limit_pauses_feed_without_overwriting_an_independent_pause(
+    engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(db_size_guard, "get_settings", lambda: _feed_settings(settings))
+    monkeypatch.setattr(db_size_guard, "database_size_mb", lambda _session: 410.0)
+    monkeypatch.setattr(db_size_guard, "prune_telemetry", lambda *_args: {})
+    with Session(engine) as session:
+        set_feed_enabled(session, enabled=False, note="operator maintenance pause")
+
+    db_size_guard.guard_once()
+
+    with Session(engine) as session:
+        row = session.execute(
+            text("SELECT enabled, note FROM operations_feed_control WHERE id = 1")
+        ).one()
+        assert row == (False, "operator maintenance pause")

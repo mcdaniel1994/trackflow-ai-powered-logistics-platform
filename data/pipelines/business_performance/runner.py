@@ -27,6 +27,7 @@ from .queue import (
 )
 
 logger = logging.getLogger(__name__)
+DEFAULT_LEASE_RENEWAL_SECONDS = 60.0
 
 
 class RunnerStatus(StrEnum):
@@ -51,6 +52,8 @@ class ClaimOutcome:
     status: RunnerStatus
     metrics: RunMetrics | None = None
     error_code: ErrorCode | None = None
+    stage: str | None = None
+    error_type: str | None = None
 
 
 class TransientRunError(RuntimeError):
@@ -121,13 +124,33 @@ def execute_claim_with_renewal(
     run_id = str(claim.run_id)
     with advisory_lock(engine, lock_key) as acquired:
         if not acquired:
-            return ClaimOutcome(RunnerStatus.RETRYABLE, error_code="LOCK_UNAVAILABLE")
+            logger.warning(
+                "reporting_pipeline_retry run_id=%s attempt=%s stage=orchestration "
+                "error_code=LOCK_UNAVAILABLE",
+                run_id,
+                claim.attempt,
+            )
+            return ClaimOutcome(
+                RunnerStatus.RETRYABLE,
+                error_code="LOCK_UNAVAILABLE",
+                stage="orchestration",
+            )
         if not heartbeat(engine, claim):
+            logger.error(
+                "reporting_pipeline_lease_lost run_id=%s attempt=%s stage=orchestration",
+                run_id,
+                claim.attempt,
+            )
             return ClaimOutcome(RunnerStatus.LEASE_LOST)
 
         stop = Event()
         abort = Event()
-        interval = float(os.environ.get("REPORTING_HEARTBEAT_SECONDS", "60"))
+        interval = float(
+            os.environ.get(
+                "REPORTING_HEARTBEAT_SECONDS",
+                DEFAULT_LEASE_RENEWAL_SECONDS,
+            )
+        )
         renewer = Thread(
             target=_renew_claim,
             kwargs={
@@ -146,6 +169,11 @@ def execute_claim_with_renewal(
             if abort.is_set() or not heartbeat(engine, claim):
                 raise LeaseLostError("pipeline run lease is no longer owned")
         except LeaseLostError:
+            logger.error(
+                "reporting_pipeline_lease_lost run_id=%s attempt=%s",
+                run_id,
+                claim.attempt,
+            )
             return ClaimOutcome(RunnerStatus.LEASE_LOST)
         except PipelineStageError as exc:
             logger.error(
@@ -159,11 +187,23 @@ def execute_claim_with_renewal(
             return ClaimOutcome(
                 RunnerStatus.RETRYABLE if exc.retryable else RunnerStatus.FAILED,
                 error_code=exc.error_code,
+                stage=exc.stage,
+                error_type=exc.error_type,
             )
         except PermanentRunError as exc:
-            return ClaimOutcome(RunnerStatus.FAILED, error_code=exc.error_code)
+            return ClaimOutcome(
+                RunnerStatus.FAILED,
+                error_code=exc.error_code,
+                stage="orchestration",
+                error_type=type(exc).__name__,
+            )
         except TransientRunError as exc:
-            return ClaimOutcome(RunnerStatus.RETRYABLE, error_code=exc.error_code)
+            return ClaimOutcome(
+                RunnerStatus.RETRYABLE,
+                error_code=exc.error_code,
+                stage="orchestration",
+                error_type=type(exc).__name__,
+            )
         except Exception as exc:
             # Persist only a fixed failure class; payloads, SQL, credentials, and
             # stack traces never enter the durable audit row.
@@ -174,7 +214,12 @@ def execute_claim_with_renewal(
                 claim.attempt,
                 type(exc).__name__,
             )
-            return ClaimOutcome(RunnerStatus.RETRYABLE, error_code="INTERNAL_FAILED")
+            return ClaimOutcome(
+                RunnerStatus.RETRYABLE,
+                error_code="INTERNAL_FAILED",
+                stage="orchestration",
+                error_type=type(exc).__name__,
+            )
         finally:
             stop.set()
             renewer.join(timeout=max(1.0, interval + 1.0))
@@ -190,12 +235,46 @@ def finalize_claim(engine: Engine, claim: RunClaim, outcome: ClaimOutcome) -> Ru
     if outcome.status == RunnerStatus.SUCCEEDED and outcome.metrics is not None:
         transitioned = finalize_success(engine, claim, outcome.metrics)
     elif outcome.status == RunnerStatus.FAILED and outcome.error_code is not None:
-        transitioned = finalize_failure(engine, claim, outcome.error_code)
+        transitioned = finalize_failure(
+            engine,
+            claim,
+            outcome.error_code,
+            stage=outcome.stage,
+            error_type=outcome.error_type,
+        )
     elif outcome.status == RunnerStatus.RETRYABLE and outcome.error_code is not None:
-        transitioned = release_retryable(engine, claim, outcome.error_code)
+        transitioned = release_retryable(
+            engine,
+            claim,
+            outcome.error_code,
+            stage=outcome.stage,
+            error_type=outcome.error_type,
+        )
     else:
         raise RuntimeError("invalid claim outcome")
-    return RunnerResult(outcome.status if transitioned else RunnerStatus.LEASE_LOST, run_id)
+    if not transitioned:
+        logger.error(
+            "reporting_pipeline_lease_lost run_id=%s attempt=%s stage=%s",
+            run_id,
+            claim.attempt,
+            outcome.stage or "orchestration",
+        )
+        return RunnerResult(RunnerStatus.LEASE_LOST, run_id)
+    if outcome.status == RunnerStatus.SUCCEEDED:
+        logger.info(
+            "reporting_pipeline_publication_complete run_id=%s attempt=%s",
+            run_id,
+            claim.attempt,
+        )
+    elif outcome.status == RunnerStatus.RETRYABLE:
+        logger.warning(
+            "reporting_pipeline_retry run_id=%s attempt=%s stage=%s error_code=%s",
+            run_id,
+            claim.attempt,
+            outcome.stage or "orchestration",
+            outcome.error_code,
+        )
+    return RunnerResult(outcome.status, run_id)
 
 
 def run_once(

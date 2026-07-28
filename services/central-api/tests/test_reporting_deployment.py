@@ -128,6 +128,27 @@ def test_central_api_container_health_uses_liveness_not_dependency_readiness() -
     assert "/health/ready" not in healthcheck
 
 
+def test_reporting_logs_persist_with_bounded_non_root_access() -> None:
+    dockerfile = (REPO_ROOT / "docker/central-api.Dockerfile").read_text()
+    assert "install -d -o trackflow -g trackflow -m 0750 /var/log/trackflow/reporting" in dockerfile
+    assert "USER 10001" in dockerfile
+
+    for filename in ("compose.yaml", "compose.coolify.yaml"):
+        compose_text = (REPO_ROOT / filename).read_text()
+        reporting = _service_block(compose_text, "reporting-worker")
+        maintenance = _service_block(compose_text, "maintenance-worker")
+
+        assert "reporting-logs:" in compose_text.split("\nvolumes:\n", 1)[1]
+        assert "reporting-logs:/var/log/trackflow/reporting" in reporting
+        assert "reporting-logs:/var/log/trackflow/reporting" in maintenance
+        assert "REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log" in reporting
+        assert 'REPORTING_LOG_MAX_BYTES: "10485760"' in reporting
+        assert 'REPORTING_LOG_BACKUP_COUNT: "9"' in reporting
+        assert "REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log" in maintenance
+        assert 'REPORTING_LOG_RETENTION_DAYS: "14"' in maintenance
+        assert 'REPORTING_LOG_TOTAL_BYTES: "262144000"' in maintenance
+
+
 def test_prefect_postgres_guard_rejects_sqlite_fallback() -> None:
     guard_script = (REPO_ROOT / "docker/prefect-postgres-guard.sh").read_text()
     assert "tablename='flow_run'" in guard_script

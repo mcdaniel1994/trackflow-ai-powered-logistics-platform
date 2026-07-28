@@ -200,7 +200,7 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       OPERATIONS_FEED_ENABLED: ${OPERATIONS_FEED_ENABLED:-false}
-      OPERATIONS_FEED_INTERVAL_SECONDS: ${OPERATIONS_FEED_INTERVAL_SECONDS:-5}
+      OPERATIONS_FEED_INTERVAL_SECONDS: ${OPERATIONS_FEED_INTERVAL_SECONDS:-15}
       OPERATIONS_FEED_USER_UUID: ${OPERATIONS_FEED_USER_UUID:-${SEED_USER_UUID:-}}
       TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
       TELEMETRY_OPERATIONAL_RETENTION_DAYS: ${TELEMETRY_OPERATIONAL_RETENTION_DAYS:-7}
@@ -239,6 +239,9 @@ services:
       REPORTING_STAGE_TIMEOUT_EXTRACT_SECONDS: ${REPORTING_STAGE_TIMEOUT_EXTRACT_SECONDS:-300}
       REPORTING_STAGE_TIMEOUT_TRANSFORM_SECONDS: ${REPORTING_STAGE_TIMEOUT_TRANSFORM_SECONDS:-300}
       REPORTING_STAGE_TIMEOUT_LOAD_SECONDS: ${REPORTING_STAGE_TIMEOUT_LOAD_SECONDS:-300}
+      REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
+      REPORTING_LOG_MAX_BYTES: "10485760"
+      REPORTING_LOG_BACKUP_COUNT: "9"
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
       PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
       PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
@@ -256,6 +259,8 @@ services:
       prefect-server: {condition: service_healthy}
     read_only: true
     tmpfs: ["/tmp"]
+    volumes:
+      - reporting-logs:/var/log/trackflow/reporting
     # This image bakes a HEALTHCHECK against :8000, which this command never binds.
     healthcheck: {disable: true}
     command:
@@ -288,6 +293,9 @@ services:
       PREFECT_API_URL: http://prefect-server:4200/api
       PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
       PREFECT_RUN_RETENTION_DAYS: ${PREFECT_RUN_RETENTION_DAYS:-30}
+      REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
+      REPORTING_LOG_RETENTION_DAYS: "14"
+      REPORTING_LOG_TOTAL_BYTES: "262144000"
       DATABASE_CONNECT_TIMEOUT_SECONDS: ${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}
       DATABASE_STATEMENT_TIMEOUT_MS: ${DATABASE_STATEMENT_TIMEOUT_MS:-15000}
       PREFECT_SERVER_ANALYTICS_ENABLED: "false"
@@ -298,6 +306,8 @@ services:
       postgres: {condition: service_healthy}
     read_only: true
     tmpfs: ["/tmp"]
+    volumes:
+      - reporting-logs:/var/log/trackflow/reporting
     # This image bakes a HEALTHCHECK against :8000, which this command never binds.
     healthcheck: {disable: true}
     command:
@@ -314,3 +324,4 @@ services:
 volumes:
   identity-data:
   prefect-db:
+  reporting-logs:

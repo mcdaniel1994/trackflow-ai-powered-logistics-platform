@@ -6,6 +6,7 @@ from typing import ClassVar
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
@@ -212,3 +213,60 @@ class PipelineRun(SQLModel, table=True):
     source_watermark: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     error_code: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     error_summary: str | None = Field(default=None, sa_column=Column(String(500), nullable=True))
+
+
+class PipelineRunAttempt(SQLModel, table=True):
+    """Sanitized terminal evidence for one execution attempt."""
+
+    __tablename__ = "pipeline_run_attempts"
+    __table_args__: ClassVar[tuple[SchemaItem | dict[str, str], ...]] = (
+        UniqueConstraint("run_id", "attempt", name="uq_pipeline_run_attempts_run_attempt"),
+        CheckConstraint("attempt > 0", name="ck_pipeline_run_attempts_attempt_positive"),
+        CheckConstraint(
+            "stage IS NULL OR stage IN ('extract', 'transform', 'load', 'orchestration')",
+            name="ck_pipeline_run_attempts_stage",
+        ),
+        CheckConstraint("duration_ms >= 0", name="ck_pipeline_run_attempts_duration"),
+        CheckConstraint(
+            "(rows_scanned IS NULL OR rows_scanned >= 0) "
+            "AND (rollup_rows_written IS NULL OR rollup_rows_written >= 0)",
+            name="ck_pipeline_run_attempts_counts",
+        ),
+        CheckConstraint(
+            "error_code IS NULL OR error_code IN "
+            "('EXTRACT_FAILED', 'VALIDATE_FAILED', 'LOAD_FAILED', 'DB_UNAVAILABLE', "
+            "'LOCK_UNAVAILABLE', 'STALE_ABANDONED', 'ORCHESTRATION_FAILED', 'INTERNAL_FAILED')",
+            name="ck_pipeline_run_attempts_originating_error",
+        ),
+        CheckConstraint(
+            "retry_outcome IN ('retried', 'exhausted', 'failed', 'lease_lost', 'succeeded')",
+            name="ck_pipeline_run_attempts_retry_outcome",
+        ),
+        Index("ix_pipeline_run_attempts_started_at_desc", text("started_at DESC")),
+        {"schema": REPORTING_SCHEMA},
+    )
+
+    id: UUID = Field(
+        default_factory=uuid4,
+        sa_column=Column(PGUUID(as_uuid=True), primary_key=True, nullable=False),
+    )
+    run_id: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("reporting.pipeline_runs.id", name="fk_pipeline_run_attempts_run_id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    attempt: int = Field(sa_column=Column(Integer, nullable=False))
+    stage: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    started_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    ended_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    duration_ms: int = Field(sa_column=Column(BigInteger, nullable=False))
+    source_cutoff_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    rows_scanned: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    rollup_rows_written: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    error_code: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    error_type: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    retry_outcome: str = Field(sa_column=Column(Text, nullable=False))
+    pipeline_version: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    build_sha: str | None = Field(default=None, sa_column=Column(Text, nullable=True))

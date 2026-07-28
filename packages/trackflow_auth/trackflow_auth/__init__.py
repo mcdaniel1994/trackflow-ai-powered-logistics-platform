@@ -1,6 +1,9 @@
 """Shared verification helpers for TrackFlow Python services."""
 
-from .validation import safe_request_validation_exception_handler, safe_validation_errors
+from .validation import (
+    safe_request_validation_exception_handler,
+    safe_validation_errors,
+)
 from .verifier import (
     ACCESS_COOKIE_NAME,
     CSRF_COOKIE_NAME,

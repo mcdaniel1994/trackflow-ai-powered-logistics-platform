@@ -16,7 +16,19 @@ Claude-specific sessions also read `CLAUDE.md` after this file.
 
 ## Pre-Implementation Reading
 
-Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, apply `.agents/rules/public-ui-visibility.md` and follow its linked `docs/standards/visibility.md` sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, apply `.agents/rules/authentication-security.md` and follow its linked `docs/standards/authentication-security-standard.md`. If database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations are touched, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`. If telemetry design or instrumentation is touched (events, metrics, traces, correlation IDs, audit/security telemetry, analytics, retention, or AI telemetry), apply `.agents/rules/telemetry.md` and follow its linked `docs/standards/telemetry-standard.md`. If you add or change behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard (`docs/standards/testing.md`, `error-handling.md`, `observability.md`, `production-readiness.md`).
+Before implementation, read the active engagement brief at `docs/briefs/NN-<slug>.md` and the README for every folder being modified. If public-facing pages are touched, apply `.agents/rules/public-ui-visibility.md` and follow its linked `docs/standards/visibility.md` sections 1-6. If auth, session, token, cookie, authorization, or AI-agent user-context behavior is touched, apply `.agents/rules/authentication-security.md` and follow its linked `docs/standards/authentication-security-standard.md`. If database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations are touched, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`. If telemetry design or instrumentation is touched (events, metrics, traces, correlation IDs, audit/security telemetry, analytics, retention, or AI telemetry), apply `.agents/rules/telemetry.md` and follow its linked `docs/standards/telemetry-standard.md`. If you add or change behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard (`docs/standards/testing.md`, `error-handling.md`, `observability.md`, `production-readiness.md`). If a dependency, third-party service, or AI model/provider is added, upgraded, or removed, apply `.agents/rules/compliance-licensing.md` and follow its linked `docs/standards/compliance-licensing-standard.md`.
+
+## Remaining Work
+
+All remaining TrackFlow work is planned from `docs/planning/remaining_planning/`. Read
+`docs/planning/remaining_planning/README.md` before planning or implementing any engagement from
+Engagement 6 onward. It is the index, the sequence, and — most importantly — the precedence rule
+between owner-approved specifications and bootcamp planning inputs, which are requirements rather
+than architecture. A project in that folder with no approved specification is not ready to
+implement: produce analysis and a proposed spec, then stop for owner approval.
+
+That README does not replace this guide, the engagement brief convention in `docs/briefs/`, or any
+standard in `docs/standards/`.
 
 ## Mandatory Pre-Commit Workflow
 

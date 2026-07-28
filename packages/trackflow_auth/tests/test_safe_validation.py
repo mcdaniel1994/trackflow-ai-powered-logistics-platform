@@ -5,8 +5,10 @@ import json
 
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
-
-from trackflow_auth import safe_request_validation_exception_handler, safe_validation_errors
+from trackflow_auth import (
+    safe_request_validation_exception_handler,
+    safe_validation_errors,
+)
 
 
 def request() -> Request:

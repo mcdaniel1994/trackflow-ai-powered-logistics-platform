@@ -7,6 +7,8 @@ import os
 import signal
 import urllib.request
 from collections.abc import Callable
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 from threading import Event, Thread
 from types import FrameType
 
@@ -23,6 +25,8 @@ HEARTBEAT_INTERVAL_SECONDS = 10.0
 DISPATCH_INTERVAL_SECONDS = 60.0
 PREFECT_HEALTH_TIMEOUT_SECONDS = 5.0
 DEFAULT_RUN_TIMEOUT_SECONDS = 1800.0
+DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024
+DEFAULT_LOG_BACKUP_COUNT = 9
 
 
 def _safe_failure(operation: str, exc: Exception) -> None:
@@ -57,10 +61,14 @@ def prefect_is_healthy() -> bool:
         return False
 
 
-def _run_watchdog(done: Event, timeout_seconds: float) -> None:
+def _run_watchdog(done: Event, timeout_seconds: float, run_id: str, attempt: int) -> None:
     if done.wait(timeout_seconds):
         return
-    logger.critical("reporting_run_watchdog_expired")
+    logger.critical(
+        "reporting_run_timeout run_id=%s attempt=%s stage=orchestration",
+        run_id,
+        attempt,
+    )
     for handler in logging.getLogger().handlers:
         handler.flush()
     os._exit(1)
@@ -128,7 +136,7 @@ def run_worker(
                     )
                     watchdog = Thread(
                         target=_run_watchdog,
-                        args=(done, timeout_seconds),
+                        args=(done, timeout_seconds, str(claim.run_id), claim.attempt),
                         name="reporting-run-watchdog",
                         daemon=True,
                     )
@@ -157,12 +165,32 @@ def _stop(stop: Event) -> Callable[[int, FrameType | None], None]:
     return handler
 
 
+def _configure_persisted_log() -> None:
+    """Add a bounded host-mounted log without replacing stdout diagnostics."""
+    raw_path = os.environ.get("REPORTING_LOG_PATH", "").strip()
+    if not raw_path:
+        return
+    path = Path(raw_path)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
+    path.parent.chmod(0o750)
+    handler = RotatingFileHandler(
+        path,
+        maxBytes=int(os.environ.get("REPORTING_LOG_MAX_BYTES", DEFAULT_LOG_MAX_BYTES)),
+        backupCount=int(os.environ.get("REPORTING_LOG_BACKUP_COUNT", DEFAULT_LOG_BACKUP_COUNT)),
+        encoding="utf-8",
+    )
+    path.chmod(0o640)
+    handler.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    logging.getLogger().addHandler(handler)
+
+
 def main() -> None:
     """Run one single-concurrency worker until SIGTERM or SIGINT."""
     from .flows import prefect_executor
     from .startup_guard import StartupGuardFailure, verify_startup_contract
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s", force=True)
+    _configure_persisted_log()
 
     # Compose no longer gates this container on the Prefect guards, so the same
     # conditions are enforced here before any work can be claimed. Exiting

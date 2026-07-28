@@ -1,0 +1,19 @@
+{
+  "evaluation_partition": {
+    "end": "2025-12-01",
+    "rows": 24,
+    "start": "2024-01-01"
+  },
+  "metrics": {
+    "k2_p_value": 0.0203069598760721,
+    "k2_statistic": 7.793583201312695,
+    "mse_eur_squared": 4234779297.3871098,
+    "psi_predicted_revenue": 11.091035365681478,
+    "rmse_eur": 65075.18188516348,
+    "rmse_percent_mean_test_revenue": 9.031790263299785,
+    "somers_d_gini": 0.5
+  },
+  "psi_expected_distribution": "in_sample_training_predictions",
+  "psi_subject": "predicted_revenue_eur",
+  "schema_version": 1
+}

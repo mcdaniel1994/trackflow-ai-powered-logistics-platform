@@ -129,6 +129,7 @@ class ReportingService:
                     orchestrator_healthy=orchestrator_healthy,
                 ),
                 next_scheduled_refresh=self._next_refresh(now),
+                attempts=self.repository.latest_attempts(),
             )
         except SQLAlchemyError as exc:
             raise self._database_failure("latest_runs", exc) from exc

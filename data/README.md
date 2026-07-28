@@ -24,6 +24,18 @@ adds optional Prefect recovery results under `prefect-results/recovery`, API-onl
 retention, and an isolated read-only PostgreSQL backup service with a distinct R2 token. Phase 4
 adds shared server-derived queue/readiness states and startup gates that verify Prefect PostgreSQL
 state plus the digest-mapped server/client version contract before the worker can claim work.
+Reporting-reliability Phase 6.1 adds durable per-attempt history, bounded status evidence, fixed
+timeouts, exact-once failure accounting, and owner-approved persistent-log defaults; it is locally
+verified and awaits production acceptance before Phase 6.2.
+
+Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
+generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline
+environment, train a fixed-seed strict-recursive Random Forest, run five-fold expanding-window
+evaluation over the training partition only, and write versioned artifacts to `eval/`. The formal
+evaluation diagnoses overfitting and does not approve operational use. The owner accepted
+Phases 6.5.a–b as a complete offline evaluation on 2026-07-28; the model remains prohibited from
+serving and operational use. Forecasting/ML packages are optional and are absent from the
+production Central API virtualenv.
 
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
@@ -31,6 +43,14 @@ uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pi
 uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines \
   --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
 uv build --project data
+```
+
+Validate and reproduce the complete Phase 6.5 offline artifacts:
+
+```bash
+uv run --project data --extra forecasting --extra dev python scripts/generate_trackflow_sales.py --check
+uv run --project data --extra forecasting --extra dev python scripts/train_sales_forecast.py --evaluate --force
+uv run --project data --extra forecasting --extra dev pytest tests/pipelines/test_sales_forecasting.py
 ```
 
 Run one explicit recomputable week directly against a migrated local database:

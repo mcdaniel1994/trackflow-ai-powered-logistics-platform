@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import time as monotonic_time
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
@@ -413,15 +414,16 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
         finally:
             engine.dispose()
 
-    _begin_stage(claim, "extract", enforce=flow_run_id is not None)
+    extract_started = _begin_stage(claim, "extract", enforce=flow_run_id is not None)
     try:
         extracted = extract_warehouse_client_activity(claim.target_weeks)
     except LeaseLostError:
         raise
     except Exception as exc:
         raise _stage_failure("extract", exc) from None
+    _complete_stage(claim, "extract", extract_started)
 
-    _begin_stage(claim, "transform", enforce=flow_run_id is not None)
+    transform_started = _begin_stage(claim, "transform", enforce=flow_run_id is not None)
     try:
         transform_flow = transform_weekly_performance
         recovery_storage = prefect_result_storage_from_environment()
@@ -440,14 +442,16 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
         raise
     except Exception as exc:
         raise _stage_failure("transform", exc) from None
+    _complete_stage(claim, "transform", transform_started)
 
-    _begin_stage(claim, "load", enforce=flow_run_id is not None)
+    load_started = _begin_stage(claim, "load", enforce=flow_run_id is not None)
     try:
         loaded = load_weekly_performance_report(transformed.rows, claim)
     except LeaseLostError:
         raise
     except Exception as exc:
         raise _stage_failure("load", exc) from None
+    _complete_stage(claim, "load", load_started)
 
     metrics = RunMetrics(
         rows_extracted=extracted.rows_extracted,
@@ -460,15 +464,32 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
     return metrics
 
 
-def _begin_stage(claim: RunClaim, stage: str, *, enforce: bool) -> None:
-    if not enforce:
-        return
-    engine = _engine()
-    try:
-        if not claim_is_owned(engine, claim) or not record_stage(engine, claim, stage):
-            raise LeaseLostError("pipeline run lease is no longer owned")
-    finally:
-        engine.dispose()
+def _begin_stage(claim: RunClaim, stage: str, *, enforce: bool) -> float:
+    if enforce:
+        engine = _engine()
+        try:
+            if not claim_is_owned(engine, claim) or not record_stage(engine, claim, stage):
+                raise LeaseLostError("pipeline run lease is no longer owned")
+        finally:
+            engine.dispose()
+    logging.getLogger(__name__).info(
+        "reporting_stage_start run_id=%s attempt=%s stage=%s",
+        claim.run_id,
+        claim.attempt,
+        stage,
+    )
+    return monotonic_time.monotonic()
+
+
+def _complete_stage(claim: RunClaim, stage: str, started: float) -> None:
+    duration_ms = max(0, round((monotonic_time.monotonic() - started) * 1000))
+    logging.getLogger(__name__).info(
+        "reporting_stage_complete run_id=%s attempt=%s stage=%s duration_ms=%s",
+        claim.run_id,
+        claim.attempt,
+        stage,
+        duration_ms,
+    )
 
 
 def _flow_run_name(claim: RunClaim) -> str:

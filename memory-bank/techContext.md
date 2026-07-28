@@ -104,5 +104,7 @@ trackflow/
 - `memory-bank/`, `AGENTS.md`, and `.agents/` are coding-agent infrastructure for maintaining this repository.
 - `agents/` and `skills/` are product architecture for future TrackFlow AI agents and their reusable business capabilities.
 - `data/` is for future raw data, processed data, pipelines, and evaluation datasets.
-- `workflows/` is for future n8n automation workflows.
+- `workflows/` is reserved for future automation workflows; the tool is not decided. Engagement 9
+  is LangGraph agentic-workflow work and its assignment places agent logic under `services/`, so
+  `workflows/` is not assumed to be its home.
 - `resources/` is for non-code shared resources such as schemas, templates, and configuration assets.

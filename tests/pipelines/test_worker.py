@@ -95,7 +95,7 @@ def test_watchdog_uses_fixed_log_and_process_exit(
 ) -> None:
     exits: list[int] = []
     monkeypatch.setattr(worker.os, "_exit", lambda code: exits.append(code))
-    worker._run_watchdog(Event(), 0.001)
+    worker._run_watchdog(Event(), 0.001, str(uuid4()), 1)
     assert exits == [1]
 
 

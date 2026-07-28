@@ -36,7 +36,7 @@ These exist in the repository now and are evidenced by tests or verified deploym
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | Central API service logs | `services/central-api` (`main.py`, domain services) | Handled failures, DB errors, unexpected exceptions | "Why did a request fail?" (Andrés Kim / on-call) | Application log | `operation`, `error_type`, safe messages. **Excludes** SQL, connection URLs, payload values, secrets | stdout (container) | Governed by container/host log lifecycle (no central aggregation) | Server/deploy operators | None (logs only) | `services/central-api/central_api/main.py`, domain `service.py` | ✅ |
 | Identity service logs | `services/identity` | Auth lifecycle, password reset, user management | "What auth-relevant events occurred?" | Application / audit log | who/what/when/outcome. **Excludes** passwords, tokens, reset links, emails | stdout (container) | Container/host log lifecycle | Server/deploy operators | None | `test_password_reset.py`, `test_users.py` (`caplog` assert secrets absent) | ✅ |
-| Health / readiness checks | Identity, Central API, Back Office | Container/orchestrator probe; `GET /health` (Central API) | "Is the service up and is its DB reachable?" | Operational signal | `status`, `database`. **Excludes** connection detail | Ephemeral (probe response) | N/A | Deploy/monitoring | Coolify container health | `central_api/main.py:health`; `runbooks/backend-coolify-deployment.md` | ✅ |
+| Health / readiness checks | Identity, Central API, Back Office | Container liveness; core readiness; separate reporting verification | "Can the process answer, are core dependencies safe, and is reporting healthy?" | Operational signal | Fixed status/check identifiers plus bounded queue/heartbeat/publication fields. **Excludes** URLs, credentials, SQL, payloads, and exception detail | Ephemeral probe responses; deployment stores bounded reporting JSON artifact | N/A | Deploy/monitoring | `/health/live`, `/health/ready`, `/health/reporting`; Back Office `/api/health/{live,ready,reporting}` | `test_readiness.py`, Back Office health-route tests; `runbooks/backend-coolify-deployment.md` | ✅ |
 
 **Not implemented today (intentional gaps — do not claim otherwise):** centralized/structured log aggregation & retention, metrics, distributed tracing, request-correlation IDs, product analytics, alerting/uptime monitoring, a telemetry event store, and any AI telemetry. See `../standards/observability.md` §4.
 
@@ -89,8 +89,9 @@ path) and **may be lost on crash/restart**. No exact KPI is built on best-effort
   window is a deliberate portfolio deviation from the standard's risk-based security retention,
   accepted because the data is synthetic and the store is disposable.
 - **Storage bounding:** the live operations feed grows the ledger, so `db_size_guard.py` keeps the
-  database under the Supabase Free 500 MB cap — pruning telemetry at 400 MB and, at 450 MB, pausing
-  the feed (via `operations_feed_control`) and running a ledger-safe reset/reseed. See
+  database under the Supabase Free 500 MB cap — pruning telemetry and pausing the feed at 400 MB.
+  At 450 MB it keeps the feed paused and refuses reset/reseed unless an exact one-shot owner
+  approval is consumed and the normal reporting worker completes a fresh checkpoint. See
   [operations-feed.md](operations-feed.md).
 - **Environment separation:** every row carries `env`; non-production (local/CI) events must not
   reach the production store; tests use disposable databases. Portfolio-production rows are `env`

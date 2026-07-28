@@ -50,6 +50,23 @@ class LatestSuccessfulRun(BaseModel):
     finished_at: datetime
     target_weeks: list[date]
     rows_loaded: int
+    source_cutoff_at: datetime | None
+
+
+class PipelineRunAttemptRead(BaseModel):
+    run_id: UUID
+    attempt: int
+    stage: Literal["extract", "transform", "load", "orchestration"] | None
+    started_at: datetime
+    ended_at: datetime
+    duration_ms: int
+    rows_scanned: int | None
+    rollup_rows_written: int | None
+    error_code: str | None
+    error_type: str | None
+    retry_outcome: Literal["retried", "exhausted", "failed", "lease_lost", "succeeded"]
+    pipeline_version: str | None
+    build_sha: str | None
 
 
 class NextScheduledRefresh(BaseModel):
@@ -72,6 +89,7 @@ class PipelineRunsResponse(BaseModel):
     latest_successful: LatestSuccessfulRun | None
     worker: ReportingWorkerHealth
     next_scheduled_refresh: NextScheduledRefresh
+    attempts: list[PipelineRunAttemptRead]
 
 
 class PipelineRunRequest(BaseModel):

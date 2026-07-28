@@ -2,10 +2,15 @@
 
 ## Status and safety boundary
 
-Repository implementation and production hardening are complete and locally verified. The first
-approved hardened deployment exposed a Coolify init-script mount defect; an image-baked,
-idempotent PostgreSQL bootstrap hotfix is locally verified and awaits approved redeployment.
-External acceptance and the rollback drill remain owner actions. Do not bypass the GitHub
+Reporting-reliability Phase 6.1 is implemented and locally verified through Alembic
+`20260728_0011`. It preserves a sanitized row for every execution attempt, separates core readiness
+from reporting verification, fixes watchdog/lease timing, and removes synchronous pipeline
+execution from maintenance. Production migration/deployment, fault injection, a 15-minute
+stopped-worker observation, and notification verification remain acceptance actions. The owner
+approved the persisted-log defaults on 2026-07-28: 10 MiB rotation with nine backups, 14-day
+retention, a 250 MiB directory ceiling, and a persistent `reporting-logs` volume mounted at
+`/var/log/trackflow/reporting`. External acceptance and the rollback drill remain owner actions.
+Do not bypass the GitHub
 Production reviewer gate. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
@@ -61,6 +66,16 @@ ORDER BY requested_at DESC
 LIMIT 20;
 ```
 
+Inspect attempt evidence separately; the parent row is current state, not the complete execution
+history:
+
+```sql
+SELECT run_id, attempt, started_at, finished_at, status, rows_loaded, error_code
+FROM reporting.pipeline_run_attempts
+ORDER BY started_at DESC
+LIMIT 50;
+```
+
 Do not query or expose `cache_nonce`, connection strings, or cache credentials in operational
 evidence.
 
@@ -97,10 +112,12 @@ Do not extend the lease or edit the claim token. If the hard watchdog has not al
 worker, restart only `reporting-worker`; PostgreSQL releases the advisory lock and the stale sweep
 returns the row to `retryable`. Startup reconciliation closes the abandoned Prefect flow run.
 
-For retry exhaustion (`failed` after attempt 5), use `error_code` to repair the dependency or input
-problem, confirm readiness, then have an administrator create a new request. Never reset `attempt`
-or recycle the failed row. `ORCHESTRATION_FAILED`, `INTERNAL_FAILED`, `DB_UNAVAILABLE`, and
-`LOCK_UNAVAILABLE` are retryable before exhaustion; validation failures require a corrected request.
+For retry exhaustion (`failed` after attempt 5), the parent row reports
+`MAX_ATTEMPTS_EXCEEDED`; use the fifth `reporting.pipeline_run_attempts.error_code` to diagnose the
+originating failure. Confirm readiness, then have an administrator create a new request. Never reset
+`attempt` or recycle the failed row. `ORCHESTRATION_FAILED`, `INTERNAL_FAILED`,
+`DB_UNAVAILABLE`, and `LOCK_UNAVAILABLE` are retryable before exhaustion; validation failures
+require a corrected request.
 
 ## R2 provisioning — owner action
 
@@ -218,27 +235,33 @@ have `CREATE` on either application schema and must never receive the migration 
 At the database hard limit, the size guard:
 
 1. Pauses the operations feed through its durable kill switch.
-2. Enqueues and synchronously executes a checkpoint using the normal reporting queue, runner,
-   advisory lock, lease, and claim-token protocol.
-3. In one transaction, truncates `inventory_discrepancies`, `stockout_events`, `stock_exits`, and
-   `stock_entries`; updates `reporting.source_ledger_state.last_reset_at`; and marks the reset week
-   incomplete.
-4. Reseeds a consistent ledger window, then re-enables the feed.
+2. Prunes telemetry and refuses any destructive action by default.
+3. Requires the owner to keep the feed paused and write the exact one-shot control note
+   `owner-approved-db-size-reset`. The guard atomically consumes that note before checkpoint work;
+   it cannot authorize a later run.
+4. Enqueues a checkpoint and only observes the normal reporting worker. Maintenance never claims
+   or executes pipeline work.
+5. Only after that exact run succeeds, truncates the disposable source ledger in one transaction,
+   updates `reporting.source_ledger_state.last_reset_at`, records the incomplete reset week, reseeds,
+   and re-enables the feed.
 
-If the checkpoint fails or cannot claim its exact request, the reset still protects the Supabase
-size limit. Every week in the recompute window is recorded in `reporting.incomplete_weeks` with
-reason `reset_checkpoint_failed`. The dashboard and API must continue to label those weeks
-incomplete; never delete the marker merely to make a report appear healthy.
-
-For a planned reset, pause the feed and run/verify the pipeline in the first minutes after an ISO
-Monday boundary. Confirm a successful checkpoint before invoking the guarded reset. This minimizes
-the partial interval, but the reset week is still honestly marked.
+A failed, stale, missing, or unconfirmed checkpoint blocks truncation and leaves the feed paused.
+Repair reporting and obtain a fresh owner approval; never edit a run, reuse a consumed approval, or
+delete an incomplete-week marker to make a report appear healthy.
 
 ## Retention, verification, recovery, and rollback
 
 `business-event-prune` removes stockout and discrepancy occurrence rows older than the configured
 26-week ISO boundary. It does not prune reporting rows or technical telemetry. Verify deletion
 counts from the structured completion log; do not log event payloads or client identifiers.
+
+The worker mirrors its existing safe structured logs to
+`/var/log/trackflow/reporting/reporting-worker.log` on the persistent `reporting-logs` volume, with
+10 MiB rotation and nine backups. Daily maintenance mounts the same volume and enforces a
+14-day/250 MiB directory cap. The image creates the directory as UID 10001 with mode `0750`; the
+worker creates the file with mode `0640`. The path is not exposed over HTTP. Production acceptance
+must still prove these ownership, rotation, retention, and byte-limit controls on the deployed
+host and verify delivery through a configured Coolify notification destination.
 
 After the approved production deployment, verify:
 
@@ -262,3 +285,5 @@ database. R2 objects are disposable and may be deleted without a database rollba
 - The production Prefect restore drill is not executed.
 - The rotated `MIGRATION_DATABASE_URL` is not yet stored in GitHub Production.
 - The first hardened production run and rollback drill are not executed.
+- The persisted reporting-log settings are owner-approved and repository-wired; production
+  permissions/retention and the Coolify notification destination still require live verification.

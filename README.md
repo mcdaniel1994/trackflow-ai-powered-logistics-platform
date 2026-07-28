@@ -30,19 +30,24 @@ Back Office. The production stack is verified on Coolify at
 `backoffice.forgehub.cloud`; deployment, rollback, and remaining operational
 gaps are documented in `docs/runbooks/`.
 
-**Engagement 6** dedicated-Prefect repository remediation is implemented through Phase 4. It adds
-a private, digest-pinned Prefect Server backed by its own PostgreSQL database plus
-continuous claim renewal, token-guarded Prefect correlation, stage progress, fail-closed
-orchestrator health, a hard run watchdog, optional R2 recovery results, API-only history retention,
-isolated daily database backups, server-derived operator states, and release startup guards.
-`reporting.pipeline_runs` remains the sole dispatch authority. Production soak, restore, outage,
+**Engagement 6** is in progress. Delivered and running in production: a Central API `telemetry`
+domain with exact warehouse metrics, a live operations feed, always-on reporting and maintenance
+workers, approval-gated migrations, dependency-aware readiness, automatic immutable-image rollback,
+and a private, digest-pinned Prefect Server backed by its own PostgreSQL database.
+`reporting.pipeline_runs` is the sole dispatch authority.
+
+**The weekly business report is not yet working.** As of July 27, 2026 the reporting worker and
+Prefect are healthy in production, but every pipeline run to date has failed and
+`reporting.weekly_warehouse_client_performance` is empty — no report has ever been published.
+Two owner-approved specifications now cover the remaining work:
+[`spec.md`](docs/planning/remaining_planning/spec.md) for reporting reliability (Phases 6.1–6.4) and
+[`spec-6.5-sales-forecasting.md`](docs/planning/remaining_planning/spec-6.5-sales-forecasting.md)
+for sales forecasting (6.5), which runs in parallel. Phase 6.1 remains at its production-acceptance
+gate with owner-approved persisted-log defaults. Independent Phases 6.5.a and 6.5.b are complete
+and owner-accepted as an offline evaluation: the formal chronological evaluation diagnoses
+overfitting and does not approve the artifact for operational use. Neither track has been deployed.
+Production soak, restore, outage,
 memory-headroom, and rollback acceptance gates remain owner-approved external work.
-The July 15 first production startup exposed a Coolify init-script mount defect; the repository now
-uses an image-baked, idempotent Prefect PostgreSQL bootstrap and container liveness independent of
-worker readiness. The hotfix is locally verified and production redeployment remains approval-gated.
-It adds trustworthy telemetry, live inventory operations, durable weekly business reporting,
-always-on reporting and maintenance workers, approval-gated migrations, dependency-aware
-readiness, and automatic immutable-image rollback.
 
 ---
 
@@ -158,6 +163,24 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### 🚧 Engagement 6 / 6.5 — Data, Telemetry & Forecasting *(in progress)*
+
+- Production telemetry, live synthetic-but-canonical operations, and the durable weekly reporting
+  queue remain in service; the weekly report itself has never successfully published.
+- Phase 6.1 locally adds durable per-attempt failure evidence, separate liveness/core
+  readiness/reporting verification, safe timeout ordering, and an owner-gated destructive reset.
+- Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
+  offline Random Forest baseline, five-fold chronological evaluation, and versioned
+  metrics/model/report/chart artifacts.
+- The formal evaluation diagnoses overfitting and unstable temporal validation, so the artifact is
+  explicitly not approved for serving or operational decisions. Engagement 6.5 is owner-accepted
+  as a complete offline evaluation; Phase 6.1 remains at production acceptance and Phase 6.2 has
+  not begun.
+
+📁 Locations: `data/`, `services/central-api/`, `uis/backoffice/`, and `.github/workflows/`
+
+---
+
 ### ✅ Centralized Incident Manager *(delivered subproject)*
 
 - Browser-based incident registration across Central, Los Angeles, and Zaragoza
@@ -197,11 +220,17 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Prefect startup hotfix locally verified — production redeploy/acceptance pending |
-| 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
-| 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
-| 9 | Workflow automation (n8n) | ⏳ Upcoming |
-| 10 | Real-time dashboards & alerts | ⏳ Upcoming |
+| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 locally verified with logging defaults approved, production acceptance pending before 6.2 |
+| 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
+| 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
+| 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
+| 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
+
+All remaining work is planned from
+**[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its
+[README](docs/planning/remaining_planning/README.md) for the index, sequence, and the precedence
+rule between owner-approved specifications and bootcamp planning inputs.
 
 ---
 
@@ -255,11 +284,13 @@ trackflow/
 │   ├── pipelines/                 # ETL logic
 │   └── eval/                      # AI evaluation datasets
 │
-├── workflows/                     # n8n automation workflows
+├── workflows/                     # Reserved for future automation workflows
 │
 ├── docs/                          # Documentation
 │   ├── briefs/                    # Stakeholder briefs (per engagement)
 │   ├── planning/                  # Subproject specs & architecture proposals
+│   │   └── remaining_planning/    # Entry point for all remaining work (specs + planning inputs)
+│   ├── runbooks/                  # Operational runbooks
 │   ├── standards/                 # Cross-cutting standards (visibility, etc.)
 │   └── archive/                   # Historical planning artifacts
 │
@@ -283,9 +314,9 @@ trackflow/
 | Frontend | HTML5, Tailwind CSS, vanilla JavaScript, React, Next.js App Router |
 | Language | TypeScript, Python |
 | Backend | Independent FastAPI services under `services/`; Central API uses SQLModel + PostgreSQL |
-| AI | RAG, LLM agents, semantic search |
-| Automation | n8n workflows |
-| Infra | npm workspaces, monorepo, GitHub Codespaces |
+| Data | Prefect-orchestrated pipelines, Supabase PostgreSQL |
+| AI *(planned)* | RAG with a vector store, LangGraph agents, MCP server, semantic search |
+| Infra | npm workspaces, monorepo, Docker, GitHub Actions → GHCR, Coolify on a Hostinger VPS |
 
 ---
 

@@ -52,6 +52,7 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
     inspector = inspect(engine)
     assert set(inspector.get_table_names(schema="reporting")) == {
         "incomplete_weeks",
+        "pipeline_run_attempts",
         "pipeline_runs",
         "source_ledger_state",
         "weekly_warehouse_client_performance",
@@ -73,6 +74,14 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         column["name"] for column in inspector.get_columns("worker_heartbeats", schema="reporting")
     }
     assert {"last_progress_at", "orchestrator_healthy"}.issubset(heartbeat_columns)
+    attempt_indexes = {
+        index["name"]
+        for index in inspector.get_indexes("pipeline_run_attempts", schema="reporting")
+    }
+    assert {
+        "ix_pipeline_run_attempts_started_at_desc",
+        "uq_pipeline_run_attempts_run_attempt",
+    }.issubset(attempt_indexes)
     with Session(engine) as session:
         rows = list(session.exec(sa_select(SourceLedgerState)).all())
         assert len(rows) == 1

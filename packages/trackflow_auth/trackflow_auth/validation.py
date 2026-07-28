@@ -9,7 +9,6 @@ from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-
 SAFE_MESSAGE_BY_TYPE = {
     "extra_forbidden": "Extra fields are not permitted.",
     "greater_than": "Value is out of range.",

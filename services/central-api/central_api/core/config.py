@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     telemetry_security_retention_days: int = 365
     # Live operations feed (portfolio synthetic-but-canonical data generation).
     operations_feed_enabled: bool = False
-    operations_feed_interval_seconds: float = 5.0
+    operations_feed_interval_seconds: float = 15.0
     operations_feed_batch_min: int = 1
     operations_feed_batch_max: int = 4
     operations_feed_backfill_days: int = 10

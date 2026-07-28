@@ -4,7 +4,16 @@
 
 ## Status
 
-In progress — dedicated Prefect production remediation Phases 0-4 are implemented and locally
+In progress — reporting-reliability Phase 6.1 is implemented and locally verified through Alembic
+revision `20260728_0011`; its production migration, deployment, fault injection, stopped-worker
+observation, and notification verification remain acceptance actions. The owner approved the
+persisted-log volume/path/limits and controlled acceptance workflow on 2026-07-28. Independent
+sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline evaluation.
+Five chronological folds diagnose overfitting and unstable temporal validation; the offline
+artifact is not approved for serving or operational decisions. The weekly business report has still never published in
+production.
+
+Dedicated Prefect production remediation Phases 0-4 are implemented and locally
 verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
 reporting and maintenance clients target it while `reporting.pipeline_runs` remains the sole
 dispatch authority. Continuous claim renewal, token-guarded Prefect correlation, stage progress,

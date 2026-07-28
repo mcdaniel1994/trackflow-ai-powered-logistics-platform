@@ -9,17 +9,20 @@ def test_release_orders_migration_deploy_readiness_and_rollback() -> None:
     migration = workflow.index("name: Run and verify production migrations")
     deploy = workflow.index("name: Deploy immutable SHA through Coolify")
     readiness = workflow.index("name: Poll application health and unauthenticated protection")
-    guard_verification = workflow.index("name: Verify Prefect startup guards from live worker state")
+    guard_verification = workflow.index("name: Verify reporting separately from core readiness")
     rollback = workflow.index("name: Restore previous image after deployment or health failure")
     assert prefect_contract < migration < deploy < readiness < guard_verification < rollback
     assert "steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'" in workflow
-    # A guard rejection must roll the release back, not just be reported.
-    assert "steps.prefect_guard_verification.outcome == 'failure'" in workflow
+    # Reporting is recorded separately and can never amplify into image rollback.
+    rollback_condition = workflow[rollback : workflow.index("name: Fail an unsuccessful release")]
+    assert "steps.prefect_guard_verification.outcome" not in rollback_condition
+    assert "/api/health/ready" in workflow
+    assert "/api/health/reporting" in workflow
     assert 'TARGET_IMAGE_TAG="$PREVIOUS_IMAGE_TAG"' in workflow
     assert "CAPTURE_PREVIOUS_IMAGE_TAG=false" in workflow
     assert "if: env.DEPLOYMENT_MODE == 'release'" in workflow
     assert 'echo "Image rollback:' in workflow
-    assert 'echo "Prefect guards:' in workflow
+    assert 'echo "Reporting verification (non-rollback):' in workflow
 
 
 def test_prefect_release_contract_is_static_and_live_guarded() -> None:
@@ -61,7 +64,7 @@ def test_guard_verification_rejects_pre_deployment_heartbeats() -> None:
 
     boundary_step = workflow.index("name: Record post-deployment verification boundary")
     deploy = workflow.index("name: Deploy immutable SHA through Coolify")
-    guard_check = workflow.index("name: Verify Prefect startup guards from live worker state")
+    guard_check = workflow.index("name: Verify reporting separately from core readiness")
     # The boundary must be recorded after Coolify returns and before it is used.
     assert deploy < boundary_step < guard_check
     assert "REPORTING_STARTUP_MIN_HEARTBEAT_AT" in workflow

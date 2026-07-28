@@ -1,19 +1,10 @@
-"""Bound Supabase Free-tier storage for the live operations feed.
+"""Bound database growth without performing an unattended destructive reset.
 
-The 5-second feed writes real ledger rows continuously, so the database must be kept
-well clear of Supabase Free's 500 MB cap. This job (a Coolify scheduled task, ~every
-15 minutes) measures the database and takes graduated, automatic action:
-
-- below the soft limit: log the size only.
-- at/above the soft limit (default 400 MB): prune telemetry immediately and log a warning.
-- at/above the hard limit (default 450 MB): pause the feed (kill-switch row), run a
-  ledger-safe reset/reseed, then re-enable — keeping the DB bounded without ever leaving
-  the stock ledger in an inconsistent state.
-
-The business ledger is deliberately disposable in this portfolio environment (documented
-in docs/runbooks/telemetry-inventory.md); the reset truncates synthetic movements and
-rebuilds a consistent baseline + rolling window rather than partially deleting rows (which
-would corrupt computed stock).
+At the soft limit the feed is paused through its existing control row and telemetry
+retention still runs. At the hard limit the same safe actions occur, but ledger reset
+is refused unless an owner has deliberately paused the feed and written the exact
+one-shot approval token to the control row. The token is consumed before checkpoint
+work starts and cannot authorize a later reset.
 
 Usage:
     python -m scripts.db_size_guard
@@ -22,11 +13,10 @@ Usage:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, date, datetime, timedelta
 
-from pipelines.business_performance.flows import prefect_executor
 from pipelines.business_performance.queue import DEFAULT_RECOMPUTE_WEEKS, enqueue_cli
-from pipelines.business_performance.runner import RunnerStatus, run_once
 from process.business_performance import iso_week_start, reset_incomplete_weeks
 from sqlalchemy import text
 from sqlmodel import Session
@@ -34,13 +24,21 @@ from sqlmodel import Session
 from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_engine
 from central_api.domains.inventory.seed import seed_inventory
-from central_api.domains.operations.control import set_feed_enabled
+from central_api.domains.operations.control import feed_enabled, set_feed_enabled
 from central_api.domains.telemetry.service import TelemetryService
 from scripts.operations_feed import backfill_history, resolve_user_uuid
 
 logger = logging.getLogger("central_api.db_size_guard")
 
 _BYTES_PER_MB = 1024 * 1024
+RESET_APPROVAL_NOTE = "owner-approved-db-size-reset"
+RESET_APPROVAL_CONSUMED_NOTE = "db_size_guard: owner approval consumed"
+CHECKPOINT_TIMEOUT_SECONDS = 900.0
+CHECKPOINT_POLL_SECONDS = 5.0
+
+
+class ResetBlocked(RuntimeError):
+    """The destructive path lacks a fresh, successful reporting checkpoint."""
 
 
 def database_size_mb(session: Session) -> float:
@@ -66,20 +64,48 @@ def _checkpoint_target_weeks(reset_at: datetime) -> tuple[date, ...]:
     )
 
 
-def run_reporting_checkpoint() -> bool:
-    """Run one durable checkpoint request and report whether this exact request succeeded."""
+def run_reporting_checkpoint(
+    *,
+    timeout_seconds: float = CHECKPOINT_TIMEOUT_SECONDS,
+    poll_seconds: float = CHECKPOINT_POLL_SECONDS,
+) -> bool:
+    """Enqueue and observe one exact checkpoint; never claim or execute reporting work."""
     engine = get_engine()
     run_id = enqueue_cli(engine)
-    result = run_once(engine, prefect_executor)
-    succeeded = bool(result.status == RunnerStatus.SUCCEEDED and result.run_id == str(run_id))
-    if not succeeded:
-        logger.error(
-            "db_size_guard_checkpoint_failed checkpoint_run_id=%s runner_status=%s claimed_run_id=%s",
-            run_id,
-            result.status,
-            result.run_id,
-        )
-    return succeeded
+    deadline = time.monotonic() + timeout_seconds
+    while time.monotonic() <= deadline:
+        with engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT status, finished_at FROM reporting.pipeline_runs "
+                    "WHERE id = :run_id"
+                ),
+                {"run_id": run_id},
+            ).mappings().one_or_none()
+        if row is None:
+            logger.error("db_size_guard_checkpoint_unconfirmed checkpoint_run_id=%s", run_id)
+            return False
+        if row["status"] == "succeeded" and row["finished_at"] is not None:
+            return True
+        if row["status"] == "failed":
+            logger.error("db_size_guard_checkpoint_failed checkpoint_run_id=%s", run_id)
+            return False
+        time.sleep(poll_seconds)
+    logger.error("db_size_guard_checkpoint_stale checkpoint_run_id=%s", run_id)
+    return False
+
+
+def consume_reset_approval(session: Session) -> bool:
+    """Atomically consume the exact owner-set control note once."""
+    approved = session.execute(
+        text(
+            "UPDATE operations_feed_control SET note = :consumed, updated_at = now() "
+            "WHERE id = 1 AND enabled = false AND note = :approval RETURNING id"
+        ),
+        {"approval": RESET_APPROVAL_NOTE, "consumed": RESET_APPROVAL_CONSUMED_NOTE},
+    ).scalar_one_or_none()
+    session.commit()
+    return approved is not None
 
 
 def _reset_source_tables(
@@ -130,20 +156,19 @@ def reset_ledger(
 ) -> None:
     """Checkpoint, reset, annotate, and rebuild the disposable source ledger.
 
-    The feed is paused before the checkpoint so its published aggregates cover a stable
-    source. Checkpoint failure never blocks the hard-limit reset; affected weeks are marked
-    incomplete instead of being silently represented as verified history.
+    The caller must already have consumed an explicit owner approval. The feed stays
+    paused throughout. A failed, stale, or unconfirmed checkpoint blocks all truncation.
     """
-    set_feed_enabled(session, enabled=False, note="db_size_guard: hard-limit reset in progress")
     boundary = reset_at or datetime.now(UTC)
     target_weeks = _checkpoint_target_weeks(boundary)
     try:
         checkpoint_succeeded = run_reporting_checkpoint()
-    except Exception:
-        # A hard-limit reset cannot wait indefinitely for reporting recovery.
-        # Persist the fixed failure classification below without logging payloads.
-        logger.error("db_size_guard_checkpoint_failed_before_reset")
-        checkpoint_succeeded = False
+    except Exception as exc:
+        logger.error("db_size_guard_checkpoint_failed_before_reset error_type=%s", type(exc).__name__)
+        raise ResetBlocked("reporting checkpoint could not be confirmed") from None
+    if not checkpoint_succeeded:
+        logger.error("db_size_guard_reset_blocked reason=checkpoint_not_successful")
+        raise ResetBlocked("reporting checkpoint could not be confirmed")
     with Session(get_engine()) as work:
         _reset_source_tables(
             work,
@@ -153,7 +178,7 @@ def reset_ledger(
         )
         seed_inventory(work, user_uuid)
         backfill_history(work, user_uuid, days=settings.operations_feed_backfill_days)
-    set_feed_enabled(session, enabled=True, note="db_size_guard: reset complete")
+    set_feed_enabled(session, enabled=True, note="db_size_guard: owner-approved reset complete")
     logger.error(
         "db_size_guard_reset_complete backfill_days=%s checkpoint_succeeded=%s",
         settings.operations_feed_backfill_days,
@@ -175,12 +200,38 @@ def guard_once() -> float:
         )
 
         if size_mb >= settings.db_size_hard_limit_mb:
-            logger.error("db_size_hard_limit_reached db_size_mb=%.1f", size_mb)
-            user_uuid = resolve_user_uuid(settings)
-            reset_ledger(session, user_uuid, settings)
-        elif size_mb >= settings.db_size_soft_limit_mb:
-            logger.warning("db_size_soft_limit_reached db_size_mb=%.1f pruning_telemetry", size_mb)
+            logger.error("db_size_hard_limit_reached db_size_mb=%.1f feed_paused=true", size_mb)
             prune_telemetry(session, settings)
+            if feed_enabled(session):
+                set_feed_enabled(
+                    session,
+                    enabled=False,
+                    note="db_size_guard: hard limit reached; owner approval required",
+                )
+            if not consume_reset_approval(session):
+                logger.critical(
+                    "db_size_guard_reset_refused reason=owner_approval_required "
+                    "approval_note=%s",
+                    RESET_APPROVAL_NOTE,
+                )
+                return size_mb
+            user_uuid = resolve_user_uuid(settings)
+            try:
+                reset_ledger(session, user_uuid, settings)
+            except ResetBlocked:
+                logger.critical("db_size_guard_reset_refused reason=checkpoint_not_successful")
+        elif size_mb >= settings.db_size_soft_limit_mb:
+            logger.warning(
+                "db_size_soft_limit_reached db_size_mb=%.1f pruning_telemetry feed_paused=true",
+                size_mb,
+            )
+            prune_telemetry(session, settings)
+            if feed_enabled(session):
+                set_feed_enabled(
+                    session,
+                    enabled=False,
+                    note="db_size_guard: soft limit reached",
+                )
     return size_mb
 
 

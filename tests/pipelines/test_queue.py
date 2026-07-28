@@ -81,6 +81,20 @@ def _run_row(engine: Engine, run_id: UUID) -> dict[str, object]:
         )
 
 
+def _attempt_rows(engine: Engine, run_id: UUID) -> list[dict[str, object]]:
+    with engine.connect() as connection:
+        return [
+            dict(row)
+            for row in connection.execute(
+                text(
+                    "SELECT * FROM reporting.pipeline_run_attempts "
+                    "WHERE run_id = :run_id ORDER BY attempt"
+                ),
+                {"run_id": run_id},
+            ).mappings()
+        ]
+
+
 def _claim_requested(engine: Engine, *, now: datetime = BASE_TIME) -> RunClaim:
     enqueue_cli(engine, now=now - timedelta(seconds=1))
     claim = claim_next(engine, now=now)
@@ -211,6 +225,11 @@ def test_reset_after_enqueue_fails_request_instead_of_retrying_forever(
     row = _run_row(pipeline_engine, run_id)
     assert row["status"] == "failed"
     assert row["error_code"] == "VALIDATE_FAILED"
+    attempts = _attempt_rows(pipeline_engine, run_id)
+    assert len(attempts) == 1
+    assert attempts[0]["error_code"] == "VALIDATE_FAILED"
+    assert attempts[0]["error_type"] == "QueueValidationError"
+    assert attempts[0]["retry_outcome"] == "failed"
 
 
 def test_retry_backoff_blocks_early_reclaim(pipeline_engine: Engine) -> None:
@@ -219,6 +238,10 @@ def test_retry_backoff_blocks_early_reclaim(pipeline_engine: Engine) -> None:
     row = _run_row(pipeline_engine, first.run_id)
     assert row["status"] == "retryable"
     assert row["next_attempt_at"] == BASE_TIME + timedelta(minutes=1)
+    attempts = _attempt_rows(pipeline_engine, first.run_id)
+    assert len(attempts) == 1
+    assert attempts[0]["error_code"] == "DB_UNAVAILABLE"
+    assert attempts[0]["retry_outcome"] == "retried"
     assert claim_next(pipeline_engine, now=BASE_TIME + timedelta(seconds=59)) is None
     second = claim_next(pipeline_engine, now=BASE_TIME + timedelta(minutes=1))
     assert second is not None
@@ -247,6 +270,13 @@ def test_fifth_transient_failure_is_terminal(pipeline_engine: Engine) -> None:
     assert row["status"] == "failed"
     assert row["error_code"] == "MAX_ATTEMPTS_EXCEEDED"
     assert row["next_attempt_at"] is None
+    attempts = _attempt_rows(pipeline_engine, claim.run_id)
+    assert len(attempts) == 1
+    assert attempts[0]["error_code"] == "DB_UNAVAILABLE"
+    assert attempts[0]["retry_outcome"] == "exhausted"
+    assert "MAX_ATTEMPTS_EXCEEDED" not in {
+        attempt["error_code"] for attempt in attempts
+    }
 
 
 def test_stale_recovery_uses_lease_and_heartbeat_only(pipeline_engine: Engine) -> None:
@@ -262,6 +292,10 @@ def test_stale_recovery_uses_lease_and_heartbeat_only(pipeline_engine: Engine) -
         recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
     )
     assert _run_row(pipeline_engine, claim.run_id)["status"] == "retryable"
+    attempts = _attempt_rows(pipeline_engine, claim.run_id)
+    assert len(attempts) == 1
+    assert attempts[0]["error_code"] == "STALE_ABANDONED"
+    assert attempts[0]["retry_outcome"] == "lease_lost"
 
 
 @pytest.mark.parametrize(
@@ -309,7 +343,7 @@ def test_process_death_releases_lock_rolls_back_and_requeues_each_stage(
 
     assert recover_stale_runs(
         pipeline_engine,
-        now=datetime.now(UTC) + timedelta(minutes=11),
+        now=datetime.now(UTC) + timedelta(minutes=16),
     ) == 1
     row = _run_row(pipeline_engine, run_id)
     assert row["status"] == "retryable"
@@ -326,11 +360,15 @@ def test_stale_recovery_fails_max_attempt_and_never_moves_terminal_rows(
             {"id": claim.run_id},
         )
     assert (
-        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
     )
     assert (
         _run_row(pipeline_engine, claim.run_id)["error_code"] == "MAX_ATTEMPTS_EXCEEDED"
     )
+    attempts = _attempt_rows(pipeline_engine, claim.run_id)
+    assert len(attempts) == 1
+    assert attempts[0]["error_code"] == "STALE_ABANDONED"
+    assert attempts[0]["retry_outcome"] == "lease_lost"
     assert recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(days=1)) == 0
 
 
@@ -339,7 +377,7 @@ def test_old_worker_cannot_heartbeat_publish_or_finalize_after_reclaim(
 ) -> None:
     claim = _claim_requested(pipeline_engine)
     assert (
-        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
     )
     assert (
         heartbeat(pipeline_engine, claim, now=BASE_TIME + timedelta(minutes=12))
@@ -368,6 +406,7 @@ def test_old_worker_cannot_heartbeat_publish_or_finalize_after_reclaim(
     assert (
         finalize_failure(pipeline_engine, claim, "LOAD_FAILED", now=BASE_TIME) is False
     )
+    assert len(_attempt_rows(pipeline_engine, claim.run_id)) == 1
 
 
 def test_runner_releases_claim_when_advisory_lock_is_held(
@@ -491,7 +530,7 @@ def test_prefect_correlation_and_stage_updates_are_claim_token_guarded(
         ).one()
     assert row == (flow_run_id, "extract", BASE_TIME + timedelta(seconds=1))
     assert (
-        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=11)) == 1
+        recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
     )
     assert record_stage(pipeline_engine, claim, "load") is False
     assert record_prefect_flow_run(pipeline_engine, claim, uuid4()) is False

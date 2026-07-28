@@ -2,6 +2,7 @@
 name = "trackflow-incidents"
 version = "0.1.0"
 description = "Shared TrackFlow incident contracts and legacy CSV validation."
+license = { text = "Proprietary" }
 requires-python = ">=3.11"
 
 [project.optional-dependencies]

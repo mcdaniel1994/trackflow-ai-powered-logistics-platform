@@ -1,0 +1,12 @@
+{
+  "accepted_phase_6_5_a_manifest_sha256": "5dab48f315c4e4e9af6c2d1fcaab6d56a22b1f54aad5bfa4bc4703ffce72d377",
+  "artifact_hashes_sha256": {
+    "evaluation_report.md": "601f3ccc4137869900f8a33d36e34b07c2035fa96d5bf7674e1ff699622d43dd",
+    "sales_forecast_evaluation.v1.json": "34f14b4df39791afe2a4a7ca8411ac70bf8280af802cfbca4ef6899ab3f55e02",
+    "sales_forecast_learning_curve.v1.png": "b6d98dd26340e7febfdb4688a2836f4db44d3c45efbee13f8cd110b9f337a7bb"
+  },
+  "dataset_sha256": "db18966a665e70ea85f5c979c1574b95615520872bab51035d676915284a8433",
+  "phase": "6.5.b",
+  "random_seed": 42,
+  "schema_version": 1
+}

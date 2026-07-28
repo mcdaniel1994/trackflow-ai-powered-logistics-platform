@@ -2,6 +2,7 @@
 name = "trackflow-central-api"
 version = "0.1.0"
 description = "TrackFlow Central API inventory service."
+license = { text = "Proprietary" }
 requires-python = ">=3.11"
 dependencies = [
   "alembic>=1.16.0",
