@@ -12,8 +12,10 @@ approved the persisted-log defaults on 2026-07-28: 10 MiB rotation with nine bac
 retention, a 250 MiB directory ceiling, and a persistent `reporting-logs` volume mounted at
 `/var/log/trackflow/reporting`. External acceptance and the rollback drill remain owner actions.
 Do not bypass the GitHub
-Production reviewer gate. Phase 6.2 durable hourly SQL rollups are locally verified through
-`20260728_0012`, default off, and not yet deployed or live-reconciled. Never
+Production reviewer gate. Phase 6.2 durable hourly SQL rollups are deployed through
+`20260728_0012` and enabled in production. The first 113,064-row full-history publication exceeded
+the 60-second budget without committing partial state; the set-based correction awaits redeployment
+and live reconciliation. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business

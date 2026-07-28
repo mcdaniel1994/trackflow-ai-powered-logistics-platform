@@ -2,10 +2,12 @@
 
 ## Status
 
-Phase 6.2 is implemented and verified on disposable local PostgreSQL through additive Alembic
-revision `20260728_0012`. It is **not deployed or production-accepted**. The off-by-default flag
-keeps the deployed behavior unchanged until a separately reviewed production release enables
-shadow computation. Phases 6.3–6.4 have not started.
+Phase 6.2 is deployed through additive Alembic revision `20260728_0012`, but it is **not yet
+production-accepted**. The first enabled production shadow run exposed a publication-cardinality
+defect: the 113,064-row full-history grid used a row-by-row upsert and exceeded the 60-second
+publication budget. No cursor or partial rows committed. A typed set-based PostgreSQL upsert fixes
+that path locally and awaits redeployment and exact live reconciliation. Phases 6.3–6.4 have not
+started.
 
 Phase 6.1's remaining controlled exercises were omitted by explicit owner direction. That exception
 is recorded in the Phase 6.1 production evidence and is not treated as passing evidence here.
@@ -85,17 +87,50 @@ cleaned the disposable database afterward.
 All measured local budgets pass with substantial margin. These measurements do not replace live
 shadow reconciliation.
 
+### Production-cardinality correction
+
+The immutable merge `9376c1e` deployed migration `20260728_0012` successfully and passed public
+liveness, core readiness, reporting verification, and unauthenticated redirect checks. After the
+owner enabled `REPORTING_HOURLY_ROLLUPS_ENABLED=true` and redeployed, forced-read-only inspection
+confirmed:
+
+- the inspector role remained non-superuser and transaction/default read-only;
+- the source window spans 18,844 completed hours across six warehouse/client dimensions;
+- the resulting dense grid contains 113,064 rows;
+- the first shadow claim reached `load` quickly but exceeded the ≤60-second publication budget;
+- `reporting.hourly_activity_rollups` remained empty and the singleton publication/cutoff fields
+  remained null, proving no partial publication.
+
+The production failure was caused by SQLAlchemy executemany issuing the upsert row by row. The
+correction sends typed column arrays to one PostgreSQL `unnest(...)` set and retains claim
+verification, upsert, and cursor advancement in the same transaction.
+
+The revised opt-in performance gate now uses the observed 18,844-hour × six-dimension grid:
+
+| Measurement | Corrected local result | Budget |
+|---|---:|---:|
+| Source/event rows | 2,120,000 | ≥ 2× projected volume |
+| Dense rollup rows | 113,064 | observed production cardinality |
+| Full-history aggregate | 1.466 s | ≤ 30 s |
+| Set-based publication | 1.644 s | aggregate + publish ≤ 60 s |
+| Exact reconciliation | 0.994 s | ≤ 60 s |
+| Rollup-derived read | 0.035 s | ≤ 2 s |
+| Process peak RSS | 322,240,512 bytes | ≤ 80% of 768 MiB |
+
+The corrected full data suite passes 127 tests with one opt-in performance test skipped and 90.25%
+coverage. The explicit performance gate passes separately; Ruff, strict mypy, package build,
+Compose validation, and 11 release-safety tests also pass.
+
 ## Production acceptance still required
 
 Before Phase 6.2 can be called production-accepted:
 
-1. review and deploy the additive `20260728_0012` migration and immutable image;
-2. verify runtime grants/readiness for both new reporting tables;
-3. explicitly enable the shadow flag only for the reporting worker;
-4. let Prefect publish hourly shadow rollups at a fixed live cutoff;
-5. run exact live reconciliation and record aggregate-only evidence;
-6. confirm public reporting responses remain byte-compatible and the weekly table remains
+1. review and deploy the set-based publication correction while retaining additive
+   `20260728_0012`;
+2. let Prefect publish hourly shadow rollups at a fixed live cutoff;
+3. run exact live reconciliation and record aggregate-only evidence;
+4. confirm public reporting responses remain byte-compatible and the weekly table remains
    unchanged; and
-7. rerun the same complete release gates against the immutable release candidate.
+5. rerun the same complete release gates against the immutable release candidate.
 
 Phase 6.3 cutover must not deploy before this evidence is complete.

@@ -7,8 +7,9 @@
 In progress — reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
 Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to omit the remaining controlled
 exercises and proceed; Phase 6.1 is closed by that documented exception, not by passing evidence.
-Phase 6.2 durable hourly SQL rollups are implemented and locally verified through additive revision
-`20260728_0012`; the shadow flag defaults off and production deployment/reconciliation remain.
+Phase 6.2 durable hourly SQL rollups are deployed through additive revision `20260728_0012` and the
+production flag is enabled. The first 113,064-row publication exceeded its budget without a partial
+commit; a set-based correction is locally verified and awaits redeployment/reconciliation.
 Independent
 sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline evaluation.
 Five chronological folds diagnose overfitting and unstable temporal validation; the offline

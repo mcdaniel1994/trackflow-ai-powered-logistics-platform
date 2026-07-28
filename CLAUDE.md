@@ -91,8 +91,9 @@ Then read the active engagement brief and the README for every folder being modi
   Prefect are healthy, but every pipeline run to date has failed and
   `reporting.weekly_warehouse_client_performance` is empty. Phase 6.1 is deployed as immutable image
   `13bba2e` through revision `20260728_0011` and closed by a documented owner exception after the
-  remaining controlled exercises were omitted. Phase 6.2 durable hourly SQL rollups are locally
-  verified through `20260728_0012`, off by default, and await production shadow reconciliation.
+  remaining controlled exercises were omitted. Phase 6.2 durable hourly SQL rollups are deployed
+  through `20260728_0012`; their set-based production-cardinality correction awaits redeployment
+  and exact live reconciliation.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

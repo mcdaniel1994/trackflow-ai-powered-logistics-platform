@@ -9,8 +9,9 @@ Compose service. It polls every five seconds, records a worker heartbeat every t
 checks the America/Chicago schedule every minute. Queue leases, claim-token comparisons,
 idempotent scheduled requests, retries, and the PostgreSQL advisory lock remain authoritative.
 The Phase 6.1 reliability image `13bba2e` and Alembic revision `20260728_0011` are deployed; the
-owner closed its remaining exercises by documented exception. Phase 6.2 is locally verified through
-additive revision `20260728_0012`. `REPORTING_HOURLY_ROLLUPS_ENABLED` defaults off: the legacy
+owner closed its remaining exercises by documented exception. Phase 6.2 is deployed through
+additive revision `20260728_0012`; its set-based 113,064-row publication correction awaits
+redeployment and live reconciliation. `REPORTING_HOURLY_ROLLUPS_ENABLED` defaults off: the legacy
 07:00 path remains byte-compatible while disabled. When explicitly enabled for shadow validation,
 Prefect computes completed UTC hours at 07:00 and 19:00 America/Chicago, recomputes an unconditional
 trailing 72 hours, writes only `reporting.hourly_activity_rollups`, and leaves weekly served data

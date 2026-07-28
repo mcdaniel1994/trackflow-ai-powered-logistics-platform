@@ -8,8 +8,8 @@ inventory, centralized operational incidents, and suppliers.
 Engagement 5 inventory and the Centralized Incident Manager subproject are delivered. Engagement 6
 reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and closed by documented
 owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
-an additive cadence identity at local head `20260728_0012`; its off-by-default shadow path awaits
-production deployment and exact live reconciliation.
+an additive cadence identity at deployed head `20260728_0012`; its set-based production-cardinality
+correction awaits redeployment and exact live reconciliation.
 The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
