@@ -1,10 +1,9 @@
-"""Prove the reporting worker cleared its Prefect startup guard after a deploy.
+"""Prove the reporting worker entered its selected execution loop after a deploy.
 
-Compose no longer gates reporting-worker on the one-shot Prefect guards, because
-`up -d` blocks until such dependencies exit and that put them on Coolify's
-command boundary. The worker enforces those conditions itself at startup and
-exits non-zero when they fail, so a live, healthy worker heartbeat is the
-observable proof that the guards passed.
+The retained Prefect mode enforces its startup guards inside the worker. Direct
+SQL has no Prefect runtime dependency and enters the same durable queue loop
+after allowlisted executor selection. In both modes, a live, healthy worker
+heartbeat after the deployment boundary is the observable startup proof.
 
 This replaces a hard-coded `PREFECT_GUARD_RESULT=passed` in the deploy workflow,
 which asserted the old Compose ordering rather than measuring anything.
@@ -63,8 +62,7 @@ def evaluate_heartbeat(
 ) -> str | None:
     """Return a fixed failure reason, or None when the new worker proved itself."""
     if worker is None or worker["heartbeat_at"] is None:
-        # The worker never reached its poll loop: its startup guard rejected the
-        # deployment, or it never started at all.
+        # The worker never reached its selected executor's poll loop.
         return "worker_heartbeat_absent"
     if worker["heartbeat_at"] < boundary:
         # Recent is not enough — this predates the deployment, so it is the

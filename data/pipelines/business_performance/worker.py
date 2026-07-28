@@ -85,11 +85,14 @@ def run_worker(
     executor: RunExecutor,
     *,
     stop: Event,
+    orchestrator_health: Callable[[], bool] | None = None,
+    reconcile_prefect_runs: bool = True,
     poll_interval_seconds: float = POLL_INTERVAL_SECONDS,
     heartbeat_interval_seconds: float = HEARTBEAT_INTERVAL_SECONDS,
     dispatch_interval_seconds: float = DISPATCH_INTERVAL_SECONDS,
 ) -> None:
     """Poll serially while heartbeat and scheduling remain responsive."""
+    health_check = prefect_is_healthy if orchestrator_health is None else orchestrator_health
     background = (
         Thread(
             target=_periodic,
@@ -115,17 +118,18 @@ def run_worker(
     for thread in background:
         thread.start()
 
-    from .flows import reconcile_orphaned_flow_runs
+    if reconcile_prefect_runs:
+        from .flows import reconcile_orphaned_flow_runs
 
-    try:
-        reconcile_orphaned_flow_runs(engine)
-    except Exception as exc:
-        _safe_failure("orphan_reconciliation", exc)
+        try:
+            reconcile_orphaned_flow_runs(engine)
+        except Exception as exc:
+            _safe_failure("orphan_reconciliation", exc)
     logger.info("reporting_worker_started")
     try:
         while not stop.is_set():
             try:
-                healthy = prefect_is_healthy()
+                healthy = health_check()
                 record_worker_heartbeat(
                     engine,
                     last_progress_at=utc_now(),
@@ -195,29 +199,46 @@ def _configure_persisted_log() -> None:
 
 def main() -> None:
     """Run one single-concurrency worker until SIGTERM or SIGINT."""
-    from .flows import prefect_executor
+    from .executor_selection import executor_from_environment
     from .startup_guard import StartupGuardFailure, verify_startup_contract
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s", force=True)
     _configure_persisted_log()
 
-    # Compose no longer gates this container on the Prefect guards, so the same
-    # conditions are enforced here before any work can be claimed. Exiting
-    # non-zero restarts this worker under `restart: on-failure` rather than
-    # letting it process against a database Prefect never migrated.
     try:
-        verify_startup_contract()
+        executor_name, executor = executor_from_environment()
+    except ValueError:
+        logger.critical("reporting_worker_startup_guard=failed reason=unsupported_executor")
+        raise SystemExit(1) from None
+
+    # The Prefect rollback path keeps its original fail-closed startup contract.
+    # Direct SQL has no Prefect runtime contract, so it must not be gated on a
+    # service that is outside its execution path.
+    try:
+        if executor_name == "prefect":
+            verify_startup_contract()
     except StartupGuardFailure as failure:
         logger.critical("reporting_worker_startup_guard=failed reason=%s", failure.reason)
         raise SystemExit(1) from None
-    logger.info("reporting_worker_startup_guard=complete")
+    logger.info(
+        "reporting_worker_startup_guard=complete executor=%s",
+        executor_name,
+    )
 
     stop = Event()
     signal.signal(signal.SIGTERM, _stop(stop))
     signal.signal(signal.SIGINT, _stop(stop))
     engine = engine_from_environment()
     try:
-        run_worker(engine, prefect_executor, stop=stop)
+        run_worker(
+            engine,
+            executor,
+            stop=stop,
+            orchestrator_health=(
+                prefect_is_healthy if executor_name == "prefect" else lambda: True
+            ),
+            reconcile_prefect_runs=executor_name == "prefect",
+        )
     finally:
         engine.dispose()
 

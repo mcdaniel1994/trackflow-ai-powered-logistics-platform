@@ -245,6 +245,8 @@ services:
       REPORTING_HOURLY_ROLLUPS_ENABLED: ${REPORTING_HOURLY_ROLLUPS_ENABLED:-false}
       REPORTING_ROLLUP_CUTOVER_ENABLED: ${REPORTING_ROLLUP_CUTOVER_ENABLED:-false}
       REPORTING_COMPUTATION_ENABLED: ${REPORTING_COMPUTATION_ENABLED:-true}
+      # Preserve Prefect as the local default while permitting direct-path drills.
+      REPORTING_EXECUTOR: ${REPORTING_EXECUTOR:-prefect}
       REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
       REPORTING_LOG_MAX_BYTES: "10485760"
       REPORTING_LOG_BACKUP_COUNT: "9"

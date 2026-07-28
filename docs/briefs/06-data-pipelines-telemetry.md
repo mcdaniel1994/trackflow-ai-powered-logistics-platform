@@ -16,12 +16,12 @@ The first six-row verified weekly snapshot published, and the control-plane/safe
 drill passed without unexpected work or unrelated-route failure. On 2026-07-28 the owner accepted
 Phase 6.3 as-is and approved beginning Phase 6.4 by explicit exception. The computation-disable
 drill and required seven-day observation were waived by that decision; neither was passed or
-executed. Phase 6.4 measured re-budgeting and direct-SQL executor work may begin, while the
-production executor swap, resource-limit changes, final Prefect topology removal, and any Phase
-6.4 time-gate exception remain separately owner-gated. Local Phase 6.4 implementation has begun
-with a direct SQL executor under the existing run contract and fixed-cutoff parity coverage. It is
-not selected by the production worker; no resource study or Phase 6.4 observation gate is claimed
-as started or complete.
+executed. On the same date the owner waived the Phase 6.4 48-hour steady-state study, separate
+deployment resource study, all 48-hour post-change comparisons, and seven-day clean run; those
+gates are waived, not passed or executed. The owner separately approved the production swap to the
+direct SQL executor after same-day verification. The allowlisted worker selection and production
+Compose setting are prepared with no resource-limit change. Deployment verification remains
+pending, and final Prefect topology removal remains separately approval-gated.
 Independent sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline
 evaluation. Five chronological folds diagnose overfitting and unstable temporal validation; the
 offline artifact is not approved for serving or operational decisions.

@@ -292,12 +292,13 @@ def run_once(
 
 
 def main() -> None:
-    """Claim and execute at most one durable request through the Prefect flow."""
-    from .flows import prefect_executor
+    """Claim and execute at most one durable request through the selected executor."""
+    from .executor_selection import executor_from_environment
 
+    _executor_name, executor = executor_from_environment()
     engine = engine_from_environment()
     try:
-        run_once(engine, prefect_executor)
+        run_once(engine, executor)
     finally:
         engine.dispose()
 

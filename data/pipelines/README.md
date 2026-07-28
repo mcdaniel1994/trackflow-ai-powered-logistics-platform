@@ -18,3 +18,7 @@ queue remains authoritative and the read-only worker keeps only temporary client
 Phase 6.3 removes the raw Python/R2 transform from the active executor, atomically activates only
 exactly reconciled rollups, and serves completed history from weekly facts plus the current
 incomplete week from hourly facts. Cutover defaults off until the controlled production gate.
+Phase 6.4 adds an allowlisted `REPORTING_EXECUTOR` selector. Code and local Compose default to
+Prefect; the owner-approved production Compose path selects `direct_sql` without Prefect startup,
+health, or orphan-flow coupling. Prefect infrastructure remains present for rollback until a
+separate final removal approval.

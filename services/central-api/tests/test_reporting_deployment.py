@@ -105,7 +105,12 @@ def test_dedicated_prefect_services_are_private_pinned_and_postgres_backed() -> 
         assert "ports:" not in server
         assert "PREFECT_API_URL: http://prefect-server:4200/api" in reporting
         assert "PREFECT_API_URL: http://prefect-server:4200/api" in maintenance
-        assert "prefect-server: {condition: service_healthy}" in reporting
+        if filename == "compose.yaml":
+            assert "prefect-server: {condition: service_healthy}" in reporting
+            assert "REPORTING_EXECUTOR: ${REPORTING_EXECUTOR:-prefect}" in reporting
+        else:
+            assert "prefect-server: {condition: service_healthy}" not in reporting
+            assert "REPORTING_EXECUTOR: direct_sql" in reporting
         assert "prefect-server: {condition: service_healthy}" not in maintenance
 
     env_example = (REPO_ROOT / ".env.example").read_text()
@@ -191,10 +196,11 @@ def test_guards_do_not_gate_deployment_startup() -> None:
         assert "prefect-server: {condition: service_healthy}" not in version_guard
 
 
-def test_reporting_worker_enforces_guard_conditions_fail_closed() -> None:
-    """What Compose no longer gates, the worker must enforce itself."""
+def test_reporting_worker_enforces_prefect_guard_conditions_fail_closed() -> None:
+    """The retained Prefect rollback path remains guarded; direct SQL bypasses it."""
     worker = (REPO_ROOT / "data/pipelines/business_performance/worker.py").read_text()
     assert "verify_startup_contract()" in worker
+    assert 'if executor_name == "prefect":' in worker
     assert "reporting_worker_startup_guard=failed" in worker
     assert "SystemExit(1)" in worker
 

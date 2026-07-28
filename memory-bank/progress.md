@@ -70,12 +70,12 @@
   into the worker, guards emit fixed tokens, and `scripts/release/measure_compose_startup.sh` makes
   the attach time measurable (18s chain against ~3GB of per-deployment pulls). Approved
   redeployment is complete. The Phase 6.3 control-plane outage/restore drill passed; its
-  computation-disable and seven-day gates were waived by owner exception. Phase 6.4 measured
-  48-hour studies and direct-executor work are approved to begin. Production executor swap,
-  resource-limit changes, final Prefect topology removal, Prefect restore, scheduled-run, and
-  image-rollback exercises remain separately owner-gated. Local direct-executor implementation is
-  now underway behind the unchanged `RunExecutor` contract, with production selection unchanged
-  and no 48-hour or seven-day Phase 6.4 evidence yet started.
+  computation-disable and seven-day gates were waived by owner exception. The owner also waived
+  Phase 6.4's 48-hour steady-state/deployment/post-change studies and seven-day clean run, recording
+  them as waived rather than passed or executed. The production direct-SQL executor swap is
+  separately approved and prepared after same-day queue/recovery/parity/2×-volume verification,
+  with no resource-limit change. Deployment verification is pending. Final Prefect topology
+  removal remains separately approval-gated.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
@@ -118,9 +118,10 @@ implementing any of the items below.
   owner exception. Phase 6.2 is production-accepted. Phase 6.3 is deployed through
   `20260728_0013`; controlled rollout steps 1-6 and rollback drill one passed. The owner accepted
   Phase 6.3 by explicit exception on 2026-07-28, waiving rollback drill two and the seven-day
-  observation without executing them. Phase 6.4 is approved to begin subject to its own production
-  mutation and time-gate approvals. Its first local slice adds the unselected direct SQL executor
-  and fixed-cutoff Prefect/direct parity coverage; measurement windows remain unstarted.
+  observation without executing them. Phase 6.4's time gates are likewise waived, not passed or
+  executed. Its direct SQL executor, allowlisted selection, and same-day verification are complete;
+  the production swap is approved/prepared, with deployment verification and separately approved
+  final Prefect removal still open.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
@@ -153,7 +154,8 @@ implementing any of the items below.
   while the July 28 immutable deployment verified its hotfix and Phase 6.1. The owner omitted the
   remaining Phase 6.1 exercises. Phase 6.3 rollback drill one ran successfully; the owner later
   waived drill two and the seven-day observation and accepted the phase by explicit exception.
-  Phase 6.4 production mutations and time-gate exceptions remain separately approval-gated.
+  The Phase 6.4 direct-SQL production swap and time-gate waivers are approved; deployment
+  verification remains open, with resource-limit changes and final Prefect removal unapproved.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

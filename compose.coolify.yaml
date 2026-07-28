@@ -275,6 +275,9 @@ services:
       REPORTING_HOURLY_ROLLUPS_ENABLED: ${REPORTING_HOURLY_ROLLUPS_ENABLED:-false}
       REPORTING_ROLLUP_CUTOVER_ENABLED: ${REPORTING_ROLLUP_CUTOVER_ENABLED:-false}
       REPORTING_COMPUTATION_ENABLED: ${REPORTING_COMPUTATION_ENABLED:-true}
+      # Owner-approved Phase 6.4 production swap. Prefect remains deployed only
+      # as a separately removable rollback path until final retirement approval.
+      REPORTING_EXECUTOR: direct_sql
       REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
       REPORTING_LOG_MAX_BYTES: "10485760"
       REPORTING_LOG_BACKUP_COUNT: "9"
@@ -286,14 +289,8 @@ services:
       REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
       REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
       REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
-    # The guards deliberately do not appear here. `up -d` blocks until every
-    # `service_completed_successfully` dependency exits, so gating the worker on
-    # them charged the whole guard chain to Coolify's command boundary; a slow
-    # guard left this container in `created` and the command was killed as exit
-    # 255. The worker now enforces the identical conditions fail-closed in its own
-    # bounded startup, where a failure restarts one container instead of the deploy.
-    depends_on:
-      prefect-server: {condition: service_healthy}
+    # Direct SQL does not depend on Prefect readiness. The retained Prefect
+    # services are rollback-only pending separate final removal approval.
     read_only: true
     tmpfs: ["/tmp"]
     volumes:
