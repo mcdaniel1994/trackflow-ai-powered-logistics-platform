@@ -28,7 +28,10 @@ Reporting-reliability Phase 6.1 adds durable per-attempt history, bounded status
 timeouts, exact-once failure accounting, and owner-approved persistent-log defaults; it is deployed
 and closed by documented owner exception. Phase 6.2 adds off-by-default durable hourly SQL rollups,
 fixed cutoffs, trailing 72-hour recomputation, exact reconciliation, and a 12-hour shadow cadence.
-It is locally verified through Alembic `20260728_0012` and awaits production shadow acceptance.
+It is deployed through Alembic `20260728_0012` and production-accepted. Phase 6.3 adds atomic
+reconciled weekly publication, weekly/history plus hourly/current-week reads, transient-only inner
+SQL retries, an explicit computation kill switch, and verified-stale serving mode. It is locally
+verified through `20260728_0013` and awaits controlled production rollout.
 
 Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
 generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline

@@ -54,12 +54,14 @@ from .queue import (
     record_stage,
     verify_claim_for_publication,
 )
+from .retries import is_transient_connectivity_failure, run_with_transient_retries
 from .rollups import (
     ROLLUP_PIPELINE_VERSION,
+    activate_reconciled_rollups,
     capture_rollup_window,
     compute_hourly_rollups,
-    hourly_rollups_enabled,
     publish_hourly_rollups,
+    rollup_cutover_enabled,
 )
 from .runner import PipelineStageError
 
@@ -174,11 +176,7 @@ def extract_warehouse_client_activity(target_weeks: tuple[date, ...]) -> Warehou
         "inventory_discrepancy_detected": extract_inventory_discrepancy_detected(start, end),
     }
     sku_pairs = extract_sku_pairs()
-    timestamps = [
-        cast(datetime, record["occurred_at"])
-        for records in activity.values()
-        for record in records
-    ]
+    timestamps = [cast(datetime, record["occurred_at"]) for records in activity.values() for record in records]
     return WarehouseClientActivity(
         activity=activity,
         sku_pairs=sku_pairs,
@@ -377,9 +375,17 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
             retryable=False,
         )
     if isinstance(exc, SQLAlchemyError):
+        transient = is_transient_connectivity_failure(exc)
+        error_code: ErrorCode
+        if transient:
+            error_code = "DB_UNAVAILABLE"
+        elif stage == "load":
+            error_code = "LOAD_FAILED"
+        else:
+            error_code = "EXTRACT_FAILED" if stage == "extract" else "INTERNAL_FAILED"
         return PipelineStageError(
             stage=stage,
-            error_code="DB_UNAVAILABLE",
+            error_code=error_code,
             error_type=type(exc).__name__,
             retryable=True,
         )
@@ -390,12 +396,12 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
             error_type=type(exc).__name__,
             retryable=True,
         )
-    error_code: ErrorCode = "EXTRACT_FAILED" if stage == "extract" else "INTERNAL_FAILED"
+    fallback_error_code: ErrorCode = "EXTRACT_FAILED" if stage == "extract" else "INTERNAL_FAILED"
     if stage == "load":
-        error_code = "LOAD_FAILED"
+        fallback_error_code = "LOAD_FAILED"
     return PipelineStageError(
         stage=stage,
-        error_code=error_code,
+        error_code=fallback_error_code,
         error_type=type(exc).__name__,
         retryable=True,
     )
@@ -494,7 +500,7 @@ def hourly_activity_rollup_shadow(
         if abort is not None and abort.is_set():
             raise LeaseLostError("pipeline run lease is no longer owned")
         try:
-            window = capture_rollup_window(engine, claim)
+            window = run_with_transient_retries(lambda: capture_rollup_window(engine, claim))
         except LeaseLostError:
             raise
         except Exception as exc:
@@ -505,7 +511,7 @@ def hourly_activity_rollup_shadow(
         if abort is not None and abort.is_set():
             raise LeaseLostError("pipeline run lease is no longer owned")
         try:
-            rows = compute_hourly_rollups(engine, window)
+            rows = run_with_transient_retries(lambda: compute_hourly_rollups(engine, window))
         except LeaseLostError:
             raise
         except Exception as exc:
@@ -516,13 +522,29 @@ def hourly_activity_rollup_shadow(
         if abort is not None and abort.is_set():
             raise LeaseLostError("pipeline run lease is no longer owned")
         try:
-            written = publish_hourly_rollups(
-                engine,
-                claim,
-                window,
-                rows,
-                pipeline_version=pipeline_version,
-            )
+            if rollup_cutover_enabled():
+                activation = run_with_transient_retries(
+                    lambda: activate_reconciled_rollups(
+                        engine,
+                        claim,
+                        window,
+                        rows=rows,
+                        pipeline_version=pipeline_version,
+                    )
+                )
+                written = activation.hourly_rows_written
+                served_rows = activation.weekly_rows_written
+            else:
+                written = run_with_transient_retries(
+                    lambda: publish_hourly_rollups(
+                        engine,
+                        claim,
+                        window,
+                        rows,
+                        pipeline_version=pipeline_version,
+                    )
+                )
+                served_rows = written
         except LeaseLostError:
             raise
         except Exception as exc:
@@ -534,7 +556,7 @@ def hourly_activity_rollup_shadow(
     return RunMetrics(
         rows_extracted=window.rows_scanned,
         rows_transformed=len(rows),
-        rows_loaded=written,
+        rows_loaded=served_rows,
         source_watermark=window.source_cutoff_at,
         source_cutoff_at=window.source_cutoff_at,
         rows_scanned=window.rows_scanned,
@@ -577,17 +599,12 @@ def _flow_run_name(claim: RunClaim) -> str:
 def prefect_executor(_engine: Engine, claim: RunClaim, abort: Event | None = None) -> RunMetrics:
     if abort is not None and abort.is_set():
         raise LeaseLostError("pipeline run lease is no longer owned")
-    if hourly_rollups_enabled():
-        configured_rollup = hourly_activity_rollup_shadow.with_options(
-            flow_run_name=_flow_run_name(claim)
-        )
-        return configured_rollup(
-            claim,
-            pipeline_version=ROLLUP_PIPELINE_VERSION,
-            abort=abort,
-        )
-    configured = weekly_warehouse_client_performance.with_options(flow_run_name=_flow_run_name(claim))
-    return configured(claim, pipeline_version="engagement-6-phase-6")
+    configured_rollup = hourly_activity_rollup_shadow.with_options(flow_run_name=_flow_run_name(claim))
+    return configured_rollup(
+        claim,
+        pipeline_version=ROLLUP_PIPELINE_VERSION,
+        abort=abort,
+    )
 
 
 async def _close_orphan(flow_run_id: UUID | None, deterministic_name: str) -> bool:
@@ -612,12 +629,16 @@ async def _close_orphan(flow_run_id: UUID | None, deterministic_name: str) -> bo
 def reconcile_orphaned_flow_runs(engine: Engine) -> int:
     """Close Prefect runs left non-terminal by a prior worker process."""
     with engine.connect() as connection:
-        rows = connection.execute(
-            text(
-                "SELECT id, attempt, prefect_flow_run_id FROM reporting.pipeline_runs "
-                "WHERE pipeline_name = 'business_performance' AND status = 'running'"
+        rows = (
+            connection.execute(
+                text(
+                    "SELECT id, attempt, prefect_flow_run_id FROM reporting.pipeline_runs "
+                    "WHERE pipeline_name = 'business_performance' AND status = 'running'"
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
     reconciled = 0
     for row in rows:
         run_id = UUID(str(row["id"]))

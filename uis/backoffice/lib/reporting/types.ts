@@ -15,6 +15,9 @@ export interface WeeklyPerformanceReport {
   week_start: string | null;
   incomplete: boolean;
   entries: WeeklyPerformanceEntry[];
+  state?: "current" | "stale";
+  source_cutoff_at?: string;
+  published_at?: string;
 }
 
 export type PipelineStatus = "requested" | "running" | "retryable" | "succeeded" | "failed";
@@ -30,6 +33,8 @@ export interface LatestPipelineRun {
   started_at: string | null;
   finished_at: string | null;
   attempt: number;
+  rows_extracted?: number | null;
+  rows_transformed?: number | null;
   rows_loaded: number | null;
   error_code: string | null;
   next_attempt_at: string | null;
@@ -46,6 +51,7 @@ export interface LatestSuccessfulRun {
   finished_at: string;
   target_weeks: string[];
   rows_loaded: number;
+  source_cutoff_at?: string | null;
 }
 
 export interface PipelineRunsStatus {
@@ -64,6 +70,14 @@ export interface PipelineRunsStatus {
     timezone: "America/Chicago";
     next_occurrence_utc: string;
   };
+  reporting_state?: "current" | "stale" | "degraded" | "not_activated";
+  source_cutoff_at?: string | null;
+  published_at?: string | null;
+  current_stage?: "extract" | "transform" | "load" | null;
+  stage_started_at?: string | null;
+  latest_error_code?: string | null;
+  latest_attempt?: number | null;
+  results_current?: boolean;
 }
 
 export interface PipelineRunRequest {

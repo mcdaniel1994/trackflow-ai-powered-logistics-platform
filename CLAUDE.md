@@ -87,13 +87,14 @@ Then read the active engagement brief and the README for every folder being modi
   token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
   a hard run watchdog, optional R2 recovery results, API-only retention, an isolated read-only
   database backup service, six server-derived operator states, and release startup guards.
-  **The weekly business report has never published in production**: the reporting worker and
-  Prefect are healthy, but every pipeline run to date has failed and
+  **The weekly business report has never published in production**: the reporting worker,
+  Prefect, and hourly rollup path are healthy, but
   `reporting.weekly_warehouse_client_performance` is empty. Phase 6.1 is deployed as immutable image
   `13bba2e` through revision `20260728_0011` and closed by a documented owner exception after the
   remaining controlled exercises were omitted. Phase 6.2 durable hourly SQL rollups are deployed
-  through `20260728_0012`; their set-based production-cardinality correction awaits redeployment
-  and exact live reconciliation.
+  through `20260728_0012` and owner-accepted after corrected publication and exact reconciliation.
+  Phase 6.3 is locally verified through additive revision `20260728_0013`; its reconciled cutover,
+  safe-degradation drills, and seven-day production observation remain pending.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

@@ -15,3 +15,6 @@ layer, and absent R2 configuration safely disables caching.
 The production Compose stack runs one long-lived worker instead of separate Coolify cron jobs;
 its Prefect client targets the private dedicated Server/PostgreSQL pair. The TrackFlow PostgreSQL
 queue remains authoritative and the read-only worker keeps only temporary client files under `/tmp`.
+Phase 6.3 removes the raw Python/R2 transform from the active executor, atomically activates only
+exactly reconciled rollups, and serves completed history from weekly facts plus the current
+incomplete week from hourly facts. Cutover defaults off until the controlled production gate.

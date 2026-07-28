@@ -169,6 +169,42 @@ def test_worker_skips_claim_when_prefect_is_unhealthy(
     assert any(item.get("orchestrator_healthy") is False for item in heartbeats)
 
 
+def test_worker_kill_switch_keeps_heartbeat_but_skips_claim(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stop = Event()
+    heartbeats = 0
+    monkeypatch.setenv("REPORTING_COMPUTATION_ENABLED", "false")
+    monkeypatch.setattr(
+        "pipelines.business_performance.flows.reconcile_orphaned_flow_runs",
+        lambda _engine: 0,
+    )
+    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: True)
+    monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
+
+    def record(_engine: object, **_kwargs: object) -> None:
+        nonlocal heartbeats
+        heartbeats += 1
+        if heartbeats >= 2:
+            stop.set()
+
+    monkeypatch.setattr(worker, "record_worker_heartbeat", record)
+    monkeypatch.setattr(
+        worker,
+        "claim_next",
+        lambda _engine: pytest.fail("disabled computation claimed work"),
+    )
+    worker.run_worker(
+        object(),
+        lambda *_args: None,
+        stop=stop,
+        poll_interval_seconds=0.001,
+        heartbeat_interval_seconds=0.001,
+        dispatch_interval_seconds=0.001,
+    )
+    assert heartbeats >= 2
+
+
 def test_worker_drives_explicit_claim_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -9,14 +9,15 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Final, cast
 from uuid import UUID
 
-from sqlalchemy import Engine, RowMapping, text
+from sqlalchemy import Connection, Engine, RowMapping, text
 
 from .queue import RunClaim, engine_from_environment, verify_claim_for_publication
 
-ROLLUP_PIPELINE_VERSION: Final = "engagement-6-phase-6.2"
+ROLLUP_PIPELINE_VERSION: Final = "engagement-6-phase-6.3"
 ROLLUP_STATEMENT_TIMEOUT_MS: Final = 60_000
 TRAILING_RECOMPUTE_HOURS: Final = 72
 ROLLUP_FEATURE_FLAG: Final = "REPORTING_HOURLY_ROLLUPS_ENABLED"
+CUTOVER_FEATURE_FLAG: Final = "REPORTING_ROLLUP_CUTOVER_ENABLED"
 
 
 class RollupValidationError(RuntimeError):
@@ -64,9 +65,21 @@ class ReconciliationResult:
         return not self.mismatches
 
 
+@dataclass(frozen=True)
+class ActivationResult:
+    hourly_rows_written: int
+    weekly_rows_written: int
+    reconciliation: ReconciliationResult
+
+
 def hourly_rollups_enabled() -> bool:
     """Return the opt-in shadow-computation flag; absence is always off."""
     return os.environ.get(ROLLUP_FEATURE_FLAG, "false").strip().lower() == "true"
+
+
+def rollup_cutover_enabled() -> bool:
+    """Return the explicit activation flag; shadow remains the safe default."""
+    return os.environ.get(CUTOVER_FEATURE_FLAG, "false").strip().lower() == "true"
 
 
 def _floor_hour(value: datetime) -> datetime:
@@ -122,14 +135,18 @@ def capture_rollup_window(
     cutoff = _floor_hour(now or datetime.now(UTC))
     with engine.begin() as connection:
         _statement_timeout(connection)
-        state = connection.execute(
-            text(
-                "SELECT rollup.last_cutoff_at, ledger.last_reset_at "
-                "FROM reporting.rollup_state AS rollup "
-                "CROSS JOIN reporting.source_ledger_state AS ledger "
-                "WHERE rollup.id = 1 AND ledger.id = 1"
+        state = (
+            connection.execute(
+                text(
+                    "SELECT rollup.last_cutoff_at, ledger.last_reset_at "
+                    "FROM reporting.rollup_state AS rollup "
+                    "CROSS JOIN reporting.source_ledger_state AS ledger "
+                    "WHERE rollup.id = 1 AND ledger.id = 1"
+                )
             )
-        ).mappings().one()
+            .mappings()
+            .one()
+        )
         last_cutoff = cast(datetime | None, state["last_cutoff_at"])
         last_reset = cast(datetime | None, state["last_reset_at"])
 
@@ -270,18 +287,14 @@ _UPSERT = text(
 )
 
 
-def publish_hourly_rollups(
-    engine: Engine,
-    claim: RunClaim,
+def _publication_payload(
     window: RollupWindow,
     rows: list[HourlyRollupRow],
     *,
-    pipeline_version: str = ROLLUP_PIPELINE_VERSION,
-    now: datetime | None = None,
-) -> int:
-    """Publish idempotently and advance the singleton cursor in the same transaction."""
-    computed_at = now or datetime.now(UTC)
-    payload = {
+    pipeline_version: str,
+    computed_at: datetime,
+) -> dict[str, object]:
+    return {
         "bucket_starts": [row.bucket_start for row in rows],
         "warehouses": [row.warehouse for row in rows],
         "client_ids": [str(row.client_id) for row in rows],
@@ -297,6 +310,25 @@ def publish_hourly_rollups(
         "computed_at": computed_at,
         "pipeline_version": pipeline_version,
     }
+
+
+def publish_hourly_rollups(
+    engine: Engine,
+    claim: RunClaim,
+    window: RollupWindow,
+    rows: list[HourlyRollupRow],
+    *,
+    pipeline_version: str = ROLLUP_PIPELINE_VERSION,
+    now: datetime | None = None,
+) -> int:
+    """Publish idempotently and advance the singleton cursor in the same transaction."""
+    computed_at = now or datetime.now(UTC)
+    payload = _publication_payload(
+        window,
+        rows,
+        pipeline_version=pipeline_version,
+        computed_at=computed_at,
+    )
     with engine.begin() as connection:
         _statement_timeout(connection)
         verify_claim_for_publication(connection, claim)
@@ -395,6 +427,38 @@ _METRICS: Final = (
 )
 
 
+def _reconciliation_result(
+    connection: Connection,
+    *,
+    start: datetime,
+    cutoff: datetime,
+) -> ReconciliationResult:
+    rows = list(
+        connection.execute(
+            _RECONCILIATION_QUERY,
+            {"start": start, "end": cutoff},
+        ).mappings()
+    )
+    mismatches: list[ReconciliationMismatch] = []
+    for row in rows:
+        differing = tuple(
+            metric for metric in _METRICS if int(row[f"expected_{metric}"]) != int(row[f"actual_{metric}"])
+        )
+        if int(row["actual_discrepancy_count"]) > int(row["actual_dispatch_order_count"]):
+            differing = (*differing, "discrepancy_rate_denominator")
+        if differing:
+            raw_client_id = row["client_id"]
+            mismatches.append(
+                ReconciliationMismatch(
+                    week_start=cast(date, row["week_start"]),
+                    warehouse=cast(str, row["warehouse"]),
+                    client_id=(raw_client_id if isinstance(raw_client_id, UUID) else UUID(str(raw_client_id))),
+                    metrics=differing,
+                )
+            )
+    return ReconciliationResult(len(rows), tuple(mismatches))
+
+
 def reconcile_hourly_rollups(
     engine: Engine,
     *,
@@ -409,36 +473,12 @@ def reconcile_hourly_rollups(
         raise RollupValidationError("reconciliation window contains no completed UTC hour")
     with engine.begin() as connection:
         _statement_timeout(connection)
-        rows = list(
-            connection.execute(
-                _RECONCILIATION_QUERY,
-                {"start": start_at, "end": end_at},
-            ).mappings()
+        result = _reconciliation_result(
+            connection,
+            start=start_at,
+            cutoff=end_at,
         )
-        mismatches: list[ReconciliationMismatch] = []
-        for row in rows:
-            differing = tuple(
-                metric
-                for metric in _METRICS
-                if int(row[f"expected_{metric}"]) != int(row[f"actual_{metric}"])
-            )
-            if int(row["actual_discrepancy_count"]) > int(row["actual_dispatch_order_count"]):
-                differing = (*differing, "discrepancy_rate_denominator")
-            if differing:
-                raw_client_id = row["client_id"]
-                mismatches.append(
-                    ReconciliationMismatch(
-                        week_start=cast(date, row["week_start"]),
-                        warehouse=cast(str, row["warehouse"]),
-                        client_id=(
-                            raw_client_id
-                            if isinstance(raw_client_id, UUID)
-                            else UUID(str(raw_client_id))
-                        ),
-                        metrics=differing,
-                    )
-                )
-        if not mismatches and mark_reconciled:
+        if result.exact and mark_reconciled:
             connection.execute(
                 text(
                     "UPDATE reporting.rollup_state SET last_reconciled_at = :now "
@@ -446,7 +486,150 @@ def reconcile_hourly_rollups(
                 ),
                 {"now": datetime.now(UTC), "cutoff": end_at},
             )
-    return ReconciliationResult(len(rows), tuple(mismatches))
+    return result
+
+
+_WEEKLY_UPSERT_FROM_HOURLY = text(
+    "INSERT INTO reporting.weekly_warehouse_client_performance "
+    "(warehouse, client_id, week_start, inbound_units_count, outbound_orders_count, "
+    "stockout_events_count, discrepancy_events_count, discrepancy_rate, computed_at) "
+    "SELECT CASE hourly.warehouse WHEN 'LA' THEN 'los_angeles' ELSE 'zaragoza' END, "
+    "hourly.client_id, date_trunc('week', hourly.bucket_start)::date, "
+    "sum(hourly.inbound_units)::bigint, sum(hourly.dispatch_order_count)::bigint, "
+    "sum(hourly.stockout_count)::bigint, sum(hourly.discrepancy_count)::bigint, "
+    "CASE WHEN sum(hourly.dispatch_order_count) = 0 THEN 0 "
+    "ELSE sum(hourly.discrepancy_count)::numeric / sum(hourly.dispatch_order_count) END, "
+    ":computed_at "
+    "FROM reporting.hourly_activity_rollups AS hourly "
+    "WHERE hourly.bucket_start >= :first_week "
+    "AND hourly.bucket_start < :current_week "
+    "AND hourly.source_cutoff_at <= :cutoff "
+    "GROUP BY hourly.warehouse, hourly.client_id, date_trunc('week', hourly.bucket_start)::date "
+    "ON CONFLICT (warehouse, client_id, week_start) DO UPDATE SET "
+    "inbound_units_count = EXCLUDED.inbound_units_count, "
+    "outbound_orders_count = EXCLUDED.outbound_orders_count, "
+    "stockout_events_count = EXCLUDED.stockout_events_count, "
+    "discrepancy_events_count = EXCLUDED.discrepancy_events_count, "
+    "discrepancy_rate = EXCLUDED.discrepancy_rate, "
+    "computed_at = EXCLUDED.computed_at"
+)
+
+
+def _week_floor(value: datetime) -> datetime:
+    utc_value = value.astimezone(UTC)
+    return (utc_value - timedelta(days=utc_value.weekday())).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+
+def activate_reconciled_rollups(
+    engine: Engine,
+    claim: RunClaim,
+    window: RollupWindow,
+    *,
+    rows: list[HourlyRollupRow] | None = None,
+    pipeline_version: str = ROLLUP_PIPELINE_VERSION,
+    now: datetime | None = None,
+) -> ActivationResult:
+    """Publish a candidate, reconcile it, and activate one snapshot atomically."""
+    cutoff = _floor_hour(window.source_cutoff_at)
+    activated_at = now or datetime.now(UTC)
+
+    with (
+        engine.connect().execution_options(isolation_level="REPEATABLE READ") as connection,
+        connection.begin(),
+    ):
+        _statement_timeout(connection)
+        verify_claim_for_publication(connection, claim)
+        hourly_rows = 0
+        if rows is not None:
+            if rows:
+                published = connection.execute(
+                    _UPSERT,
+                    _publication_payload(
+                        window,
+                        rows,
+                        pipeline_version=pipeline_version,
+                        computed_at=activated_at,
+                    ),
+                )
+                hourly_rows = max(published.rowcount, 0)
+            connection.execute(
+                text(
+                    "UPDATE reporting.rollup_state SET pipeline_version = :pipeline_version, "
+                    "last_cutoff_at = GREATEST(COALESCE(last_cutoff_at, :cutoff), :cutoff), "
+                    "last_published_at = :published_at WHERE id = 1"
+                ),
+                {
+                    "pipeline_version": pipeline_version,
+                    "cutoff": cutoff,
+                    "published_at": activated_at,
+                },
+            )
+        history_start = cast(
+            datetime | None,
+            connection.scalar(
+                text(
+                    "SELECT min(bucket_start) FROM reporting.hourly_activity_rollups WHERE source_cutoff_at <= :cutoff"
+                ),
+                {"cutoff": cutoff},
+            ),
+        )
+        if history_start is None:
+            raise RollupValidationError("no hourly rollups are available for activation")
+        start_at = _floor_hour(history_start)
+        first_week = _week_floor(start_at)
+        if start_at > first_week:
+            first_week += timedelta(days=7)
+        current_week = _week_floor(cutoff)
+        reconciliation = _reconciliation_result(
+            connection,
+            start=start_at,
+            cutoff=cutoff,
+        )
+        if not reconciliation.exact:
+            raise RollupValidationError("rollup reconciliation failed")
+        connection.execute(
+            text(
+                "DELETE FROM reporting.weekly_warehouse_client_performance "
+                "WHERE week_start >= :first_week AND week_start < :current_week"
+            ),
+            {"first_week": first_week.date(), "current_week": current_week.date()},
+        )
+        weekly_rows = 0
+        if first_week < current_week:
+            published = connection.execute(
+                _WEEKLY_UPSERT_FROM_HOURLY,
+                {
+                    "first_week": first_week,
+                    "current_week": current_week,
+                    "cutoff": cutoff,
+                    "computed_at": activated_at,
+                },
+            )
+            weekly_rows = max(published.rowcount, 0)
+        activation = connection.execute(
+            text(
+                "UPDATE reporting.rollup_state SET "
+                "last_reconciled_at = :activated_at, "
+                "active_pipeline_version = :pipeline_version, "
+                "active_cutoff_at = :cutoff, "
+                "active_published_at = :activated_at "
+                "WHERE id = 1 AND pipeline_version = :pipeline_version "
+                "AND last_cutoff_at >= :cutoff"
+            ),
+            {
+                "activated_at": activated_at,
+                "pipeline_version": pipeline_version,
+                "cutoff": cutoff,
+            },
+        )
+        if activation.rowcount != 1:
+            raise RollupValidationError("rollup activation state changed")
+    return ActivationResult(hourly_rows, weekly_rows, reconciliation)
 
 
 def _parse_instant(value: str) -> datetime:

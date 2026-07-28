@@ -145,9 +145,7 @@ class HourlyActivityRollup(SQLModel, table=True):
         {"schema": REPORTING_SCHEMA},
     )
 
-    bucket_start: datetime = Field(
-        sa_column=Column(DateTime(timezone=True), primary_key=True, nullable=False)
-    )
+    bucket_start: datetime = Field(sa_column=Column(DateTime(timezone=True), primary_key=True, nullable=False))
     warehouse: str = Field(sa_column=Column(Text, primary_key=True, nullable=False))
     client_id: UUID = Field(
         sa_column=Column(
@@ -179,6 +177,17 @@ class RollupState(SQLModel, table=True):
     __tablename__ = "rollup_state"
     __table_args__: ClassVar[tuple[SchemaItem | dict[str, str], ...]] = (
         CheckConstraint(f"id = {ROLLUP_STATE_ID}", name="ck_rollup_state_singleton"),
+        CheckConstraint(
+            "("
+            "active_pipeline_version IS NULL AND active_cutoff_at IS NULL "
+            "AND active_published_at IS NULL"
+            ") OR ("
+            "active_pipeline_version IS NOT NULL AND active_cutoff_at IS NOT NULL "
+            "AND active_published_at IS NOT NULL AND last_reconciled_at IS NOT NULL "
+            "AND active_cutoff_at <= last_cutoff_at"
+            ")",
+            name="ck_rollup_state_active_snapshot",
+        ),
         {"schema": REPORTING_SCHEMA},
     )
 
@@ -193,6 +202,18 @@ class RollupState(SQLModel, table=True):
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
     last_reconciled_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    active_pipeline_version: str | None = Field(
+        default=None,
+        sa_column=Column(Text, nullable=True),
+    )
+    active_cutoff_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    active_published_at: datetime | None = Field(
         default=None,
         sa_column=Column(DateTime(timezone=True), nullable=True),
     )
@@ -254,9 +275,7 @@ class PipelineRun(SQLModel, table=True):
             "pipeline_name",
             text("COALESCE(requested_week_start, '0001-01-01'::date)"),
             unique=True,
-            postgresql_where=text(
-                "status = 'requested' AND trigger_type = 'manual' AND cache_nonce IS NULL"
-            ),
+            postgresql_where=text("status = 'requested' AND trigger_type = 'manual' AND cache_nonce IS NULL"),
         ),
         Index("ix_pipeline_runs_claim", "pipeline_name", "status", "next_attempt_at", "requested_at"),
         Index("ix_pipeline_runs_latest", "pipeline_name", text("requested_at DESC")),
@@ -311,8 +330,7 @@ class PipelineRunAttempt(SQLModel, table=True):
         ),
         CheckConstraint("duration_ms >= 0", name="ck_pipeline_run_attempts_duration"),
         CheckConstraint(
-            "(rows_scanned IS NULL OR rows_scanned >= 0) "
-            "AND (rollup_rows_written IS NULL OR rollup_rows_written >= 0)",
+            "(rows_scanned IS NULL OR rows_scanned >= 0) AND (rollup_rows_written IS NULL OR rollup_rows_written >= 0)",
             name="ck_pipeline_run_attempts_counts",
         ),
         CheckConstraint(

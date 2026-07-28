@@ -75,23 +75,21 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         "stage_started_at",
         "scheduled_for",
     }.issubset(pipeline_columns)
-    heartbeat_columns = {
-        column["name"] for column in inspector.get_columns("worker_heartbeats", schema="reporting")
-    }
+    heartbeat_columns = {column["name"] for column in inspector.get_columns("worker_heartbeats", schema="reporting")}
     assert {"last_progress_at", "orchestrator_healthy"}.issubset(heartbeat_columns)
-    attempt_indexes = {
-        index["name"]
-        for index in inspector.get_indexes("pipeline_run_attempts", schema="reporting")
-    }
+    attempt_indexes = {index["name"] for index in inspector.get_indexes("pipeline_run_attempts", schema="reporting")}
     assert {
         "ix_pipeline_run_attempts_started_at_desc",
         "uq_pipeline_run_attempts_run_attempt",
     }.issubset(attempt_indexes)
-    hourly_indexes = {
-        index["name"]
-        for index in inspector.get_indexes("hourly_activity_rollups", schema="reporting")
-    }
+    hourly_indexes = {index["name"] for index in inspector.get_indexes("hourly_activity_rollups", schema="reporting")}
     assert "ix_hourly_rollups_week_range" in hourly_indexes
+    rollup_columns = {column["name"] for column in inspector.get_columns("rollup_state", schema="reporting")}
+    assert {
+        "active_pipeline_version",
+        "active_cutoff_at",
+        "active_published_at",
+    }.issubset(rollup_columns)
     with Session(engine) as session:
         rows = list(session.exec(sa_select(SourceLedgerState)).all())
         assert len(rows) == 1

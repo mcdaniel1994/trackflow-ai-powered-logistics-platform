@@ -7,14 +7,16 @@
 In progress — reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
 Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to omit the remaining controlled
 exercises and proceed; Phase 6.1 is closed by that documented exception, not by passing evidence.
-Phase 6.2 durable hourly SQL rollups are deployed through additive revision `20260728_0012` and the
-production flag is enabled. The first 113,064-row publication exceeded its budget without a partial
-commit; a set-based correction is locally verified and awaits redeployment/reconciliation.
-Independent
+Phase 6.2 durable hourly SQL rollups are deployed through additive revision `20260728_0012`; the
+set-based correction completed a 1,266-row publication, exact 12-dimension reconciliation, and
+sub-60-second durable attempt, and the owner accepted the phase on 2026-07-28. Phase 6.3 is locally
+implemented through additive revision `20260728_0013`: reconciled weekly activation, hourly
+current-week reads, transient-only inner retries, safe 503/stale rollback modes, and additive
+operator status are verified locally but not yet deployed or accepted in production. Independent
 sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline evaluation.
 Five chronological folds diagnose overfitting and unstable temporal validation; the offline
-artifact is not approved for serving or operational decisions. The weekly business report has still never published in
-production.
+artifact is not approved for serving or operational decisions. The weekly business report has still
+never published in production.
 
 Dedicated Prefect production remediation Phases 0-4 are implemented and locally
 verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
