@@ -5,16 +5,19 @@ inventory, centralized operational incidents, and suppliers.
 
 ## Delivery status
 
-Engagement 5 inventory and the Centralized Incident Manager subproject are delivered
-locally. The release suite covers disposable-PostgreSQL migration rollback, repeatable
-seeds, security and failure paths, aggregate queries, lifecycle transitions, and
-concurrent inventory/incident protection. The current baseline is 56 passing tests
-with 91% branch-aware source coverage.
+Engagement 5 inventory and the Centralized Incident Manager subproject are delivered. Engagement 6
+reporting-reliability Phase 6.1 is implemented locally through Alembic `20260728_0011`; its
+persisted-log defaults are owner-approved and it awaits production acceptance before Phase 6.2.
+The release suite covers disposable-PostgreSQL
+migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
+separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
+protection. The current Central API baseline is 173 passing tests with 93% branch-aware source
+coverage.
 
 The portfolio Supabase production project is migrated through Alembic revision
-`20260702_0003`. Runtime-role CRUD, Central API health, approved inventory and
-supplier seeds, and authenticated Back Office access are verified; production
-incidents remain empty. Future production changes and restore drills remain
+`20260716_0010` as of the July 28 read-only rescan. Runtime-role CRUD, Central API health, approved
+inventory and supplier seeds, and authenticated Back Office access are verified; the weekly
+business report has never successfully published. Future production changes and restore drills remain
 approval-gated through `docs/runbooks/`.
 
 ## Ownership and boundaries
@@ -56,14 +59,16 @@ uv run --project services/central-api uvicorn central_api.main:app --reload --po
 ```
 
 Local liveness: `http://127.0.0.1:8002/health/live`. Readiness is
-`/health/ready`; `/health` retains the original compatibility response. Readiness verifies the
-database, image schema floor, inventory columns, reporting grants, and worker heartbeat.
+`/health/ready`; `/health` retains the original compatibility response. Core readiness verifies
+only the database, image schema floor, inventory columns, and production runtime role. Reporting
+grants, worker/orchestrator state, queue state, publication time, and safe latest failure evidence
+are isolated on `/health/reporting` and never trigger application rollback.
 The maintenance image also runs API-only Prefect terminal-run retention; the separate
 `prefect-db-backup` image owns `pg_dump` and backup R2 access so Central API never receives either.
-Reporting status uses one shared derivation for readiness and the API's six `queue_state` values;
-Compose blocks worker startup until an image-baked, idempotent Prefect PostgreSQL bootstrap plus
-the PostgreSQL-state and Prefect version guards pass. Container health uses `/health/live`; the
-dependency-aware `/health/ready` probe remains the full-stack release gate.
+Reporting status uses one shared derivation for the reporting verification/API six-state
+`queue_state`. The reporting worker enforces the image-baked Prefect PostgreSQL and version
+contract fail-closed before claiming work; one-shot guards report but do not gate Compose startup.
+Container health uses `/health/live`; core `/health/ready` is the release gate.
 
 ## Quality gates
 
@@ -95,6 +100,9 @@ without confirming the target, recovery posture, and explicit approval.
 | `SEED_USER_UUID` | Existing local Identity user's UUID for seeded movements |
 | `PREFECT_API_URL` | Internal Prefect API used by maintenance retention; no Prefect DB credential |
 | `PREFECT_RUN_RETENTION_DAYS` | Terminal Prefect history retention, default 30 days |
+| `REPORTING_LOG_PATH` | Reporting-worker persisted log file; production uses `/var/log/trackflow/reporting/reporting-worker.log` and stdout remains active |
+| `REPORTING_LOG_MAX_BYTES` / `REPORTING_LOG_BACKUP_COUNT` | Per-file rotation limits; production uses 10 MiB and 9 backups |
+| `REPORTING_LOG_RETENTION_DAYS` / `REPORTING_LOG_TOTAL_BYTES` | Daily maintenance caps; production uses 14 days and 250 MiB |
 
 Stock is computed from movements per SKU row and warehouse. It is never stored or
 accepted from clients.

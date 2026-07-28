@@ -80,14 +80,22 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/runbooks/telemetry-inventory.md`.
   Production hardening lives in `data/pipelines/business_performance/worker.py`,
   `services/central-api/scripts/{maintenance_worker,production_migrate}.py`, the root Compose
-  files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation now has
+  files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation has
   private Prefect Server/PostgreSQL wiring, a SQLite-fallback guard, independent claim renewal,
   token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
-  a hard run watchdog, optional R2 recovery results, API-only retention, and an isolated read-only
-  database backup service, six server-derived operator states, and release startup guards verified
-  locally. A July 15 Coolify startup incident is remediated with an image-baked, idempotent
-  PostgreSQL bootstrap and liveness-only container health checks. Repository Phases 0-4 plus the
-  startup hotfix are complete; approved redeployment and external production acceptance remain.
+  a hard run watchdog, optional R2 recovery results, API-only retention, an isolated read-only
+  database backup service, six server-derived operator states, and release startup guards.
+  **The weekly business report has never published in production**: the reporting worker and
+  Prefect are healthy, but every pipeline run to date has failed and
+  `reporting.weekly_warehouse_client_performance` is empty. Phase 6.1 is implemented and locally
+  verified through revision `20260728_0011`; persisted-log defaults are owner-approved, but the
+  production-acceptance gate remains open before Phase 6.2. Independent Phases 6.5.a–b produced an
+  owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
+  diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;
+  6.5 is complete as an offline evaluation. The engagement is covered by two
+  owner-approved specifications — `docs/planning/remaining_planning/spec.md` (Phases 6.1-6.4,
+  reporting reliability) and `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`
+  (6.5, runs in parallel).
 
 - **Engagement 7+** - TBD per engagement.
   Confirm with Cory before placing new code.

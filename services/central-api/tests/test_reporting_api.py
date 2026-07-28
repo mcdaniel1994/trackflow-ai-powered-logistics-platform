@@ -12,7 +12,12 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session
 
 from central_api.domains.inventory.models import Client
-from central_api.domains.reporting.models import IncompleteWeek, PipelineRun, WeeklyWarehouseClientPerformance
+from central_api.domains.reporting.models import (
+    IncompleteWeek,
+    PipelineRun,
+    PipelineRunAttempt,
+    WeeklyWarehouseClientPerformance,
+)
 from central_api.domains.reporting.repository import ReportingRepository
 from central_api.domains.reporting.service import ReportingService
 
@@ -216,6 +221,7 @@ def test_latest_runs_distinguishes_latest_success_and_queue_without_internals(
         "finished_at": (BASE_TIME + timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
         "target_weeks": [MONDAY.isoformat()],
         "rows_loaded": 24,
+        "source_cutoff_at": None,
     }
     assert payload["queue_state"] == "unavailable"
     assert payload["worker"] == {
@@ -225,6 +231,7 @@ def test_latest_runs_distinguishes_latest_success_and_queue_without_internals(
         "orchestrator_healthy": None,
     }
     assert [item["trigger_type"] for item in payload["queued"]] == ["manual", "manual"]
+    assert payload["attempts"] == []
     serialized = response.text.lower()
     for forbidden in ("cache_nonce", "bucket", "object_key", "claim_token", "lease_expires_at"):
         assert forbidden not in serialized
@@ -237,6 +244,7 @@ def test_latest_runs_empty_state(client: TestClient, auth_headers: dict[str, str
     assert payload["latest"] is None
     assert payload["latest_successful"] is None
     assert payload["queued"] == []
+    assert payload["attempts"] == []
     assert payload["queue_state"] == "unavailable"
     assert payload["worker"] == {
         "status": "unknown",
@@ -244,6 +252,42 @@ def test_latest_runs_empty_state(client: TestClient, auth_headers: dict[str, str
         "last_progress_at": None,
         "orchestrator_healthy": None,
     }
+
+
+def test_latest_runs_bounds_sanitized_attempt_history(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    engine: Engine,
+) -> None:
+    with Session(engine) as session:
+        run = _run(status="failed", requested_at=BASE_TIME, error_code="INTERNAL_FAILED")
+        session.add(run)
+        session.flush()
+        for attempt in range(1, 13):
+            session.add(
+                PipelineRunAttempt(
+                    run_id=run.id,
+                    attempt=attempt,
+                    stage="transform",
+                    started_at=BASE_TIME + timedelta(minutes=attempt),
+                    ended_at=BASE_TIME + timedelta(minutes=attempt, seconds=1),
+                    duration_ms=1000,
+                    error_code="INTERNAL_FAILED",
+                    error_type="RuntimeError",
+                    retry_outcome="retried" if attempt < 12 else "exhausted",
+                    pipeline_version="test",
+                )
+            )
+        session.commit()
+        run_id = run.id
+
+    payload = client.get("/reporting/pipeline-runs/latest", headers=auth_headers).json()
+    assert len(payload["attempts"]) == 10
+    assert {row["run_id"] for row in payload["attempts"]} == {str(run_id)}
+    assert [row["attempt"] for row in payload["attempts"]] == list(range(12, 2, -1))
+    serialized = str(payload["attempts"]).lower()
+    assert "message" not in serialized
+    assert "connection" not in serialized
 
 
 def test_latest_runs_reports_worker_health(
@@ -278,7 +322,7 @@ def test_latest_runs_reports_worker_health(
     with engine.begin() as connection:
         connection.execute(
             text("UPDATE reporting.worker_heartbeats SET heartbeat_at = :heartbeat_at"),
-            {"heartbeat_at": now - timedelta(seconds=31)},
+            {"heartbeat_at": now - timedelta(seconds=61)},
         )
     stale = client.get("/reporting/pipeline-runs/latest", headers=auth_headers)
     assert stale.json()["worker"]["status"] == "stale"

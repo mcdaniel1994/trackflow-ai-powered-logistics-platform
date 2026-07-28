@@ -13,7 +13,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Event
 from types import FrameType
-from typing import Any, Final, Protocol
+from typing import Any, Final, Protocol, cast
 
 import boto3  # type: ignore[import-untyped]
 from botocore.config import Config  # type: ignore[import-untyped]
@@ -68,13 +68,16 @@ class BackupConfig:
 
 
 def _store(config: BackupConfig) -> BackupStore:
-    return boto3.client(
-        "s3",
-        endpoint_url=config.endpoint,
-        aws_access_key_id=config.access_key_id,
-        aws_secret_access_key=config.secret_access_key,
-        region_name="auto",
-        config=Config(connect_timeout=10, read_timeout=60, retries={"max_attempts": 2, "mode": "standard"}),
+    return cast(
+        BackupStore,
+        boto3.client(
+            "s3",
+            endpoint_url=config.endpoint,
+            aws_access_key_id=config.access_key_id,
+            aws_secret_access_key=config.secret_access_key,
+            region_name="auto",
+            config=Config(connect_timeout=10, read_timeout=60, retries={"max_attempts": 2, "mode": "standard"}),
+        ),
     )
 
 

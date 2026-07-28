@@ -31,7 +31,7 @@ from .domains.suppliers.service import SupplierError
 from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
 from .domains.telemetry.router import router as telemetry_router
 from .domains.telemetry.service import TelemetryError
-from .health import ReadinessFailure, check_readiness
+from .health import ReadinessFailure, check_readiness, reporting_verification
 
 
 def _access_denied_reason(exc: StarletteHTTPException) -> str | None:
@@ -173,9 +173,30 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready", response_model=None)
     def health_ready(session: Annotated[Session, Depends(get_session)]) -> dict[str, str] | JSONResponse:
-        """Verify schema, runtime grants, and reporting-worker availability."""
+        """Verify database, compatible schema, and the production runtime role."""
         failure = readiness(session)
         return failure or {"status": "ready"}
+
+    @app.get("/health/reporting", response_model=None)
+    def health_reporting(
+        session: Annotated[Session, Depends(get_session)],
+    ) -> dict[str, object] | JSONResponse:
+        """Expose reporting-only verification without affecting core availability."""
+        try:
+            evidence = reporting_verification(session)
+        except ReadinessFailure as exc:
+            logger.error("reporting_verification_failed check=%s", exc.check)
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_verified", "check": exc.check},
+            )
+        except SQLAlchemyError as exc:
+            logger.error("reporting_verification_database_failure error_type=%s", type(exc).__name__)
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_verified", "check": "reporting_database"},
+            )
+        return evidence
 
     @app.get("/health", response_model=HealthRead)
     def health(session: Annotated[Session, Depends(get_session)]) -> HealthRead | JSONResponse:

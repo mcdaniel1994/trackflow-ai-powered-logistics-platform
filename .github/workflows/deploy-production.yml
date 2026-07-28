@@ -80,7 +80,7 @@ jobs:
           echo "MIGRATION_AFTER=not-run" >> "$GITHUB_ENV"
           echo "READINESS_RESULT=not-run" >> "$GITHUB_ENV"
           echo "SMOKE_RESULT=not-run" >> "$GITHUB_ENV"
-          echo "PREFECT_GUARD_RESULT=not-run" >> "$GITHUB_ENV"
+          echo "REPORTING_VERIFICATION_RESULT=not-run" >> "$GITHUB_ENV"
 
       - name: Confirm all immutable image manifests exist
         shell: bash
@@ -135,7 +135,9 @@ jobs:
         env:
           TARGET_IMAGE_TAG: ${{ env.IMAGE_TAG }}
           CAPTURE_PREVIOUS_IMAGE_TAG: "true"
-        run: python scripts/release/coolify_release.py
+        run: |
+          set -o pipefail
+          python scripts/release/coolify_release.py 2>&1 | tee "$RUNNER_TEMP/coolify-deploy.log"
 
       # coolify_release.py polls until the deployment finishes, so by this point
       # Compose has replaced the containers. Any heartbeat at or after this instant
@@ -160,7 +162,7 @@ jobs:
           ready=false
           for attempt in {1..30}; do
             if curl --silent --show-error --fail --max-time 10 \
-              "$BACKOFFICE_BASE_URL/api/health" > /dev/null
+              "$BACKOFFICE_BASE_URL/api/health/ready" > /dev/null
             then
               ready=true
               break
@@ -185,14 +187,21 @@ jobs:
       # gates reporting-worker on the one-shot guards, so guard success is proven
       # by the worker reaching its poll loop past its own fail-closed startup
       # guard and heartbeating with a healthy orchestrator.
-      - name: Verify Prefect startup guards from live worker state
+      - name: Verify reporting separately from core readiness
         id: prefect_guard_verification
         if: steps.release_verification.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
-          echo "PREFECT_GUARD_RESULT=failed" >> "$GITHUB_ENV"
+          echo "REPORTING_VERIFICATION_RESULT=failed" >> "$GITHUB_ENV"
+          status="$(curl --silent --show-error --output "$RUNNER_TEMP/reporting-verification.json" \
+            --write-out '%{http_code}' --max-time 10 \
+            "$BACKOFFICE_BASE_URL/api/health/reporting")"
+          if [[ "$status" != "200" ]]; then
+            echo "Reporting verification returned HTTP $status; release remains deployed." >&2
+            exit 1
+          fi
           output="$RUNNER_TEMP/prefect-guard.log"
           # The script owns its own bounded poll: the worker restarts on-failure and
           # needs a heartbeat interval or two past the boundary before a verdict.
@@ -209,11 +218,11 @@ jobs:
             exit 1
           fi
           cat "$output"
-          echo "PREFECT_GUARD_RESULT=passed" >> "$GITHUB_ENV"
+          echo "REPORTING_VERIFICATION_RESULT=passed" >> "$GITHUB_ENV"
 
       - name: Restore previous image after deployment or health failure
         id: automatic_rollback
-        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure' || steps.prefect_guard_verification.outcome == 'failure'
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
         continue-on-error: true
         shell: bash
         run: |
@@ -233,7 +242,7 @@ jobs:
           echo "ROLLBACK_RESULT=succeeded" >> "$GITHUB_ENV"
 
       - name: Fail an unsuccessful release
-        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure' || steps.prefect_guard_verification.outcome == 'failure'
+        if: steps.coolify_deploy.outcome == 'failure' || steps.release_verification.outcome == 'failure'
         shell: bash
         run: |
           if [[ "${{ steps.automatic_rollback.outcome }}" == "failure" ]]; then
@@ -260,9 +269,22 @@ jobs:
             echo
             echo "Smoke tests: \`$SMOKE_RESULT\`"
             echo
-            echo "Prefect guards: \`$PREFECT_GUARD_RESULT\`"
+            echo "Reporting verification (non-rollback): \`$REPORTING_VERIFICATION_RESULT\`"
             echo
             echo "Image rollback: \`$ROLLBACK_RESULT\`"
             echo
             echo "Job status: \`$JOB_STATUS\`"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Preserve deployment and smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-deployment-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/production-migration.log
+            ${{ runner.temp }}/coolify-deploy.log
+            ${{ runner.temp }}/reporting-verification.json
+            ${{ runner.temp }}/prefect-guard.log
+          if-no-files-found: ignore
+          retention-days: 30

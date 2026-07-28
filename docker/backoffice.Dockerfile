@@ -18,5 +18,5 @@ COPY --from=build --chown=node:node /app/uis/backoffice/.next/static ./uis/backo
 COPY --from=build --chown=node:node /app/uis/backoffice/public ./uis/backoffice/public
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["wget", "-qO-", "http://127.0.0.1:3000/api/health/live"]
 CMD ["node", "uis/backoffice/server.js"]

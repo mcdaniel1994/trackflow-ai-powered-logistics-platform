@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Final, Literal, cast
@@ -17,7 +18,7 @@ PIPELINE_NAME: Final = "business_performance"
 PIPELINE_VERSION: Final = "engagement-6-phase-5"
 REPORTING_WORKER_NAME: Final = "reporting"
 DEFAULT_RECOMPUTE_WEEKS: Final = 3
-DEFAULT_LEASE_SECONDS: Final = 600
+DEFAULT_LEASE_SECONDS: Final = 900
 DEFAULT_MAX_ATTEMPTS: Final = 5
 DEFAULT_BACKOFF_SECONDS: Final = 60
 DEFAULT_CONNECT_TIMEOUT_SECONDS: Final = 10
@@ -47,6 +48,7 @@ _SAFE_ERROR_SUMMARIES: Final[dict[str, str]] = {
     "ORCHESTRATION_FAILED": "Orchestration service unavailable",
     "INTERNAL_FAILED": "Internal reporting execution failed",
 }
+_BUILD_SHA = re.compile(r"^(?:sha-)?[0-9a-f]{40}$")
 
 
 class QueueConfigurationError(RuntimeError):
@@ -77,6 +79,51 @@ class RunMetrics:
     rows_transformed: int
     rows_loaded: int
     source_watermark: datetime | None = None
+
+
+def _safe_build_sha() -> str | None:
+    value = os.environ.get("TRACKFLOW_BUILD_SHA", os.environ.get("GITHUB_SHA", "")).strip().lower()
+    return value if _BUILD_SHA.fullmatch(value) else None
+
+
+def _record_attempt(
+    connection: Connection,
+    claim: RunClaim,
+    *,
+    ended_at: datetime,
+    retry_outcome: str,
+    stage: str | None = None,
+    error_code: ErrorCode | None = None,
+    error_type: str | None = None,
+    metrics: RunMetrics | None = None,
+) -> None:
+    """Insert sanitized attempt evidence in the same transaction as its run transition."""
+    originating_code = None if error_code == "MAX_ATTEMPTS_EXCEEDED" else error_code
+    connection.execute(
+        text(
+            "INSERT INTO reporting.pipeline_run_attempts "
+            "(run_id, attempt, stage, started_at, ended_at, duration_ms, rows_scanned, "
+            "rollup_rows_written, error_code, error_type, retry_outcome, pipeline_version, build_sha) "
+            "SELECT id, :attempt, COALESCE(:stage, current_stage, 'orchestration'), "
+            "COALESCE(started_at, :ended_at), :ended_at, "
+            "GREATEST(0, (EXTRACT(EPOCH FROM (:ended_at - COALESCE(started_at, :ended_at))) * 1000)::bigint), "
+            ":rows_scanned, :rollup_rows_written, :error_code, :error_type, :retry_outcome, "
+            "pipeline_version, :build_sha FROM reporting.pipeline_runs WHERE id = :run_id "
+            "ON CONFLICT (run_id, attempt) DO NOTHING"
+        ),
+        {
+            "run_id": claim.run_id,
+            "attempt": claim.attempt,
+            "stage": stage,
+            "ended_at": ended_at,
+            "rows_scanned": metrics.rows_extracted if metrics is not None else None,
+            "rollup_rows_written": metrics.rows_loaded if metrics is not None else None,
+            "error_code": originating_code,
+            "error_type": error_type,
+            "retry_outcome": retry_outcome,
+            "build_sha": _safe_build_sha(),
+        },
+    )
 
 
 def utc_now() -> datetime:
@@ -368,6 +415,22 @@ def claim_next(
                         "token": row["claim_token"],
                     },
                 )
+                _record_attempt(
+                    connection,
+                    RunClaim(
+                        run_id=_row_uuid(row, "id"),
+                        claim_token=_row_uuid(row, "claim_token"),
+                        trigger_type=cast(TriggerType, row["trigger_type"]),
+                        requested_week_start=cast(date | None, row["requested_week_start"]),
+                        target_weeks=(),
+                        attempt=cast(int, row["attempt"]),
+                    ),
+                    ended_at=claimed_at,
+                    retry_outcome="failed",
+                    stage="orchestration",
+                    error_code="VALIDATE_FAILED",
+                    error_type="QueueValidationError",
+                )
                 return None
             connection.execute(
                 text("UPDATE reporting.pipeline_runs SET target_weeks = :weeks WHERE id = :id"),
@@ -432,6 +495,7 @@ def finalize_success(
     now: datetime | None = None,
 ) -> bool:
     with engine.begin() as connection:
+        ended_at = now or utc_now()
         result = connection.execute(
             text(
                 "UPDATE reporting.pipeline_runs SET status = 'succeeded', finished_at = :now, "
@@ -442,7 +506,7 @@ def finalize_success(
                 "WHERE id = :id AND claim_token = :token AND status = 'running'"
             ),
             {
-                "now": now or utc_now(),
+                "now": ended_at,
                 "rows_extracted": metrics.rows_extracted,
                 "rows_transformed": metrics.rows_transformed,
                 "rows_loaded": metrics.rows_loaded,
@@ -451,6 +515,14 @@ def finalize_success(
                 "token": claim.claim_token,
             },
         )
+        if result.rowcount == 1:
+            _record_attempt(
+                connection,
+                claim,
+                ended_at=ended_at,
+                retry_outcome="succeeded",
+                metrics=metrics,
+            )
     return result.rowcount == 1
 
 
@@ -466,6 +538,8 @@ def release_retryable(
     now: datetime | None = None,
     max_attempts: int = DEFAULT_MAX_ATTEMPTS,
     backoff_seconds: int = DEFAULT_BACKOFF_SECONDS,
+    stage: str | None = None,
+    error_type: str | None = None,
 ) -> bool:
     transition_at = now or utc_now()
     exhausted = claim.attempt >= max_attempts
@@ -488,6 +562,16 @@ def release_retryable(
                 "token": claim.claim_token,
             },
         )
+        if result.rowcount == 1:
+            _record_attempt(
+                connection,
+                claim,
+                ended_at=transition_at,
+                retry_outcome="exhausted" if exhausted else "retried",
+                stage=stage,
+                error_code=error_code,
+                error_type=error_type,
+            )
     return result.rowcount == 1
 
 
@@ -497,8 +581,11 @@ def finalize_failure(
     error_code: ErrorCode,
     *,
     now: datetime | None = None,
+    stage: str | None = None,
+    error_type: str | None = None,
 ) -> bool:
     with engine.begin() as connection:
+        ended_at = now or utc_now()
         result = connection.execute(
             text(
                 "UPDATE reporting.pipeline_runs SET status = 'failed', finished_at = :now, "
@@ -507,13 +594,23 @@ def finalize_failure(
                 "WHERE id = :id AND claim_token = :token AND status = 'running'"
             ),
             {
-                "now": now or utc_now(),
+                "now": ended_at,
                 "error_code": error_code,
                 "error_summary": _SAFE_ERROR_SUMMARIES[error_code],
                 "id": claim.run_id,
                 "token": claim.claim_token,
             },
         )
+        if result.rowcount == 1:
+            _record_attempt(
+                connection,
+                claim,
+                ended_at=ended_at,
+                retry_outcome="failed",
+                stage=stage,
+                error_code=error_code,
+                error_type=error_type,
+            )
     return result.rowcount == 1
 
 
@@ -530,7 +627,8 @@ def recover_stale_runs(
     with engine.begin() as connection:
         rows = connection.execute(
             text(
-                "SELECT id, attempt FROM reporting.pipeline_runs "
+                "SELECT id, attempt, claim_token, trigger_type, requested_week_start, "
+                "target_weeks, current_stage FROM reporting.pipeline_runs "
                 "WHERE pipeline_name = :pipeline_name AND status = 'running' "
                 "AND lease_expires_at < :now FOR UPDATE SKIP LOCKED"
             ),
@@ -556,6 +654,21 @@ def recover_stale_runs(
                     ],
                     "id": row["id"],
                 },
+            )
+            _record_attempt(
+                connection,
+                RunClaim(
+                    run_id=_row_uuid(row, "id"),
+                    claim_token=_row_uuid(row, "claim_token"),
+                    trigger_type=cast(TriggerType, row["trigger_type"]),
+                    requested_week_start=cast(date | None, row["requested_week_start"]),
+                    target_weeks=tuple(cast(list[date] | None, row["target_weeks"]) or ()),
+                    attempt=attempt,
+                ),
+                ended_at=sweep_at,
+                retry_outcome="lease_lost",
+                stage=cast(str | None, row["current_stage"]),
+                error_code="STALE_ABANDONED",
             )
             recovered += 1
     return recovered

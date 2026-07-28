@@ -38,6 +38,11 @@ def test_worker_runs_guard_and_both_prunes(monkeypatch: pytest.MonkeyPatch) -> N
         "prune_telemetry_events",
         lambda: calls.append("telemetry") or {"operational": 1, "security": 2},
     )
+    monkeypatch.setattr(
+        maintenance_worker,
+        "prune_reporting_logs",
+        lambda: calls.append("reporting_logs") or {"files_deleted": 1, "bytes_deleted": 10},
+    )
 
     def prune_business() -> dict[str, int]:
         calls.append("business")
@@ -47,7 +52,7 @@ def test_worker_runs_guard_and_both_prunes(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(maintenance_worker, "prune_business_events", prune_business)
     monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: calls.append("prefect") or 5)
     maintenance_worker.run_worker(stop=stop, schedule=DueSchedule(), tick_seconds=0.01)  # type: ignore[arg-type]
-    assert calls == ["guard", "telemetry", "business", "prefect"]
+    assert calls == ["guard", "telemetry", "business", "reporting_logs", "prefect"]
 
 
 def test_signal_handler_requests_shutdown() -> None:
@@ -109,8 +114,13 @@ def test_prefect_retention_failure_does_not_repeat_business_prune(
     )
     monkeypatch.setattr(
         maintenance_worker,
+        "prune_reporting_logs",
+        lambda: calls.append("reporting_logs") or {"files_deleted": 0, "bytes_deleted": 0},
+    )
+    monkeypatch.setattr(
+        maintenance_worker,
         "prune_prefect_runs",
         lambda: (_ for _ in ()).throw(OSError("orchestrator unavailable")),
     )
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business"]
+    assert calls == ["telemetry", "business", "reporting_logs"]

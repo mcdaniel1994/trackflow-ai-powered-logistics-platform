@@ -8,8 +8,8 @@ from datetime import datetime, timedelta
 from typing import Literal, TypeAlias
 
 QueueState: TypeAlias = Literal["idle", "processing", "queued", "retrying", "stuck", "unavailable"]
-WORKER_STALE_AFTER = timedelta(seconds=30)
-PROGRESS_STALE_AFTER = timedelta(seconds=120)
+WORKER_STALE_AFTER = timedelta(seconds=60)
+PROGRESS_STALE_AFTER = timedelta(seconds=180)
 
 
 @dataclass(frozen=True)

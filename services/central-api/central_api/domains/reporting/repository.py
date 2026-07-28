@@ -8,6 +8,7 @@ from sqlmodel import Session
 
 from .schemas import (
     LatestSuccessfulRun,
+    PipelineRunAttemptRead,
     PipelineRunLatest,
     QueuedPipelineRun,
     WeeklyPerformanceEntry,
@@ -103,7 +104,8 @@ class ReportingRepository:
     def latest_successful_run(self) -> LatestSuccessfulRun | None:
         row = self.session.execute(
             text(
-                "SELECT id AS run_id, finished_at, target_weeks, rows_loaded "
+                "SELECT id AS run_id, finished_at, target_weeks, rows_loaded, "
+                "source_watermark AS source_cutoff_at "
                 "FROM reporting.pipeline_runs WHERE pipeline_name = :pipeline_name "
                 "AND status = 'succeeded' AND finished_at IS NOT NULL "
                 "ORDER BY finished_at DESC, requested_at DESC, id DESC LIMIT 1"
@@ -111,6 +113,24 @@ class ReportingRepository:
             {"pipeline_name": PIPELINE_NAME},
         ).mappings().one_or_none()
         return self._successful(row)
+
+    def latest_attempts(self, *, limit: int = 10) -> list[PipelineRunAttemptRead]:
+        """Return a bounded newest-first history without exception messages or payloads."""
+        bounded_limit = min(max(limit, 1), 25)
+        rows = self.session.execute(
+            text(
+                "SELECT attempt.run_id, attempt.stage, attempt.attempt, attempt.started_at, attempt.ended_at, "
+                "attempt.duration_ms, attempt.rows_scanned, attempt.rollup_rows_written, "
+                "attempt.error_code, attempt.error_type, attempt.retry_outcome, "
+                "attempt.pipeline_version, attempt.build_sha "
+                "FROM reporting.pipeline_run_attempts AS attempt "
+                "JOIN reporting.pipeline_runs AS run ON run.id = attempt.run_id "
+                "WHERE run.pipeline_name = :pipeline_name "
+                "ORDER BY attempt.started_at DESC, attempt.id DESC LIMIT :limit"
+            ),
+            {"pipeline_name": PIPELINE_NAME, "limit": bounded_limit},
+        ).mappings()
+        return [PipelineRunAttemptRead.model_validate(dict(row)) for row in rows]
 
     def worker_signals(self) -> RowMapping | None:
         return self.session.execute(

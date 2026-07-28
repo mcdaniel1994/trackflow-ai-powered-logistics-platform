@@ -15,7 +15,17 @@
 ## Active
 
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
-  in progress. Phase 1 added a Central API `telemetry` domain with a `telemetry_events` table,
+  in progress. Reporting-reliability Phase 6.1 is implemented and locally verified through
+  Alembic `20260728_0011`; production migration/deployment, fault injection, a stopped-worker
+  observation window, and notification verification remain before Phase 6.2. The owner approved
+  the persisted-log volume/path/limits and authorized the controlled production acceptance
+  workflow on 2026-07-28. Independent Phases 6.5.a–b are owner-accepted and complete as an offline
+  evaluation: the relocated,
+  deterministic 120-month generated dataset feeds an offline strict-recursive Random Forest
+  baseline with versioned metrics/model/chart/report artifacts. Five chronological folds produce
+  validation RMSE 50,273 ± 13,165 EUR and diagnose overfitting caused by bounded absolute-level
+  extrapolation; the artifact is not approved for operational use.
+  Phase 1 added a Central API `telemetry` domain with a `telemetry_events` table,
   exact warehouse metrics read from `StockEntry`/`StockExit`, best-effort post-response
   rejected-dispatch and `api.access.denied` diagnostics, Identity auth audit logs (logs only),
   enforced retention, bounded aggregates-only reporting endpoints, and a read-only Back Office

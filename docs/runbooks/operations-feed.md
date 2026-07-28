@@ -14,7 +14,7 @@ portfolio-production Back Office feeling like a real, moving operations platform
 
 ## What this covers
 
-- `services/central-api/scripts/operations_feed.py` — long-running writer (default ~5s tick).
+- `services/central-api/scripts/operations_feed.py` — long-running writer (default ~15s tick).
 - `services/central-api/scripts/db_size_guard.py` — scheduled size check + graduated action.
 - `operations_feed_control` — a single-row runtime kill switch (migration `20260713_0005`).
 - Telemetry enablement for production (`TELEMETRY_ENABLED=true`, 7-day retention).
@@ -42,15 +42,15 @@ portfolio-production Back Office feeling like a real, moving operations platform
 | Variable | Default | Purpose |
 |---|---|---|
 | `OPERATIONS_FEED_ENABLED` | `false` | Deploy-time on/off for the feed process |
-| `OPERATIONS_FEED_INTERVAL_SECONDS` | `5` | Tick interval (jittered ±20%) |
+| `OPERATIONS_FEED_INTERVAL_SECONDS` | `15` | Tick interval (jittered ±20%) |
 | `OPERATIONS_FEED_BATCH_MIN` / `_MAX` | `1` / `4` | Movements attempted per tick |
 | `OPERATIONS_FEED_BACKFILL_DAYS` | `10` | Rolling history seeded on first start / after reset |
 | `OPERATIONS_FEED_USER_UUID` | `SEED_USER_UUID` | Opaque service-account actor id |
 | `TELEMETRY_ENABLED` | `true` (prod) | Enables best-effort diagnostic emission |
 | `TELEMETRY_OPERATIONAL_RETENTION_DAYS` | `7` | Operational telemetry window |
 | `TELEMETRY_SECURITY_RETENTION_DAYS` | `7` | Security telemetry window (portfolio deviation — see standard) |
-| `DB_SIZE_SOFT_LIMIT_MB` | `400` | Prune telemetry at/above this |
-| `DB_SIZE_HARD_LIMIT_MB` | `450` | Pause feed + ledger reset at/above this |
+| `DB_SIZE_SOFT_LIMIT_MB` | `400` | Prune telemetry and pause the feed at/above this |
+| `DB_SIZE_HARD_LIMIT_MB` | `450` | Keep the feed paused; reset only with one-shot owner approval and a successful checkpoint |
 
 ## Kill switch (pause / resume without redeploy)
 
@@ -75,13 +75,17 @@ to prevent duplicate execution.
 ### Size-guard behaviour
 
 - **< 400 MB:** logs `db_size_measured` only.
-- **≥ 400 MB (soft):** prunes telemetry immediately, logs `db_size_soft_limit_reached` (WARNING).
-- **≥ 450 MB (hard):** logs `db_size_hard_limit_reached` (ERROR), sets the control row to disabled,
-  truncates `stock_exits`/`stock_entries`, re-seeds the baseline + rolling window, then re-enables
-  the feed. This keeps the DB well under the 500 MB Supabase Free cap.
+- **≥ 400 MB (soft):** prunes telemetry, pauses the feed, and logs
+  `db_size_soft_limit_reached` (WARNING). It does not reset or auto-resume.
+- **≥ 450 MB (hard):** keeps the feed paused and logs `db_size_hard_limit_reached` (ERROR).
+  Destructive reset is refused unless the owner writes the exact one-shot note
+  `owner-approved-db-size-reset` while the feed remains disabled. The note is consumed before work
+  begins. The guard then enqueues and observes a normal-worker checkpoint; only success permits the
+  ledger reset/reseed and automatic re-enable. Any failed, stale, missing, or unconfirmed checkpoint
+  leaves the ledger intact and the feed paused.
 
-Growth is ledger-dominated (~5s cadence ≈ ~17 MB/day); ~400 MB is reached in ~3 weeks from a small
-baseline and the 400→450 band is ~3 days — a 15-minute guard has wide margin.
+The July 28 read-only production rescan measured roughly 5.7% growth over the comparison window;
+retain the 15-minute guard cadence and remeasure before changing either threshold.
 
 ## Verification
 
@@ -90,8 +94,10 @@ baseline and the 400→450 band is ~3 days — a 15-minute guard has wide margin
   ledger, and `current_stock` never goes negative.
 - Two feed instances → only one writes (advisory lock); the other logs `operations_feed_not_leader`.
 - Toggling the control row pauses/resumes writes with no redeploy.
-- Forcing `database_size_mb` past the hard limit runs a reset that leaves stock consistent and the
-  feed re-enabled. Automated coverage: `services/central-api/tests/test_operations_feed.py`.
+- Forcing `database_size_mb` past the hard limit without the one-shot note leaves the ledger intact
+  and the feed paused. With a fresh note, a successful checkpoint permits a consistent reset/reseed;
+  a failed/stale checkpoint still blocks it. Automated coverage:
+  `services/central-api/tests/test_operations_feed.py`.
 
 ## Rollback / disable
 
@@ -102,7 +108,7 @@ baseline and the 400→450 band is ~3 days — a 15-minute guard has wide margin
 
 ## Known gaps
 
-- The size guard uses a **reset/reseed** (disposable-data) strategy, not continuity-preserving
-  ledger compaction; occasional counter resets are expected and accepted for this environment.
+- An owner-approved reset still uses a **reset/reseed** (disposable-data) strategy, not
+  continuity-preserving ledger compaction; it is never an unattended quota response.
 - No external alerting on the guard's WARNING/ERROR logs yet (tracked with the broader monitoring
   gap in [README.md](README.md)).
