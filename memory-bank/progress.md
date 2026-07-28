@@ -15,11 +15,12 @@
 ## Active
 
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
-  in progress. Reporting-reliability Phase 6.1 is implemented and locally verified through
-  Alembic `20260728_0011`; production migration/deployment, fault injection, a stopped-worker
-  observation window, and notification verification remain before Phase 6.2. The owner approved
-  the persisted-log volume/path/limits and authorized the controlled production acceptance
-  workflow on 2026-07-28. Independent Phases 6.5.a–b are owner-accepted and complete as an offline
+  in progress. Reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
+  Alembic `20260728_0011` and closed by explicit owner exception after the remaining controlled
+  exercises were omitted on 2026-07-28. Phase 6.2 durable hourly SQL rollups, fixed cutoffs,
+  trailing-window recomputation, exact reconciliation, and 12-hour shadow cadence are locally
+  verified through additive revision `20260728_0012`; the flag defaults off and production
+  deployment/live reconciliation remain. Independent Phases 6.5.a–b are owner-accepted and complete as an offline
   evaluation: the relocated,
   deterministic 120-month generated dataset feeds an offline strict-recursive Random Forest
   baseline with versioned metrics/model/chart/report artifacts. Five chronological folds produce
@@ -99,8 +100,9 @@ specifications and bootcamp planning inputs — read it before planning or
 implementing any of the items below.
 
 - Engagement 6.1-6.4 - reporting reliability remediation. Owner-approved
-  specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is locally implemented and
-  stopped at its mandatory owner-review/production-acceptance gate; Phases 6.2-6.4 have not started.
+  specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is closed by documented
+  owner exception. Phase 6.2 is locally implemented and verified through `20260728_0012`; its
+  production shadow acceptance remains. Phases 6.3-6.4 have not started.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
@@ -130,7 +132,8 @@ implementing any of the items below.
   The Coolify `4.1.2` and GitHub Production environment prerequisites are
   configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
   follow-ups; the first live automated deployment exposed the documented Prefect startup defect,
-  its hotfix redeployment is pending, and the rollback drill has not run.
+  while the July 28 immutable deployment verified its hotfix and Phase 6.1. The owner omitted the
+  remaining Phase 6.1 exercises; the live rollback drill has not run.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

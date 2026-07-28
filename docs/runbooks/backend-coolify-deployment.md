@@ -3,10 +3,14 @@
 ## Status
 
 Base production deployment verified on July 3, 2026 UTC (July 2 America/Chicago). The first
-dedicated-Prefect production release on July 15 failed during Compose startup; the repository
-hotfix is implemented and awaiting an approved redeployment. Reporting-reliability Phase 6.1 is
-also implemented and locally verified through `20260728_0011`, but has not been deployed. Future production mutations still
-require the GitHub Production reviewer approval. The hardened release workflow now
+dedicated-Prefect production release on July 15 failed during Compose startup. The permanent
+hotfix and reporting-reliability Phase 6.1 were deployed together on July 28 as immutable image
+`13bba2e2bdebb0c25c05ba23addbeb62bac8586b`; Supabase reached `20260728_0011`, core readiness
+passed, and reporting verification was recorded separately. The Phase 6.1 controlled production
+exercises were later omitted by explicit owner direction; they are not passing evidence. Additive
+Phase 6.2 revision `20260728_0012` remains local and must use this approval-gated release path
+before shadow reconciliation. Future production mutations still require the GitHub Production
+reviewer approval. The hardened release workflow now
 migrates, verifies grants, deploys declarative workers, polls dependency-aware readiness,
 smoke-tests unauthenticated protection, and restores the previous image tag on failure.
 

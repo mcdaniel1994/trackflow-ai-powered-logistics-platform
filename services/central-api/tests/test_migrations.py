@@ -44,9 +44,11 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
         )
         assert {"clients", "stockout_events", "inventory_discrepancies"}.issubset(inspect(engine).get_table_names())
         assert set(inspect(engine).get_table_names(schema="reporting")) == {
+            "hourly_activity_rollups",
             "incomplete_weeks",
             "pipeline_run_attempts",
             "pipeline_runs",
+            "rollup_state",
             "source_ledger_state",
             "weekly_warehouse_client_performance",
             "worker_heartbeats",
@@ -58,6 +60,7 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
             "uq_pipeline_runs_scheduled_date",
             "uq_pipeline_runs_single_active",
             "uq_pipeline_runs_pending_manual",
+            "uq_pipeline_runs_scheduled_for",
             "ix_pipeline_runs_claim",
             "ix_pipeline_runs_latest",
         }.issubset(pipeline_indexes)
@@ -86,6 +89,8 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
         command.upgrade(config, "head")
         assert "pipeline_runs" in inspect(engine).get_table_names(schema="reporting")
         assert "pipeline_run_attempts" in inspect(engine).get_table_names(schema="reporting")
+        assert "hourly_activity_rollups" in inspect(engine).get_table_names(schema="reporting")
+        assert "rollup_state" in inspect(engine).get_table_names(schema="reporting")
         assert "worker_heartbeats" in inspect(engine).get_table_names(schema="reporting")
 
         command.downgrade(config, "20260713_0005")

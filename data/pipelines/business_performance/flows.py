@@ -54,6 +54,13 @@ from .queue import (
     record_stage,
     verify_claim_for_publication,
 )
+from .rollups import (
+    ROLLUP_PIPELINE_VERSION,
+    capture_rollup_window,
+    compute_hourly_rollups,
+    hourly_rollups_enabled,
+    publish_hourly_rollups,
+)
 from .runner import PipelineStageError
 
 EXTRACTION_RETRIES: Final = 3
@@ -464,6 +471,77 @@ def weekly_warehouse_client_performance(claim: RunClaim, pipeline_version: str) 
     return metrics
 
 
+@flow(name="hourly_activity_rollup_shadow", persist_result=False)
+def hourly_activity_rollup_shadow(
+    claim: RunClaim,
+    pipeline_version: str,
+    abort: Event | None = None,
+) -> RunMetrics:
+    """Compute durable hourly rollups without changing the reporting read path."""
+    try:
+        context = get_run_context()
+        if not isinstance(context, FlowRunContext) or context.flow_run is None:
+            raise MissingContextError("flow context required")
+        flow_run_id = UUID(str(context.flow_run.id))
+    except MissingContextError:
+        flow_run_id = None
+    engine = _engine()
+    try:
+        if flow_run_id is not None and not record_prefect_flow_run(engine, claim, flow_run_id):
+            raise LeaseLostError("pipeline run lease is no longer owned")
+
+        extract_started = _begin_stage(claim, "extract", enforce=flow_run_id is not None)
+        if abort is not None and abort.is_set():
+            raise LeaseLostError("pipeline run lease is no longer owned")
+        try:
+            window = capture_rollup_window(engine, claim)
+        except LeaseLostError:
+            raise
+        except Exception as exc:
+            raise _stage_failure("extract", exc) from None
+        _complete_stage(claim, "extract", extract_started)
+
+        transform_started = _begin_stage(claim, "transform", enforce=flow_run_id is not None)
+        if abort is not None and abort.is_set():
+            raise LeaseLostError("pipeline run lease is no longer owned")
+        try:
+            rows = compute_hourly_rollups(engine, window)
+        except LeaseLostError:
+            raise
+        except Exception as exc:
+            raise _stage_failure("transform", exc) from None
+        _complete_stage(claim, "transform", transform_started)
+
+        load_started = _begin_stage(claim, "load", enforce=flow_run_id is not None)
+        if abort is not None and abort.is_set():
+            raise LeaseLostError("pipeline run lease is no longer owned")
+        try:
+            written = publish_hourly_rollups(
+                engine,
+                claim,
+                window,
+                rows,
+                pipeline_version=pipeline_version,
+            )
+        except LeaseLostError:
+            raise
+        except Exception as exc:
+            raise _stage_failure("load", exc) from None
+        _complete_stage(claim, "load", load_started)
+    finally:
+        engine.dispose()
+
+    return RunMetrics(
+        rows_extracted=window.rows_scanned,
+        rows_transformed=len(rows),
+        rows_loaded=written,
+        source_watermark=window.source_cutoff_at,
+        source_cutoff_at=window.source_cutoff_at,
+        rows_scanned=window.rows_scanned,
+        rollup_rows_written=written,
+    )
+
+
 def _begin_stage(claim: RunClaim, stage: str, *, enforce: bool) -> float:
     if enforce:
         engine = _engine()
@@ -499,6 +577,15 @@ def _flow_run_name(claim: RunClaim) -> str:
 def prefect_executor(_engine: Engine, claim: RunClaim, abort: Event | None = None) -> RunMetrics:
     if abort is not None and abort.is_set():
         raise LeaseLostError("pipeline run lease is no longer owned")
+    if hourly_rollups_enabled():
+        configured_rollup = hourly_activity_rollup_shadow.with_options(
+            flow_run_name=_flow_run_name(claim)
+        )
+        return configured_rollup(
+            claim,
+            pipeline_version=ROLLUP_PIPELINE_VERSION,
+            abort=abort,
+        )
     configured = weekly_warehouse_client_performance.with_options(flow_run_name=_flow_run_name(claim))
     return configured(claim, pipeline_version="engagement-6-phase-6")
 

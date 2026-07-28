@@ -4,10 +4,12 @@
 
 ## Status
 
-In progress — reporting-reliability Phase 6.1 is implemented and locally verified through Alembic
-revision `20260728_0011`; its production migration, deployment, fault injection, stopped-worker
-observation, and notification verification remain acceptance actions. The owner approved the
-persisted-log volume/path/limits and controlled acceptance workflow on 2026-07-28. Independent
+In progress — reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
+Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to omit the remaining controlled
+exercises and proceed; Phase 6.1 is closed by that documented exception, not by passing evidence.
+Phase 6.2 durable hourly SQL rollups are implemented and locally verified through additive revision
+`20260728_0012`; the shadow flag defaults off and production deployment/reconciliation remain.
+Independent
 sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline evaluation.
 Five chronological folds diagnose overfitting and unstable temporal validation; the offline
 artifact is not approved for serving or operational decisions. The weekly business report has still never published in
@@ -34,17 +36,16 @@ the startup chain at 18s against ~3GB of per-deployment image pulls, and reprodu
 signature (guards in flight, worker left in `created`, command killed). The guards now report without
 gating startup, the worker enforces the identical conditions fail-closed in a bounded startup guard,
 every guard emits fixed success/failure tokens, and the release measures the guard outcome from live
-worker state instead of hard-coding it. It is locally verified; approved production redeployment
-and external acceptance remain pending.
+worker state instead of hard-coding it. The immutable July 28 deployment verified this path in
+production; controlled external acceptance remains pending.
 External soak, production outage/restore, 48-hour headroom, and image-rollback acceptance gates
 remain owner-approved work. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
 reporting surface, declarative reporting/maintenance workers, production migration verifier,
 readiness probes, and automatic image rollback are implemented and locally verified through
-Alembic revision `20260716_0010`. Coolify no longer needs separate cron configuration. Before the
-hardened workflow is enabled, rotate the previously exposed migration credential, grant the
-migration role database-level `CREATE`, and store the replacement once as the GitHub Production
-environment secret `MIGRATION_DATABASE_URL`. KPI consumers are Thomas Harry (CEO) and Ana
+Alembic revision `20260728_0012` locally (`20260728_0011` in production). Coolify no longer needs separate cron configuration. The
+approval-gated migration workflow and replacement `MIGRATION_DATABASE_URL` are configured. KPI
+consumers are Thomas Harry (CEO) and Ana
 Whitfield (Head of Warehouse Operations).
 
 The engagement delivers a **Phase 1 slice only**: exact warehouse metrics read from the

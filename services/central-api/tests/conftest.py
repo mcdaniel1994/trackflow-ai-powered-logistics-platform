@@ -48,6 +48,7 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
                 "TRUNCATE telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
                 "operations_feed_control, reporting.weekly_warehouse_client_performance, "
+                "reporting.hourly_activity_rollups, reporting.rollup_state, "
                 "reporting.pipeline_runs, reporting.incomplete_weeks, reporting.source_ledger_state, "
                 "reporting.worker_heartbeats "
                 "RESTART IDENTITY CASCADE"
@@ -64,6 +65,12 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
             text(
                 "INSERT INTO reporting.source_ledger_state (id, updated_at) "
                 "VALUES (1, now()) ON CONFLICT (id) DO NOTHING"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO reporting.rollup_state (id) VALUES (1) "
+                "ON CONFLICT (id) DO NOTHING"
             )
         )
     yield

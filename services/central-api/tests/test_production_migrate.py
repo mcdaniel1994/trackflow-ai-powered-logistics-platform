@@ -63,8 +63,8 @@ def test_production_migration_upgrades_grants_and_reruns_idempotently(role_datab
     first = production_migrate.migrate()
     second = production_migrate.migrate()
     assert first.before_revision == "20260714_0008"
-    assert first.after_revision == "20260728_0011"
-    assert second.before_revision == second.after_revision == "20260728_0011"
+    assert first.after_revision == "20260728_0012"
+    assert second.before_revision == second.after_revision == "20260728_0012"
 
     migration_engine = create_engine(migration_url)
     with migration_engine.begin() as connection:
@@ -75,6 +75,8 @@ def test_production_migration_upgrades_grants_and_reruns_idempotently(role_datab
         connection.execute(text("INSERT INTO reporting.future_grant_probe DEFAULT VALUES"))
         assert connection.scalar(text("SELECT count(*) FROM reporting.future_grant_probe")) == 1
         assert connection.scalar(text("SELECT count(*) FROM reporting.worker_heartbeats")) == 0
+        assert connection.scalar(text("SELECT count(*) FROM reporting.hourly_activity_rollups")) == 0
+        assert connection.scalar(text("SELECT count(*) FROM reporting.rollup_state")) == 1
     runtime_engine.dispose()
     migration_engine.dispose()
 
