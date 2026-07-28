@@ -12,6 +12,7 @@ See the canonical [Rules and Standards Philosophy](../../AGENTS.md#rules-and-sta
 | Standard | Scope |
 |---|---|
 | [authentication-security-standard.md](authentication-security-standard.md) | Auth, sessions, tokens, cookies, authorization, protected routes, and AI-agent user context |
+| [compliance-licensing-standard.md](compliance-licensing-standard.md) | Dependency and license classification, attribution/notice files, third-party service and AI model/provider evaluation, and the exception path for non-permissive dependencies |
 | [database-engineering-standard.md](database-engineering-standard.md) | Database and persistent-storage design, queries, integrity, migrations, concurrency, recovery, and high-risk production operations |
 | [visibility.md](visibility.md) | Public-facing pages: semantic HTML, WCAG 2.1 AA, SEO, GEO, Schema.org, Core Web Vitals, bot access |
 | [testing.md](testing.md) | Test levels, what to test, coverage policy and ratcheting, local test workflow |

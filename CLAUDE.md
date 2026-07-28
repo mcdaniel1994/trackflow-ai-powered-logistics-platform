@@ -20,6 +20,7 @@ Then read the active engagement brief and the README for every folder being modi
 | Cross-agent operating rules | `AGENTS.md` |
 | Persistent project context | `memory-bank/` |
 | What this project is | `README.md` |
+| Repo license and third-party dependency attribution | `LICENSE`, `THIRD_PARTY_LICENSES.md` |
 | Current engagement brief when assigned | `docs/briefs/NN-title.md` |
 | All briefs | `docs/briefs/` |
 | Cross-cutting standards and guidance | `docs/` |
@@ -27,6 +28,7 @@ Then read the active engagement brief and the README for every folder being modi
 | Operational runbooks (deployment, etc.) | `docs/runbooks/` |
 | Intended CI workflow architecture | `.github/workflows/README.md` |
 | Repo-specific quality remediation/improvement plans | `docs/planning/` |
+| **All remaining work — specs, planning inputs, sequence** | **`docs/planning/remaining_planning/README.md`** |
 | Archived planning artifacts | `docs/archive/` |
 | Coding-agent scoped rules and skills | `.agents/` |
 | Forward-looking UI workspace | `uis/` |
@@ -97,8 +99,13 @@ Then read the active engagement brief and the README for every folder being modi
   reporting reliability) and `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`
   (6.5, runs in parallel).
 
-- **Engagement 7+** - TBD per engagement.
-  Confirm with Cory before placing new code.
+- **Engagement 7+** - planned from `docs/planning/remaining_planning/`.
+  Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
+  precedence rule between owner-approved specifications and bootcamp planning inputs (which are
+  requirements, not architecture). A project there with no approved specification is not ready to
+  implement — produce analysis and a proposed spec, then stop for owner approval. Engagement 9 is
+  LangGraph agentic-workflow work, not n8n. Engagement 10 is blocked: its requirements document is
+  empty. Confirm with Cory before placing new code.
 
 ## Coding-Agent Infrastructure Vs. Product Agents
 
@@ -112,4 +119,5 @@ For the `.agents/` vs `agents/` vs `skills/` distinction, see the canonical tabl
 - Before database or persistent-storage design, queries, schemas, repositories, migrations, seeds, recovery, or operations, apply `.agents/rules/database-engineering.md` and follow its linked `docs/standards/database-engineering-standard.md`.
 - Before telemetry design or instrumentation (events, metrics, traces, correlation IDs, audit/security telemetry, analytics, retention, or AI telemetry), apply `.agents/rules/telemetry.md` and follow its linked `docs/standards/telemetry-standard.md`.
 - Before adding or changing behavior in code, APIs, validation, failure paths, logging, or CI/deploy config, apply `.agents/rules/testing-error-handling-ci.md` and follow the relevant linked engineering-quality standard in `docs/standards/` (testing, error-handling, observability, production-readiness).
+- Before adding, upgrading, or removing a dependency, third-party service, or AI model/provider, apply `.agents/rules/compliance-licensing.md` and follow its linked `docs/standards/compliance-licensing-standard.md`.
 - Empty folders with READMEs are intentional scaffolding for future engagements.

@@ -222,10 +222,15 @@ Future production changes and the final Supplier Directory retirement remain app
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
 | 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 locally verified with logging defaults approved, production acceptance pending before 6.2 |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
-| 7 | RAG knowledge base & semantic search | ⏳ Upcoming |
-| 8 | AI agents (product, customer-facing) | ⏳ Upcoming |
-| 9 | Workflow automation (n8n) | ⏳ Upcoming |
-| 10 | Real-time dashboards & alerts | ⏳ Upcoming |
+| 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
+| 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
+| 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
+
+All remaining work is planned from
+**[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its
+[README](docs/planning/remaining_planning/README.md) for the index, sequence, and the precedence
+rule between owner-approved specifications and bootcamp planning inputs.
 
 ---
 
@@ -279,11 +284,13 @@ trackflow/
 │   ├── pipelines/                 # ETL logic
 │   └── eval/                      # AI evaluation datasets
 │
-├── workflows/                     # n8n automation workflows
+├── workflows/                     # Reserved for future automation workflows
 │
 ├── docs/                          # Documentation
 │   ├── briefs/                    # Stakeholder briefs (per engagement)
 │   ├── planning/                  # Subproject specs & architecture proposals
+│   │   └── remaining_planning/    # Entry point for all remaining work (specs + planning inputs)
+│   ├── runbooks/                  # Operational runbooks
 │   ├── standards/                 # Cross-cutting standards (visibility, etc.)
 │   └── archive/                   # Historical planning artifacts
 │
@@ -307,9 +314,9 @@ trackflow/
 | Frontend | HTML5, Tailwind CSS, vanilla JavaScript, React, Next.js App Router |
 | Language | TypeScript, Python |
 | Backend | Independent FastAPI services under `services/`; Central API uses SQLModel + PostgreSQL |
-| AI | RAG, LLM agents, semantic search |
-| Automation | n8n workflows |
-| Infra | npm workspaces, monorepo, GitHub Codespaces |
+| Data | Prefect-orchestrated pipelines, Supabase PostgreSQL |
+| AI *(planned)* | RAG with a vector store, LangGraph agents, MCP server, semantic search |
+| Infra | npm workspaces, monorepo, Docker, GitHub Actions → GHCR, Coolify on a Hostinger VPS |
 
 ---
 

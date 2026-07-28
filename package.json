@@ -1,5 +1,6 @@
 {
   "name": "trackflow",
   "private": true,
+  "license": "UNLICENSED",
   "workspaces": ["packages/*", "uis/*"]
 }

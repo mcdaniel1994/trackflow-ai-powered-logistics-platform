@@ -93,10 +93,32 @@
 
 ## Planned Next
 
-- Engagement 7 - RAG knowledge base and semantic search.
-- Engagement 8 - AI agents.
-- Engagement 9 - Workflow automation with n8n.
-- Engagement 10 - Real-time dashboards and alerts.
+All remaining work is planned from `docs/planning/remaining_planning/`. Its
+`README.md` is the index, sequence, and precedence rule between owner-approved
+specifications and bootcamp planning inputs — read it before planning or
+implementing any of the items below.
+
+- Engagement 6.1-6.4 - reporting reliability remediation. Owner-approved
+  specification: `docs/planning/remaining_planning/spec.md`. Phase 6.1 is locally implemented and
+  stopped at its mandatory owner-review/production-acceptance gate; Phases 6.2-6.4 have not started.
+- Engagement 6.5 - sales forecasting. Owner-approved specification:
+  `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
+  6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
+  as an offline evaluation; the overfitting model remains prohibited from operational use.
+- Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
+  specification yet.
+- Engagement 8 - AI agents (LangGraph, tools, MCP server with OAuth, guardrails,
+  memory). Planning inputs only; no specification yet.
+- Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
+  specification yet. This is LangGraph work, not n8n; the earlier "workflow
+  automation with n8n" framing does not match the assignment documents.
+- Engagement 10 - Real-time dashboards and alerts. Blocked: the requirements
+  document `10_realtime/realtime.md` is empty.
+- Cross-cutting backlog (`important_considerations/others.md`): website
+  contact-form lead persistence, a job-applicant form plus migration off the
+  third-party talent API, and a Back Office information-architecture
+  restructure. Fold each into the engagement that forces it rather than creating
+  a new engagement number.
 - Production restore drills and Supplier Directory retirement after its
   observation window.
 

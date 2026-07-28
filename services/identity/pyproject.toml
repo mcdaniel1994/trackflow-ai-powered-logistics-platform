@@ -2,6 +2,7 @@
 name = "trackflow-identity"
 version = "0.1.0"
 description = "TrackFlow identity FastAPI service."
+license = { text = "Proprietary" }
 requires-python = ">=3.11"
 dependencies = [
   "argon2-cffi>=23.1.0",
