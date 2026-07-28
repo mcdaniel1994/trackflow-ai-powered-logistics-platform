@@ -1,4 +1,4 @@
-"""Scheduling proofs for the 07:00 America/Chicago dispatcher."""
+"""Scheduling proofs for the 12-hour America/Chicago dispatcher."""
 
 from __future__ import annotations
 
@@ -58,6 +58,30 @@ def test_first_tick_after_missed_window_recovers_today(pipeline_engine: Engine) 
     )
     assert recovered.business_date == date(2026, 7, 15)
     assert recovered.scheduled_run_created is True
+
+
+def test_evening_slot_is_distinct_and_idempotent(
+    pipeline_engine: Engine,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REPORTING_HOURLY_ROLLUPS_ENABLED", "true")
+    morning = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
+    evening = datetime(2026, 7, 16, 0, 0, tzinfo=UTC)
+    assert dispatch_tick(pipeline_engine, now=morning).scheduled_run_created is True
+    assert dispatch_tick(pipeline_engine, now=evening).scheduled_run_created is True
+    assert dispatch_tick(pipeline_engine, now=evening).scheduled_run_created is False
+
+    with pipeline_engine.connect() as connection:
+        rows = connection.execute(
+            text(
+                "SELECT scheduled_business_date, scheduled_for "
+                "FROM reporting.pipeline_runs ORDER BY scheduled_for"
+            )
+        ).all()
+    assert rows == [
+        (date(2026, 7, 15), morning),
+        (None, evening),
+    ]
 
 
 def test_dispatch_clock_rejects_naive_datetime() -> None:

@@ -29,6 +29,7 @@ from sqlmodel import Field, SQLModel
 
 REPORTING_SCHEMA = "reporting"
 SOURCE_LEDGER_STATE_ID = 1
+ROLLUP_STATE_ID = 1
 
 
 def utc_now() -> datetime:
@@ -123,6 +124,80 @@ class WorkerHeartbeat(SQLModel, table=True):
     orchestrator_healthy: bool | None = Field(default=None, sa_column=Column(Boolean, nullable=True))
 
 
+class HourlyActivityRollup(SQLModel, table=True):
+    """One canonical warehouse/client aggregate for one completed UTC hour."""
+
+    __tablename__ = "hourly_activity_rollups"
+    __table_args__: ClassVar[tuple[SchemaItem | dict[str, str], ...]] = (
+        CheckConstraint("warehouse IN ('LA', 'ZGZ')", name="ck_hourly_rollups_warehouse"),
+        CheckConstraint(
+            "date_trunc('hour', bucket_start) = bucket_start",
+            name="ck_hourly_rollups_bucket_hour",
+        ),
+        CheckConstraint(
+            "inbound_movement_count >= 0 AND inbound_units >= 0 "
+            "AND dispatch_order_count >= 0 AND dispatch_units >= 0 "
+            "AND loss_movement_count >= 0 AND loss_units >= 0 "
+            "AND stockout_count >= 0 AND discrepancy_count >= 0",
+            name="ck_hourly_rollups_counts",
+        ),
+        Index("ix_hourly_rollups_week_range", "bucket_start", "warehouse", "client_id"),
+        {"schema": REPORTING_SCHEMA},
+    )
+
+    bucket_start: datetime = Field(
+        sa_column=Column(DateTime(timezone=True), primary_key=True, nullable=False)
+    )
+    warehouse: str = Field(sa_column=Column(Text, primary_key=True, nullable=False))
+    client_id: UUID = Field(
+        sa_column=Column(
+            PGUUID(as_uuid=True),
+            ForeignKey("clients.id", name="fk_hourly_rollups_client_id", ondelete="RESTRICT"),
+            primary_key=True,
+            nullable=False,
+        )
+    )
+    inbound_movement_count: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    inbound_units: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    dispatch_order_count: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    dispatch_units: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    loss_movement_count: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    loss_units: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    stockout_count: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    discrepancy_count: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
+    source_cutoff_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+    computed_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+    pipeline_version: str = Field(sa_column=Column(Text, nullable=False))
+
+
+class RollupState(SQLModel, table=True):
+    """Singleton cursor advanced only by a committed rollup publication."""
+
+    __tablename__ = "rollup_state"
+    __table_args__: ClassVar[tuple[SchemaItem | dict[str, str], ...]] = (
+        CheckConstraint(f"id = {ROLLUP_STATE_ID}", name="ck_rollup_state_singleton"),
+        {"schema": REPORTING_SCHEMA},
+    )
+
+    id: int = Field(
+        default=ROLLUP_STATE_ID,
+        sa_column=Column(SmallInteger, primary_key=True, nullable=False),
+    )
+    pipeline_version: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
+    last_cutoff_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    last_published_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+    last_reconciled_at: datetime | None = Field(
+        default=None,
+        sa_column=Column(DateTime(timezone=True), nullable=True),
+    )
+
+
 class PipelineRun(SQLModel, table=True):
     """Durable run request, worker lease, retry state, and sanitized audit record."""
 
@@ -162,6 +237,13 @@ class PipelineRun(SQLModel, table=True):
             postgresql_where=text("trigger_type = 'scheduled'"),
         ),
         Index(
+            "uq_pipeline_runs_scheduled_for",
+            "pipeline_name",
+            "scheduled_for",
+            unique=True,
+            postgresql_where=text("trigger_type = 'scheduled' AND scheduled_for IS NOT NULL"),
+        ),
+        Index(
             "uq_pipeline_runs_single_active",
             "pipeline_name",
             unique=True,
@@ -190,6 +272,7 @@ class PipelineRun(SQLModel, table=True):
     trigger_type: str = Field(sa_column=Column(String(16), nullable=False))
     requested_by: str = Field(sa_column=Column(Text, nullable=False))
     scheduled_business_date: date | None = Field(default=None, sa_column=Column(Date, nullable=True))
+    scheduled_for: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     requested_week_start: date | None = Field(default=None, sa_column=Column(Date, nullable=True))
     target_weeks: list[date] | None = Field(default=None, sa_column=Column(ARRAY(Date), nullable=True))
     source_window_start: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))

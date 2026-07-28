@@ -89,9 +89,11 @@ Then read the active engagement brief and the README for every folder being modi
   database backup service, six server-derived operator states, and release startup guards.
   **The weekly business report has never published in production**: the reporting worker and
   Prefect are healthy, but every pipeline run to date has failed and
-  `reporting.weekly_warehouse_client_performance` is empty. Phase 6.1 is implemented and locally
-  verified through revision `20260728_0011`; persisted-log defaults are owner-approved, but the
-  production-acceptance gate remains open before Phase 6.2. Independent Phases 6.5.a–b produced an
+  `reporting.weekly_warehouse_client_performance` is empty. Phase 6.1 is deployed as immutable image
+  `13bba2e` through revision `20260728_0011` and closed by a documented owner exception after the
+  remaining controlled exercises were omitted. Phase 6.2 durable hourly SQL rollups are locally
+  verified through `20260728_0012`, off by default, and await production shadow reconciliation.
+  Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;
   6.5 is complete as an offline evaluation. The engagement is covered by two

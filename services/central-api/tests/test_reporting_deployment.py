@@ -144,6 +144,10 @@ def test_reporting_logs_persist_with_bounded_non_root_access() -> None:
         assert "REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log" in reporting
         assert 'REPORTING_LOG_MAX_BYTES: "10485760"' in reporting
         assert 'REPORTING_LOG_BACKUP_COUNT: "9"' in reporting
+        assert (
+            "REPORTING_HOURLY_ROLLUPS_ENABLED: "
+            "${REPORTING_HOURLY_ROLLUPS_ENABLED:-false}"
+        ) in reporting
         assert "REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log" in maintenance
         assert 'REPORTING_LOG_RETENTION_DAYS: "14"' in maintenance
         assert 'REPORTING_LOG_TOTAL_BYTES: "262144000"' in maintenance

@@ -435,7 +435,17 @@ def test_runner_releases_claim_when_advisory_lock_is_held(
 
 def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None:
     enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=3))
-    succeeded = run_once(pipeline_engine, lambda _engine, _claim: RunMetrics(3, 2, 1))
+    succeeded = run_once(
+        pipeline_engine,
+        lambda _engine, _claim: RunMetrics(
+            3,
+            2,
+            1,
+            source_cutoff_at=BASE_TIME,
+            rows_scanned=7,
+            rollup_rows_written=5,
+        ),
+    )
     assert succeeded.status == RunnerStatus.SUCCEEDED
     success_row = _run_row(pipeline_engine, UUID(succeeded.run_id or ""))
     assert (
@@ -443,6 +453,15 @@ def test_runner_success_and_classified_failures(pipeline_engine: Engine) -> None
         success_row["rows_transformed"],
         success_row["rows_loaded"],
     ) == (3, 2, 1)
+    success_attempt = _attempt_rows(
+        pipeline_engine,
+        UUID(succeeded.run_id or ""),
+    )[0]
+    assert (
+        success_attempt["source_cutoff_at"],
+        success_attempt["rows_scanned"],
+        success_attempt["rollup_rows_written"],
+    ) == (BASE_TIME, 7, 5)
 
     enqueue_cli(pipeline_engine, now=datetime.now(UTC) - timedelta(seconds=2))
 

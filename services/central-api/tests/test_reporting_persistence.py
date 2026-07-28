@@ -1,6 +1,6 @@
 """Phase 3 reporting-schema constraints, indexes, and cleanup invariants."""
 
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import uuid4
 
@@ -13,8 +13,10 @@ from sqlmodel import Session
 
 from central_api.domains.inventory.models import Client
 from central_api.domains.reporting.models import (
+    HourlyActivityRollup,
     IncompleteWeek,
     PipelineRun,
+    RollupState,
     SourceLedgerState,
     WeeklyWarehouseClientPerformance,
 )
@@ -51,9 +53,11 @@ def _run(**overrides: object) -> PipelineRun:
 def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engine) -> None:
     inspector = inspect(engine)
     assert set(inspector.get_table_names(schema="reporting")) == {
+        "hourly_activity_rollups",
         "incomplete_weeks",
         "pipeline_run_attempts",
         "pipeline_runs",
+        "rollup_state",
         "source_ledger_state",
         "weekly_warehouse_client_performance",
         "worker_heartbeats",
@@ -69,6 +73,7 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         "prefect_flow_run_id",
         "current_stage",
         "stage_started_at",
+        "scheduled_for",
     }.issubset(pipeline_columns)
     heartbeat_columns = {
         column["name"] for column in inspector.get_columns("worker_heartbeats", schema="reporting")
@@ -82,10 +87,71 @@ def test_reporting_schema_tables_columns_and_singleton_are_present(engine: Engin
         "ix_pipeline_run_attempts_started_at_desc",
         "uq_pipeline_run_attempts_run_attempt",
     }.issubset(attempt_indexes)
+    hourly_indexes = {
+        index["name"]
+        for index in inspector.get_indexes("hourly_activity_rollups", schema="reporting")
+    }
+    assert "ix_hourly_rollups_week_range" in hourly_indexes
     with Session(engine) as session:
         rows = list(session.exec(sa_select(SourceLedgerState)).all())
         assert len(rows) == 1
         assert rows[0][0].id == 1
+        rollup_rows = list(session.exec(sa_select(RollupState)).all())
+        assert len(rollup_rows) == 1
+        assert rollup_rows[0][0].id == 1
+
+
+def test_hourly_rollup_enforces_canonical_key_fk_and_counts(
+    engine: Engine,
+    inventory_client: Client,
+) -> None:
+    bucket = datetime(2026, 7, 13, 12, tzinfo=UTC)
+    valid = HourlyActivityRollup(
+        bucket_start=bucket,
+        warehouse="LA",
+        client_id=inventory_client.id,
+        inbound_movement_count=1,
+        inbound_units=5,
+        dispatch_order_count=1,
+        dispatch_units=3,
+        loss_movement_count=1,
+        loss_units=2,
+        stockout_count=0,
+        discrepancy_count=1,
+        source_cutoff_at=bucket.replace(hour=13),
+        pipeline_version="test",
+    )
+    valid_values = valid.model_dump()
+    with Session(engine) as session:
+        session.add(valid)
+        session.commit()
+        invalid_rows = (
+            HourlyActivityRollup(
+                **{
+                    **valid_values,
+                    "bucket_start": bucket.replace(minute=1),
+                }
+            ),
+            HourlyActivityRollup(
+                **{
+                    **valid_values,
+                    "bucket_start": bucket.replace(hour=14),
+                    "warehouse": "los_angeles",
+                }
+            ),
+            HourlyActivityRollup(
+                **{
+                    **valid_values,
+                    "bucket_start": bucket.replace(hour=15),
+                    "client_id": uuid4(),
+                }
+            ),
+        )
+        for row in invalid_rows:
+            session.add(row)
+            with pytest.raises(IntegrityError):
+                session.commit()
+            session.rollback()
 
 
 def test_weekly_report_enforces_cross_schema_fk_idempotency_and_kpi_checks(

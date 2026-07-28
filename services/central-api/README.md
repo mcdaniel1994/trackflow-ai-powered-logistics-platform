@@ -6,16 +6,19 @@ inventory, centralized operational incidents, and suppliers.
 ## Delivery status
 
 Engagement 5 inventory and the Centralized Incident Manager subproject are delivered. Engagement 6
-reporting-reliability Phase 6.1 is implemented locally through Alembic `20260728_0011`; its
-persisted-log defaults are owner-approved and it awaits production acceptance before Phase 6.2.
+reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and closed by documented
+owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
+an additive cadence identity at local head `20260728_0012`; its off-by-default shadow path awaits
+production deployment and exact live reconciliation.
 The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
-protection. The current Central API baseline is 173 passing tests with 93% branch-aware source
+protection. The current Central API baseline is 174 passing tests with 91.69% branch-aware source
 coverage.
 
 The portfolio Supabase production project is migrated through Alembic revision
-`20260716_0010` as of the July 28 read-only rescan. Runtime-role CRUD, Central API health, approved
+`20260728_0011` as of the July 28 production acceptance rescan. Runtime-role CRUD, Central API
+health, approved
 inventory and supplier seeds, and authenticated Back Office access are verified; the weekly
 business report has never successfully published. Future production changes and restore drills remain
 approval-gated through `docs/runbooks/`.

@@ -35,6 +35,7 @@ def clean_pipeline_tables(pipeline_engine: Engine) -> Generator[None, None, None
             text(
                 "TRUNCATE inventory_discrepancies, stockout_events, stock_exits, stock_entries, "
                 "skus, clients, reporting.weekly_warehouse_client_performance, "
+                "reporting.hourly_activity_rollups, reporting.rollup_state, "
                 "reporting.pipeline_runs, reporting.incomplete_weeks, "
                 "reporting.source_ledger_state, reporting.worker_heartbeats "
                 "RESTART IDENTITY CASCADE"
@@ -43,4 +44,5 @@ def clean_pipeline_tables(pipeline_engine: Engine) -> Generator[None, None, None
         connection.execute(
             text("INSERT INTO reporting.source_ledger_state (id, updated_at) VALUES (1, now())")
         )
+        connection.execute(text("INSERT INTO reporting.rollup_state (id) VALUES (1)"))
     yield

@@ -79,6 +79,9 @@ class RunMetrics:
     rows_transformed: int
     rows_loaded: int
     source_watermark: datetime | None = None
+    source_cutoff_at: datetime | None = None
+    rows_scanned: int | None = None
+    rollup_rows_written: int | None = None
 
 
 def _safe_build_sha() -> str | None:
@@ -102,12 +105,13 @@ def _record_attempt(
     connection.execute(
         text(
             "INSERT INTO reporting.pipeline_run_attempts "
-            "(run_id, attempt, stage, started_at, ended_at, duration_ms, rows_scanned, "
-            "rollup_rows_written, error_code, error_type, retry_outcome, pipeline_version, build_sha) "
+            "(run_id, attempt, stage, started_at, ended_at, duration_ms, source_cutoff_at, "
+            "rows_scanned, rollup_rows_written, error_code, error_type, retry_outcome, "
+            "pipeline_version, build_sha) "
             "SELECT id, :attempt, COALESCE(:stage, current_stage, 'orchestration'), "
             "COALESCE(started_at, :ended_at), :ended_at, "
             "GREATEST(0, (EXTRACT(EPOCH FROM (:ended_at - COALESCE(started_at, :ended_at))) * 1000)::bigint), "
-            ":rows_scanned, :rollup_rows_written, :error_code, :error_type, :retry_outcome, "
+            ":source_cutoff_at, :rows_scanned, :rollup_rows_written, :error_code, :error_type, :retry_outcome, "
             "pipeline_version, :build_sha FROM reporting.pipeline_runs WHERE id = :run_id "
             "ON CONFLICT (run_id, attempt) DO NOTHING"
         ),
@@ -116,8 +120,17 @@ def _record_attempt(
             "attempt": claim.attempt,
             "stage": stage,
             "ended_at": ended_at,
-            "rows_scanned": metrics.rows_extracted if metrics is not None else None,
-            "rollup_rows_written": metrics.rows_loaded if metrics is not None else None,
+            "source_cutoff_at": metrics.source_cutoff_at if metrics is not None else None,
+            "rows_scanned": (
+                metrics.rows_scanned
+                if metrics is not None and metrics.rows_scanned is not None
+                else metrics.rows_extracted if metrics is not None else None
+            ),
+            "rollup_rows_written": (
+                metrics.rollup_rows_written
+                if metrics is not None and metrics.rollup_rows_written is not None
+                else metrics.rows_loaded if metrics is not None else None
+            ),
             "error_code": originating_code,
             "error_type": error_type,
             "retry_outcome": retry_outcome,
@@ -235,24 +248,33 @@ def _request_id(result_row: RowMapping | None) -> UUID | None:
 
 def enqueue_scheduled(
     engine: Engine,
-    business_date: date,
+    business_date: date | None,
     *,
+    scheduled_for: datetime | None = None,
     now: datetime | None = None,
 ) -> UUID | None:
-    """Insert exactly one scheduled request per Dallas business date."""
+    """Insert one idempotent cadence slot while preserving legacy daily inserts."""
     requested_at = now or utc_now()
+    if scheduled_for is not None and (
+        scheduled_for.tzinfo is None or scheduled_for.utcoffset() is None
+    ):
+        raise QueueValidationError("scheduled_for must be timezone-aware")
+    if business_date is None and scheduled_for is None:
+        raise QueueValidationError("scheduled request requires a date or cadence slot")
     with engine.begin() as connection:
         row = connection.execute(
             text(
                 "INSERT INTO reporting.pipeline_runs "
-                "(pipeline_name, trigger_type, requested_by, scheduled_business_date, requested_at, status) "
-                "VALUES (:pipeline_name, 'scheduled', 'system', :business_date, :requested_at, 'requested') "
-                "ON CONFLICT (pipeline_name, scheduled_business_date) "
-                "WHERE trigger_type = 'scheduled' DO NOTHING RETURNING id"
+                "(pipeline_name, trigger_type, requested_by, scheduled_business_date, scheduled_for, "
+                "requested_at, status) "
+                "VALUES (:pipeline_name, 'scheduled', 'system', :business_date, :scheduled_for, "
+                ":requested_at, 'requested') "
+                "ON CONFLICT DO NOTHING RETURNING id"
             ),
             {
                 "pipeline_name": PIPELINE_NAME,
                 "business_date": business_date,
+                "scheduled_for": scheduled_for,
                 "requested_at": requested_at,
             },
         ).mappings().one_or_none()

@@ -25,8 +25,10 @@ retention, and an isolated read-only PostgreSQL backup service with a distinct R
 adds shared server-derived queue/readiness states and startup gates that verify Prefect PostgreSQL
 state plus the digest-mapped server/client version contract before the worker can claim work.
 Reporting-reliability Phase 6.1 adds durable per-attempt history, bounded status evidence, fixed
-timeouts, exact-once failure accounting, and owner-approved persistent-log defaults; it is locally
-verified and awaits production acceptance before Phase 6.2.
+timeouts, exact-once failure accounting, and owner-approved persistent-log defaults; it is deployed
+and closed by documented owner exception. Phase 6.2 adds off-by-default durable hourly SQL rollups,
+fixed cutoffs, trailing 72-hour recomputation, exact reconciliation, and a 12-hour shadow cadence.
+It is locally verified through Alembic `20260728_0012` and awaits production shadow acceptance.
 
 Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
 generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline
@@ -43,6 +45,14 @@ uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pi
 uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines \
   --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
 uv build --project data
+```
+
+Run the opt-in Phase 6.2 production-volume gate only against the disposable local PostgreSQL on
+`127.0.0.1:55432`; it loads and then removes 2.12 million deterministic source/event rows:
+
+```bash
+REPORTING_PERFORMANCE_TEST=1 uv run --project data --extra dev pytest \
+  -c data/pyproject.toml tests/pipelines/test_rollup_performance.py -q -s
 ```
 
 Validate and reproduce the complete Phase 6.5 offline artifacts:

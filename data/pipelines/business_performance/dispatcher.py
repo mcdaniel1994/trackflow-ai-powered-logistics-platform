@@ -9,9 +9,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Engine
 
 from .queue import engine_from_environment, enqueue_scheduled, recover_stale_runs
+from .rollups import hourly_rollups_enabled
 
 DALLAS_TIMEZONE = ZoneInfo("America/Chicago")
-DAILY_REFRESH_TIME = time(hour=7)
+REFRESH_TIMES = (time(hour=7), time(hour=19))
 
 
 @dataclass(frozen=True)
@@ -28,13 +29,37 @@ def dallas_business_time(now: datetime) -> datetime:
 
 
 def dispatch_tick(engine: Engine, *, now: datetime | None = None) -> DispatchResult:
-    """Sweep stale leases, then enqueue today's request once local 07:00 has passed."""
+    """Sweep stale leases, then idempotently enqueue the latest 12-hour slot."""
     tick_at = now or datetime.now(UTC)
     local = dallas_business_time(tick_at)
     recovered = recover_stale_runs(engine, now=tick_at)
     created = False
-    if local.time().replace(tzinfo=None) >= DAILY_REFRESH_TIME:
-        created = enqueue_scheduled(engine, local.date(), now=tick_at) is not None
+    refresh_times = REFRESH_TIMES if hourly_rollups_enabled() else REFRESH_TIMES[:1]
+    eligible = [
+        refresh_time
+        for refresh_time in refresh_times
+        if local.time().replace(tzinfo=None) >= refresh_time
+    ]
+    if eligible:
+        refresh_time = eligible[-1]
+        scheduled_local = datetime.combine(
+            local.date(),
+            refresh_time,
+            tzinfo=DALLAS_TIMEZONE,
+        )
+        # Keep the legacy business-date identity on the morning slot so the
+        # prior image can run against this additive schema. The evening slot is
+        # uniquely identified by scheduled_for and leaves the legacy date NULL.
+        business_date = local.date() if refresh_time == refresh_times[0] else None
+        created = (
+            enqueue_scheduled(
+                engine,
+                business_date,
+                scheduled_for=scheduled_local.astimezone(UTC),
+                now=tick_at,
+            )
+            is not None
+        )
     return DispatchResult(
         business_date=local.date(),
         scheduled_run_created=created,

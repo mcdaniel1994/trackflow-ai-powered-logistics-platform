@@ -26,10 +26,12 @@ REQUIRED_SKU_COLUMNS = {
     "warehouse",
 }
 REQUIRED_REPORTING_TABLES = {
+    "hourly_activity_rollups",
     "weekly_warehouse_client_performance",
     "pipeline_runs",
     "pipeline_run_attempts",
     "incomplete_weeks",
+    "rollup_state",
     "source_ledger_state",
     "worker_heartbeats",
 }

@@ -2,16 +2,18 @@
 
 ## Status and safety boundary
 
-Reporting-reliability Phase 6.1 is implemented and locally verified through Alembic
-`20260728_0011`. It preserves a sanitized row for every execution attempt, separates core readiness
+Reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011`. It preserves a
+sanitized row for every execution attempt, separates core readiness
 from reporting verification, fixes watchdog/lease timing, and removes synchronous pipeline
-execution from maintenance. Production migration/deployment, fault injection, a 15-minute
-stopped-worker observation, and notification verification remain acceptance actions. The owner
+execution from maintenance. The Phase 6.1 image and migration were deployed successfully on July
+28. The owner directed the team to omit the remaining controlled acceptance exercises; that
+exception is recorded without representing them as passed. The owner
 approved the persisted-log defaults on 2026-07-28: 10 MiB rotation with nine backups, 14-day
 retention, a 250 MiB directory ceiling, and a persistent `reporting-logs` volume mounted at
 `/var/log/trackflow/reporting`. External acceptance and the rollback drill remain owner actions.
 Do not bypass the GitHub
-Production reviewer gate. Never
+Production reviewer gate. Phase 6.2 durable hourly SQL rollups are locally verified through
+`20260728_0012`, default off, and not yet deployed or live-reconciled. Never
 paste database or R2 credentials into commands, source control, logs, screenshots, or chat.
 
 The weekly report and `reporting.pipeline_runs` queue in TrackFlow PostgreSQL are the business
@@ -30,8 +32,10 @@ database backups must never become business-work authority; missing R2 cannot ch
 | `prefect-postgres-bootstrap` | idempotent SQL/role bootstrap | once per deployment | Prefect owner and backup-role credentials |
 | `prefect-db-backup` | `python /app/prefect_db_backup.py` | immediately, then every 24 h | read-only Prefect DB role; distinct `PREFECT_BACKUP_R2_*` token |
 
-The dispatcher checks America/Chicago time and creates at most one scheduled request after 07:00
-for each Dallas business date. Missed ticks recover on the next minute check. The PostgreSQL
+With `REPORTING_HOURLY_ROLLUPS_ENABLED=false` (the default), the dispatcher preserves the existing
+single 07:00 America/Chicago request and served reports remain unchanged. When the reviewed shadow
+flag is enabled, it uses idempotent 07:00 and 19:00 cadence slots. Missed ticks recover on the next
+minute check. The PostgreSQL
 queue and its lease/claim-token transitions remain authoritative. The private Prefect Server has no
 ports, work pool, or dispatch authority and uses its own persistent PostgreSQL volume. Do not create
 duplicate Coolify scheduled jobs.
@@ -54,6 +58,8 @@ docker compose -f compose.coolify.yaml config --no-interpolate
 docker build -f docker/central-api.Dockerfile -t trackflow-central-api:phase-10 .
 uv run --project services/central-api alembic -c services/central-api/alembic.ini upgrade head
 uv run --project data python data/pipelines/pipeline.py
+uv run --project data python -m pipelines.business_performance.rollups \
+  --start 2026-07-01T00:00:00Z --cutoff 2026-07-28T18:00:00Z
 ```
 
 Inspect safe queue metadata only:
@@ -70,7 +76,8 @@ Inspect attempt evidence separately; the parent row is current state, not the co
 history:
 
 ```sql
-SELECT run_id, attempt, started_at, finished_at, status, rows_loaded, error_code
+SELECT run_id, attempt, started_at, ended_at, stage, source_cutoff_at,
+       rows_scanned, rollup_rows_written, retry_outcome, error_code
 FROM reporting.pipeline_run_attempts
 ORDER BY started_at DESC
 LIMIT 50;
@@ -78,6 +85,28 @@ LIMIT 50;
 
 Do not query or expose `cache_nonce`, connection strings, or cache credentials in operational
 evidence.
+
+## Phase 6.2 shadow rollups
+
+`reporting.hourly_activity_rollups` uses canonical `LA`/`ZGZ` codes and stores counts/units for
+inbound movements, dispatch orders, losses, stockouts, and discrepancies. Discrepancy rate is
+derived; it is never stored. Each completed-hour key also records the immutable source cutoff,
+computation time, and pipeline version.
+
+`reporting.rollup_state` is a singleton. The worker captures one completed-hour UTC cutoff,
+recomputes from the prior committed cutoff plus an unconditional trailing 72 hours, upserts the
+dense hour × warehouse/client grid, verifies the claim in the publishing transaction, and only
+then advances the cursor. Manual week requests recompute the requested ISO week idempotently.
+
+The rollup job raises `statement_timeout` to 60 seconds only for its own reporting transactions.
+The Central API default remains 15 seconds. Any single aggregate exceeding 30 seconds, any
+reconciliation mismatch, or any discrepancy count above dispatch count blocks activation.
+
+Reconciliation compares raw entries, dispatches, losses, stockouts, and discrepancies independently
+against rollup sums at one fixed cutoff. Its CLI prints aggregate status only. Do not include raw
+rows or client identifiers in evidence. A mutable source or a back-dated source outside the
+trailing 72-hour window is the trigger to design dirty-bucket tracking; do not silently widen the
+window.
 
 ## Manual and forced requests
 
@@ -283,7 +312,7 @@ database. R2 objects are disposable and may be deleted without a database rollba
 - Reporting-result and backup R2 credentials are not provisioned; the verified absent-R2 path is
   non-blocking.
 - The production Prefect restore drill is not executed.
-- The rotated `MIGRATION_DATABASE_URL` is not yet stored in GitHub Production.
-- The first hardened production run and rollback drill are not executed.
+- The first hardened production deployment completed; the weekly computation still has no
+  successful publication and the rollback drill is not executed.
 - The persisted reporting-log settings are owner-approved and repository-wired; production
   permissions/retention and the Coolify notification destination still require live verification.

@@ -42,10 +42,13 @@ Prefect are healthy in production, but every pipeline run to date has failed and
 Two owner-approved specifications now cover the remaining work:
 [`spec.md`](docs/planning/remaining_planning/spec.md) for reporting reliability (Phases 6.1–6.4) and
 [`spec-6.5-sales-forecasting.md`](docs/planning/remaining_planning/spec-6.5-sales-forecasting.md)
-for sales forecasting (6.5), which runs in parallel. Phase 6.1 remains at its production-acceptance
-gate with owner-approved persisted-log defaults. Independent Phases 6.5.a and 6.5.b are complete
+for sales forecasting (6.5), which runs in parallel. The owner closed Phase 6.1 by explicit
+exception after choosing to omit its remaining controlled exercises. Independent Phases 6.5.a and 6.5.b are complete
 and owner-accepted as an offline evaluation: the formal chronological evaluation diagnoses
-overfitting and does not approve the artifact for operational use. Neither track has been deployed.
+overfitting and does not approve the artifact for operational use. Phase 6.1 is deployed at
+`13bba2e` / Alembic `20260728_0011`. Phase 6.2 hourly SQL rollups are implemented and locally
+verified through additive revision `20260728_0012`, with the shadow flag off by default; they are
+not yet deployed or production-reconciled. The 6.5 offline artifact is not deployed.
 Production soak, restore, outage,
 memory-headroom, and rollback acceptance gates remain owner-approved external work.
 
@@ -167,15 +170,17 @@ TrackFlow reflects real-world logistics challenges:
 
 - Production telemetry, live synthetic-but-canonical operations, and the durable weekly reporting
   queue remain in service; the weekly report itself has never successfully published.
-- Phase 6.1 locally adds durable per-attempt failure evidence, separate liveness/core
+- Phase 6.1 adds durable per-attempt failure evidence, separate liveness/core
   readiness/reporting verification, safe timeout ordering, and an owner-gated destructive reset.
+- Phase 6.2 adds off-by-default durable hourly SQL rollups, fixed cutoffs, trailing 72-hour
+  recomputation, exact reconciliation, and 12-hour cadence without changing served reports.
 - Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
   offline Random Forest baseline, five-fold chronological evaluation, and versioned
   metrics/model/report/chart artifacts.
 - The formal evaluation diagnoses overfitting and unstable temporal validation, so the artifact is
   explicitly not approved for serving or operational decisions. Engagement 6.5 is owner-accepted
-  as a complete offline evaluation; Phase 6.1 remains at production acceptance and Phase 6.2 has
-  not begun.
+  as a complete offline evaluation; Phase 6.1 is closed by documented owner exception, and Phase
+  6.2 is locally complete but not deployed or production-reconciled.
 
 📁 Locations: `data/`, `services/central-api/`, `uis/backoffice/`, and `.github/workflows/`
 
@@ -220,7 +225,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 locally verified with logging defaults approved, production acceptance pending before 6.2 |
+| 6 | Data pipelines & telemetry | 🚧 **Weekly reporting has never published**; Phase 6.1 closed by owner exception; Phase 6.2 locally verified through `20260728_0012`, production shadow acceptance pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
 | 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |

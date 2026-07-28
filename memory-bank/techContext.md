@@ -18,7 +18,8 @@
   `https://backoffice.forgehub.cloud`. Back Office is the only public service;
   Identity and Central API remain private on the Coolify network. Supabase uses
   separate runtime and migration roles through the IPv4 Supavisor Session
-  pooler, and the current schema is at Alembic revision `20260716_0010`.
+  pooler. Production is at Alembic revision `20260728_0011`; the additive Phase 6.2 local head is
+  `20260728_0012`.
 - `.github/workflows/release-checks.yml` runs production-target lint, typing,
   tests/coverage, and builds before `.github/workflows/container-images.yml`
   publishes Linux AMD64 commit-pinned images to GHCR.
@@ -31,7 +32,8 @@
   explicitly approved prior-revision deployment. Coolify
   `4.1.2` and the GitHub Production environment are configured for this path;
   its first live approved run exposed the July 15 Prefect init-mount defect; the repository hotfix
-  awaits approved redeployment and the rollback drill remains an owner step.
+  and Phase 6.1 were deployed successfully on July 28. The owner omitted the remaining controlled
+  Phase 6.1 exercises; the rollback drill remains an owner step.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
@@ -90,6 +92,11 @@ trackflow/
   a separate database. The worker renews leases independently, records token-CAS correlation/stage
   progress, fails closed on Prefect health, and is bounded by a hard watchdog. Optional R2 recovery
   results and backups are non-authoritative and separately credentialed.
+- Phase 6.2 adds `reporting.hourly_activity_rollups` and singleton `rollup_state`. Its Prefect-owned
+  shadow executor captures completed-hour UTC cutoffs, independently aggregates raw sources in SQL,
+  recomputes a trailing 72 hours, and publishes under claim verification. The
+  `REPORTING_HOURLY_ROLLUPS_ENABLED` flag defaults off; production remains on the legacy path until
+  shadow deployment and exact live reconciliation.
 - Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
   `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
   PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.

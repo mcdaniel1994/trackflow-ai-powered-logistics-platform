@@ -203,6 +203,50 @@ def test_prefect_flow_extracts_transforms_loads_and_finalizes(
     }
 
 
+def test_prefect_shadow_rollup_writes_hourly_only_and_records_attempt_evidence(
+    pipeline_engine: Engine,
+    database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("DATABASE_URL", database_url)
+    monkeypatch.setenv("REPORTING_HOURLY_ROLLUPS_ENABLED", "true")
+    _seed_activity(pipeline_engine)
+    enqueue_cli(
+        pipeline_engine,
+        requested_week_start=WEEK,
+        now=datetime.now(UTC) - timedelta(seconds=1),
+    )
+    with prefect_test_harness():
+        result = run_once(pipeline_engine, prefect_executor)
+    assert result.status == RunnerStatus.SUCCEEDED
+
+    with pipeline_engine.connect() as connection:
+        hourly_count = int(
+            connection.scalar(
+                text("SELECT count(*) FROM reporting.hourly_activity_rollups")
+            )
+        )
+        weekly_count = int(
+            connection.scalar(
+                text(
+                    "SELECT count(*) FROM "
+                    "reporting.weekly_warehouse_client_performance"
+                )
+            )
+        )
+        attempt = connection.execute(
+            text(
+                "SELECT source_cutoff_at, rows_scanned, rollup_rows_written "
+                "FROM reporting.pipeline_run_attempts"
+            )
+        ).mappings().one()
+    assert hourly_count == 7 * 24
+    assert weekly_count == 0
+    assert attempt["source_cutoff_at"] is not None
+    assert attempt["rows_scanned"] == 2
+    assert attempt["rollup_rows_written"] == hourly_count
+
+
 def test_failed_load_rolls_back_and_preserves_previous_success(
     pipeline_engine: Engine,
     database_url: str,
