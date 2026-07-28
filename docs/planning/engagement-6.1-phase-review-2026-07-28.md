@@ -2,8 +2,10 @@
 
 ## Status
 
-Phase 6.1 is implemented and locally verified. It is **not accepted or deployed**. Work stops here
-for the specification's owner review gate; Phases 6.2–6.4 have not started.
+Phase 6.1 is implemented, locally verified, and deployed as immutable image `13bba2e` through
+Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to skip the remaining controlled
+production exercises and proceed. Phase 6.1 is closed by that explicit exception; the omitted
+evidence is not represented as passing. Phase 6.2 has started; Phases 6.3–6.4 have not.
 
 The mandatory read-only production rescan was completed before code changes. Its redacted evidence
 is in [`engagement-6.1-production-rescan-2026-07-28.md`](engagement-6.1-production-rescan-2026-07-28.md).

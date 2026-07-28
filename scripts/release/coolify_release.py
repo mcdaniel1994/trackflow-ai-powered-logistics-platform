@@ -206,7 +206,7 @@ def entrypoint() -> None:
                 with open(github_env, "a", encoding="utf-8") as environment_file:
                     environment_file.write(f"PREVIOUS_IMAGE_TAG={image_tag}\n")
 
-        result = deploy(
+        deploy(
             CoolifyClient(
                 api_base=f"{base_url}/api/v1",
                 token=_required("COOLIFY_TOKEN"),
@@ -218,8 +218,6 @@ def entrypoint() -> None:
             poll_interval_seconds=float(os.environ.get("COOLIFY_POLL_INTERVAL_SECONDS", "20")),
             on_previous_image_tag=capture_previous,
         )
-        if os.environ.get("GITHUB_ACTIONS") == "true":
-            print(f"::add-mask::{result.deployment_uuid}")
         print("coolify_deployment_complete")
     except Exception as exc:
         print(f"coolify_release_failed error_type={type(exc).__name__}", file=sys.stderr)

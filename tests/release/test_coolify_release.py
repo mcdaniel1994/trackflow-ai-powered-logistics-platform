@@ -17,6 +17,7 @@ MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = MODULE
 SPEC.loader.exec_module(MODULE)
 ReleaseError = MODULE.ReleaseError
+ReleaseResult = MODULE.ReleaseResult
 deploy = MODULE.deploy
 
 OLD_TAG = "sha-" + "1" * 40
@@ -127,3 +128,28 @@ def test_failed_deployment_preserves_target_for_automatic_image_rollback() -> No
     )
     assert rollback.previous_image_tag == NEW_TAG
     assert client.records[0]["value"] == OLD_TAG
+
+
+def test_entrypoint_never_emits_deployment_identifier(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    deployment_identifier = "sensitive-deployment-coordinate"
+    monkeypatch.setenv("COOLIFY_BASE_URL", "https://coolify.example.test")
+    monkeypatch.setenv("COOLIFY_WEBHOOK", "https://coolify.example.test/webhook")
+    monkeypatch.setenv("COOLIFY_TOKEN", "test-token")
+    monkeypatch.setenv("COOLIFY_APPLICATION_UUID", "application-uuid")
+    monkeypatch.setenv("TARGET_IMAGE_TAG", NEW_TAG)
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setattr(
+        MODULE,
+        "deploy",
+        lambda *args, **kwargs: ReleaseResult(OLD_TAG, deployment_identifier),
+    )
+
+    MODULE.entrypoint()
+
+    captured = capsys.readouterr()
+    assert captured.out == "coolify_deployment_complete\n"
+    assert deployment_identifier not in captured.out
+    assert captured.err == ""
