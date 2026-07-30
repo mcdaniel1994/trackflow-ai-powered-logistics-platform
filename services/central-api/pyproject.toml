@@ -81,6 +81,23 @@ module = [
 ]
 ignore_missing_imports = true
 
+# The LangGraph/LangChain stack (Engagement 8) is typed but transitively pulls numpy, whose 1.26
+# stubs use 3.12-only `type` syntax that mypy rejects under python_version 3.11. Skip following into
+# these third-party libraries (treat as Any) rather than lowering our own strictness.
+[[tool.mypy.overrides]]
+module = [
+  "langgraph",
+  "langgraph.*",
+  "langchain_core",
+  "langchain_core.*",
+  "langchain_openai",
+  "langchain_openai.*",
+  "numpy",
+  "numpy.*",
+]
+follow_imports = "skip"
+ignore_missing_imports = true
+
 [tool.coverage.run]
 branch = true
 source = ["central_api"]

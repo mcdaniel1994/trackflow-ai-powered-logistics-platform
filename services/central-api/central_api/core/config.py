@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     rag_generation_model: str = "deepseek-chat"
     rag_top_k: int = 5
     rag_min_score: float = 0.35
+    # LangGraph agent (Engagement 8). Disabled unless enabled AND the RAG dependency is configured
+    # (the Phase 1 graph reuses retrieve/generate_answer). See docs/agents/agent-design.md.
+    agents_enabled: bool = False
+    agent_name: str = "trackflow-cx-agent"
+    # Content capture is opt-in: when False (default) no raw prompt/answer text is persisted to the
+    # trace store — only safe metadata (telemetry standard §8). When True, redacted previews are stored.
+    agents_store_content: bool = False
+    agents_trace_retention_days: int = 7
 
     @field_validator("database_url")
     @classmethod

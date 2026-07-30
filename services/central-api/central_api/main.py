@@ -19,6 +19,8 @@ from trackflow_auth import (  # type: ignore[import-untyped]
 
 from .core.config import get_settings
 from .db.session import get_session
+from .domains.agents.router import router as agents_router
+from .domains.agents.service import AgentError
 from .domains.incidents.router import router as incidents_router
 from .domains.incidents.service import IncidentError
 from .domains.inventory.router import router as inventory_router
@@ -157,6 +159,12 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @app.exception_handler(AgentError)
+    async def agent_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, AgentError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
     @app.exception_handler(SQLAlchemyError)
     async def database_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         """Catch unexpected driver failures while keeping URLs and SQL out of logs."""
@@ -228,6 +236,7 @@ def create_app() -> FastAPI:
     app.include_router(telemetry_router)
     app.include_router(reporting_router)
     app.include_router(rag_router)
+    app.include_router(agents_router)
     return app
 
 

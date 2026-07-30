@@ -45,7 +45,8 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
+                "TRUNCATE agent_runs, agent_node_steps, agent_tool_calls, "
+                "telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
                 "operations_feed_control, reporting.weekly_warehouse_client_performance, "
                 "reporting.hourly_activity_rollups, reporting.rollup_state, "
