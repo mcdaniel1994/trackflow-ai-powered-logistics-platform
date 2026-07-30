@@ -239,7 +239,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
 | 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
-| 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
+| 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
 | 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |

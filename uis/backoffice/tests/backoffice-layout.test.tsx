@@ -1,10 +1,23 @@
+import type { ReactNode } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminUsersView } from "@/components/admin/AdminUsersView";
 import { AppShell } from "@/components/AppShell";
+import { BackofficeViewProvider } from "@/lib/backoffice/view-context";
+import { ThemeProvider } from "@/lib/theme/context";
 import { createUser, listUsers } from "@/lib/auth/api";
 import type { AuthUser, CreatedUser } from "@/lib/auth/types";
+
+function renderShell(children: ReactNode) {
+  return render(
+    <ThemeProvider>
+      <BackofficeViewProvider>
+        <AppShell>{children}</AppShell>
+      </BackofficeViewProvider>
+    </ThemeProvider>,
+  );
+}
 
 const authMocks = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -84,11 +97,7 @@ describe("Back Office responsive layout", () => {
   });
 
   it("opens mobile navigation from a hamburger drawer and closes after navigation", async () => {
-    render(
-      <AppShell>
-        <div>Shell content</div>
-      </AppShell>,
-    );
+    renderShell(<div>Shell content</div>);
 
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
 
@@ -103,10 +112,11 @@ describe("Back Office responsive layout", () => {
     expect(openButton).toHaveAttribute("aria-expanded", "true");
 
     const drawerNavigation = within(drawer as HTMLElement);
-    const drawerList = drawerNavigation.getByRole("list");
-    expect(drawerList).toHaveClass("space-y-2");
+    const drawerList = drawerNavigation.getAllByRole("list")[0];
+    expect(drawerList).toHaveClass("space-y-1.5");
     expect(drawerList).not.toHaveClass("overflow-x-auto");
-    expect(drawerNavigation.getByRole("link", { name: /operations overview/i })).toBeInTheDocument();
+    // Grouped, category-based navigation (Knowledge Base / Business / Technical Data / …).
+    expect(drawerNavigation.getByRole("link", { name: /overview/i })).toHaveAttribute("href", "/");
     expect(drawerNavigation.getByRole("link", { name: /carrier scoring/i })).toBeInTheDocument();
     expect(drawerNavigation.getByRole("link", { name: /business reporting/i })).toHaveAttribute(
       "href",
@@ -118,20 +128,17 @@ describe("Back Office responsive layout", () => {
     );
     expect(drawerNavigation.getByRole("link", { name: /user management/i })).toBeInTheDocument();
 
-    const accountLink = drawerNavigation.getByRole("link", { name: /account/i });
-    accountLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
-    await userEvent.click(accountLink);
+    // Account and sign-out moved to the header menu, so navigating any link closes the drawer.
+    const suppliersLink = drawerNavigation.getByRole("link", { name: /suppliers/i });
+    suppliersLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await userEvent.click(suppliersLink);
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
   });
 
   it("uses one Inventory Management sidebar entry across every inventory route", () => {
     authMocks.pathname = "/backoffice/inventory/orders/outbound";
 
-    render(
-      <AppShell>
-        <div>Inventory content</div>
-      </AppShell>,
-    );
+    renderShell(<div>Inventory content</div>);
 
     const inventoryLink = screen.getByRole("link", { name: "Inventory Management" });
     expect(inventoryLink).toHaveAttribute("href", "/backoffice/inventory/products");

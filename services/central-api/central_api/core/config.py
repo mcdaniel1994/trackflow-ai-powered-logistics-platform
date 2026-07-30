@@ -43,6 +43,20 @@ class Settings(BaseSettings):
     identity_jwt_issuer: str = "trackflow-identity"
     identity_jwt_audience: str = "trackflow-backoffice"
     seed_user_uuid: str | None = None
+    # RAG knowledge base (Engagement 7). The query endpoint is disabled unless a
+    # vector store and both model API keys are configured; see docs/rag/rag-design.md.
+    rag_enabled: bool = False
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    rag_collection: str = "trackflow"
+    openai_api_key: str = ""
+    rag_embedding_model: str = "text-embedding-3-small"
+    rag_embedding_dim: int = 1536
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    rag_generation_model: str = "deepseek-chat"
+    rag_top_k: int = 5
+    rag_min_score: float = 0.35
 
     @field_validator("database_url")
     @classmethod

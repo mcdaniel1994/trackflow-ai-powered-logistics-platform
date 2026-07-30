@@ -1,5 +1,5 @@
-import { OperationsOverview } from "@/components/OperationsOverview";
+import { HomeDashboard } from "@/components/HomeDashboard";
 
 export default function Page() {
-  return <OperationsOverview />;
+  return <HomeDashboard />;
 }

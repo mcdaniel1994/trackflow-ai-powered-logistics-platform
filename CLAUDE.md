@@ -109,7 +109,27 @@ Then read the active engagement brief and the README for every folder being modi
   reporting reliability) and `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`
   (6.5, runs in parallel).
 
-- **Engagement 7+** - planned from `docs/planning/remaining_planning/`.
+- **Engagement 7** - RAG Knowledge Base
+  Implemented on branch `engagement-7-rag-knowledge-base` (pending owner review; not yet merged or
+  deployed). A salesperson-voiced knowledge assistant over four policy documents in
+  `docs/company-knowledge-base/`. Pure chunking in `data/process/rag.py`; the four functions
+  `setup`/`embed`/`retrieve`/`query` in `data/pipelines/rag.py` (no orchestration framework). Vector
+  store is self-hosted **Qdrant** (collection `trackflow`, 1536-dim cosine, added to `compose.yaml`
+  and `compose.coolify.yaml`). Embeddings: OpenAI `text-embedding-3-small`; generation: DeepSeek
+  `deepseek-chat`. Endpoint `POST /knowledge/query` lives in the new
+  `services/central-api/central_api/domains/rag/` domain and imports `query()` (no logic duplicated);
+  it returns `503` unless `RAG_ENABLED=true` and both provider keys are set. Indexing CLI
+  `rag-index` and eval harness `rag-eval` under `services/central-api/scripts/`; eval set at
+  `data/eval/test-queries.json`. The Back Office (`uis/backoffice/`) was refactored: home Ask-AI query
+  box (`components/knowledge/AskKnowledgeBox.tsx`), a category-grouped sidebar
+  (`lib/backoffice/navigation.ts`), a top-center Business ↔ Technical/Agent-OS toggle
+  (`components/ViewToggle.tsx` + `lib/backoffice/view-context.tsx`), a header account menu
+  (`components/account/AccountMenu.tsx`), dark mode (`lib/theme/context.tsx`), and an Agent-OS
+  placeholder (`app/(protected)/agent-os/`). Design: `docs/rag/rag-design.md`; plan + beginner guide
+  in `docs/planning/remaining_planning/07_rag_knowledge_base/`. Still open: provider keys, a
+  provisioned Qdrant, and running `rag-index` + `rag-eval` against live services.
+
+- **Engagement 8+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are
   requirements, not architecture). A project there with no approved specification is not ready to

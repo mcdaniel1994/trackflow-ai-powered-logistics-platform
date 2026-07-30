@@ -39,6 +39,7 @@ services/supplier-directory/data/suppliers.json
 
 # Generated local identity database (contains users/session hashes)
 services/identity/data/identity.json
+services/identity/data/*.bak*
 
 # Vercel
 .vercel/

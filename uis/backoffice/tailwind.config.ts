@@ -1,6 +1,7 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -28,6 +29,15 @@ const config: Config = {
           600: "#507092",
           700: "#3a6088",
           900: "#2b486e",
+        },
+        // Dark-mode surfaces for the refactored shell (Engagement 7).
+        ink: {
+          DEFAULT: "#0f1722",
+          900: "#0f1722",
+          800: "#141d2b",
+          700: "#1c2838",
+          600: "#26374b",
+          500: "#3a4d63",
         },
       },
       boxShadow: {

@@ -14,6 +14,23 @@
 
 ## Active
 
+- Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
+  implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
+  deployed. A salesperson-voiced assistant over the four policy documents in
+  `docs/company-knowledge-base/`: pure semantic-section chunking (`data/process/rag.py`) and the four
+  modular functions `setup`/`embed`/`retrieve`/`query` (`data/pipelines/rag.py`) written directly
+  against the Qdrant and OpenAI SDKs (no orchestration framework). Vector store is self-hosted Qdrant
+  (collection `trackflow`, 1536-dim cosine, deterministic uuid5 point IDs, added to both Compose
+  files); embeddings use OpenAI `text-embedding-3-small`, generation uses DeepSeek `deepseek-chat`.
+  `POST /knowledge/query` is a new `rag` domain in `services/central-api/` that imports `query()` and
+  never returns raw chunks/scores; it stays `503` until `RAG_ENABLED=true` and both provider keys are
+  set. 22 pipeline/chunking unit tests and 5 endpoint tests pass; 10-question eval set at
+  `data/eval/test-queries.json`. The Back Office was refactored (grouped sidebar, top-center
+  Business ↔ Technical/Agent-OS toggle, header account menu, home Ask-AI box, dark mode, Agent-OS
+  placeholder); all 126 frontend tests pass and the production build is clean. Design doc at
+  `docs/rag/rag-design.md`. Open before go-live: provider keys, a provisioned Qdrant, and running
+  `rag-index` + `rag-eval` (Recall@3 ≥ 80%, faithfulness) against live services.
+
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
   in progress. Reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
   Alembic `20260728_0011` and closed by explicit owner exception after the remaining controlled
