@@ -40,7 +40,7 @@ jobs:
               uv run --project data python data/pipelines/pipeline.py --week-start 2026-07-13
               uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
               uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process
-              uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
+              uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines/business_performance tests/pipelines/sales_forecasting tests/pipelines/rag tests/pipelines/agents --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
               uv build --project data
           - name: release-safety
             label: Release safety

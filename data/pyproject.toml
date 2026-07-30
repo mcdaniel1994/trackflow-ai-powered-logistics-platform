@@ -41,7 +41,15 @@ build-backend = "hatchling.build"
 packages = ["pipelines", "process"]
 
 [tool.pytest.ini_options]
-testpaths = ["../tests/pipelines"]
+# Category subfolders are targeted directly so the milestone/graded root shims
+# (tests/pipelines/test_pipeline.py, test_sales_forecasting.py, test_rag.py) are only collected
+# when named explicitly by an evaluator command, never double-collected in the full run.
+testpaths = [
+    "../tests/pipelines/business_performance",
+    "../tests/pipelines/sales_forecasting",
+    "../tests/pipelines/rag",
+    "../tests/pipelines/agents",
+]
 pythonpath = ["."]
 
 [tool.ruff]

@@ -120,7 +120,7 @@ Then read the active engagement brief and the README for every folder being modi
   `services/central-api/central_api/domains/rag/` domain and imports `query()` (no logic duplicated);
   it returns `503` unless `RAG_ENABLED=true` and both provider keys are set. Indexing CLI
   `rag-index` and eval harness `rag-eval` under `services/central-api/scripts/`; eval set at
-  `data/eval/test-queries.json`. The Back Office (`uis/backoffice/`) was refactored: home Ask-AI query
+  `data/eval/rag/test-queries.json`. The Back Office (`uis/backoffice/`) was refactored: home Ask-AI query
   box (`components/knowledge/AskKnowledgeBox.tsx`), a category-grouped sidebar
   (`lib/backoffice/navigation.ts`), a top-center Business ↔ Technical/Agent-OS toggle
   (`components/ViewToggle.tsx` + `lib/backoffice/view-context.tsx`), a header account menu

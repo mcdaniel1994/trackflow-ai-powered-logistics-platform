@@ -1,4 +1,4 @@
-"""Evaluate the RAG knowledge base against data/eval/test-queries.json (Engagement 7).
+"""Evaluate the RAG knowledge base against data/eval/rag/test-queries.json (Engagement 7).
 
 Measures Recall@3 (does the expected source_document appear in the top-3 retrieval?) and a
 simple faithfulness check (does the generated answer contain the required facts and avoid the
@@ -20,7 +20,7 @@ from pipelines.rag import query, retrieve  # type: ignore[import-untyped]
 from central_api.core.config import get_settings
 from central_api.domains.rag.config import build_rag_config, is_rag_configured
 
-EVAL_FILE = Path(__file__).resolve().parents[3] / "data" / "eval" / "test-queries.json"
+EVAL_FILE = Path(__file__).resolve().parents[3] / "data" / "eval" / "rag" / "test-queries.json"
 
 
 def entrypoint() -> None:

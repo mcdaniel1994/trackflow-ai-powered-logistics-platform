@@ -100,7 +100,7 @@ a short `Label:` lead, keeping retrieval hits traceable.
   `trackflow` collection and must match the embedding model.
 - **`embed()` is used consistently** at index time (each chunk) and query time (the question) — the
   same function, so vectors are comparable.
-- **`min_score` threshold:** default `0.35` (cosine), tuned against `data/eval/test-queries.json`.
+- **`min_score` threshold:** default `0.35` (cosine), tuned against `data/eval/rag/test-queries.json`.
   `retrieve()` filters hits below it in Python and may return fewer than `k` — or zero. On empty
   retrieval, `query()` still calls the model with an explicit "no context found" instruction so the
   answer is honest and model-generated, never invented.
@@ -132,7 +132,7 @@ a short `Label:` lead, keeping retrieval hits traceable.
 - **Faithfulness:** no rate/percentage/timeframe in an answer differs from the retrieved chunks.
 
 Run `python -m scripts.rag_eval` (needs a live Qdrant + provider keys) to score both against
-`data/eval/test-queries.json` (10 questions across all four documents, including a Black Friday case).
+`data/eval/rag/test-queries.json` (10 questions across all four documents, including a Black Friday case).
 
 ## 8. Configuration
 

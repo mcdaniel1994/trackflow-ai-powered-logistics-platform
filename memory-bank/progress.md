@@ -25,7 +25,7 @@
   `POST /knowledge/query` is a new `rag` domain in `services/central-api/` that imports `query()` and
   never returns raw chunks/scores; it stays `503` until `RAG_ENABLED=true` and both provider keys are
   set. 22 pipeline/chunking unit tests and 5 endpoint tests pass; 10-question eval set at
-  `data/eval/test-queries.json`. The Back Office was refactored (grouped sidebar, top-center
+  `data/eval/rag/test-queries.json`. The Back Office was refactored (grouped sidebar, top-center
   Business ↔ Technical/Agent-OS toggle, header account menu, home Ask-AI box, dark mode, Agent-OS
   placeholder); all 126 frontend tests pass and the production build is clean. Design doc at
   `docs/rag/rag-design.md`. Open before go-live: provider keys, a provisioned Qdrant, and running

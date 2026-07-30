@@ -44,7 +44,7 @@ answers **like a TrackFlow salesperson would** — with exact figures and never 
 🚧 **Implemented on branch `engagement-7-rag-knowledge-base`; pending owner review.** Delivered on the
 branch: the corpus (`docs/company-knowledge-base/`), the chunking + `setup`/`embed`/`retrieve`/`query`
 pipeline (`data/process/rag.py`, `data/pipelines/rag.py`), the `POST /knowledge/query` endpoint
-(`services/central-api/central_api/domains/rag/`), the eval set (`data/eval/test-queries.json`), unit
+(`services/central-api/central_api/domains/rag/`), the eval set (`data/eval/rag/test-queries.json`), unit
 and endpoint tests, the Back Office refactor + Ask-AI UI (`uis/backoffice/`), and design docs
 (`docs/rag/rag-design.md`). Embedding model: OpenAI `text-embedding-3-small`; generation model:
 DeepSeek `deepseek-chat`; vector store: self-hosted Qdrant (collection `trackflow`).
