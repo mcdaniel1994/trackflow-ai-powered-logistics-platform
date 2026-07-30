@@ -5,7 +5,8 @@ Four separated, single-responsibility functions back the whole system:
 * ``setup``    — read the corpus, chunk it, embed each chunk, and upsert into Qdrant (idempotent).
 * ``embed``    — turn one text into a vector with a dedicated embeddings model.
 * ``retrieve`` — embed a question, search Qdrant top-k, drop hits below ``min_score``.
-* ``query``    — the only public entrypoint: retrieve -> assemble prompt -> generate the answer.
+* ``generate_answer`` — turn already-retrieved chunks into a grounded answer (no retrieval).
+* ``query``    — the public convenience entrypoint: ``retrieve`` -> ``generate_answer``.
 
 ``embed`` is deliberately the same at index time and query time. The embeddings model
 (OpenAI ``text-embedding-3-small``) and the generation model (DeepSeek ``deepseek-chat``) are
@@ -221,14 +222,22 @@ def _assemble_context(chunks: list[dict[str, object]]) -> str:
     return "\n\n".join(blocks)
 
 
-def query(question: str, config: RagConfig | None = None) -> str:
-    """The only function external consumers should call: end-to-end question -> answer.
+def generate_answer(
+    question: str,
+    chunks: list[dict[str, object]],
+    config: RagConfig | None = None,
+) -> str:
+    """Generate a grounded answer from ALREADY-retrieved chunks (no retrieval here).
 
-    Orchestrates retrieve() -> prompt assembly -> generation model. The answer is ALWAYS
-    produced by the generation model from the retrieved context; raw chunks are never returned.
+    Split out of ``query()`` so an orchestrator (e.g. the Engagement 8 LangGraph agent) can run
+    retrieval as its own step and pass the surviving chunks straight into generation, instead of
+    re-running ``retrieve()`` inside a monolithic call. ``query()`` = ``retrieve()`` +
+    ``generate_answer()``; both paths produce identical prompts and output.
+
+    The answer is ALWAYS produced by the generation model from the given context; raw chunks are
+    never returned. An empty ``chunks`` list yields the honest "no context documented" prompt.
     """
     cfg = _resolve(config)
-    chunks = retrieve(question, config=cfg)
 
     if chunks:
         context = _assemble_context(chunks)
@@ -263,3 +272,14 @@ def query(question: str, config: RagConfig | None = None) -> str:
     if not answer or not answer.strip():
         raise RagPipelineError("generation model returned an empty answer")
     return str(answer).strip()
+
+
+def query(question: str, config: RagConfig | None = None) -> str:
+    """The only function external consumers should call: end-to-end question -> answer.
+
+    Orchestrates retrieve() -> generate_answer(). The answer is ALWAYS produced by the generation
+    model from the retrieved context; raw chunks are never returned.
+    """
+    cfg = _resolve(config)
+    chunks = retrieve(question, config=cfg)
+    return generate_answer(question, chunks, cfg)
