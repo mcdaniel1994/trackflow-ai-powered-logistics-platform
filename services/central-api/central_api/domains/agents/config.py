@@ -22,6 +22,9 @@ class AgentConfig:
     agent_name: str
     rag: RagConfig
     min_score: float
+    agent_model: str
+    route_timeout_seconds: float
+    ticket_timeout_seconds: float
 
 
 def is_agents_configured(settings: Settings) -> bool:
@@ -32,4 +35,11 @@ def is_agents_configured(settings: Settings) -> bool:
 def build_agent_config(settings: Settings) -> AgentConfig:
     """Translate validated settings into an AgentConfig (reusing the RAG mapping)."""
     rag = build_rag_config(settings)
-    return AgentConfig(agent_name=settings.agent_name, rag=rag, min_score=rag.min_score)
+    return AgentConfig(
+        agent_name=settings.agent_name,
+        rag=rag,
+        min_score=rag.min_score,
+        agent_model=settings.agent_model,
+        route_timeout_seconds=settings.agent_route_timeout_seconds,
+        ticket_timeout_seconds=settings.agent_ticket_timeout_seconds,
+    )

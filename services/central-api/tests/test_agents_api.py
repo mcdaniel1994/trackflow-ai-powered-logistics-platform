@@ -36,7 +36,10 @@ def _configure_agent(app: FastAPI, base: Settings, *, store_content: bool = Fals
     return configured
 
 
-def _result(*, status: str = "ok", answer: str | None = "30 days.", trace_id: str = "trace-abc") -> AgentRunResult:
+def _result(
+    *, status: str = "ok", answer: str | None = "30 days.", trace_id: str = "trace-abc",
+    with_tool: bool = False,
+) -> AgentRunResult:
     now = datetime.now(UTC)
     steps = [
         {"node_name": "receive_question", "sequence": 1, "status": "ok", "started_at": now.isoformat(),
@@ -44,9 +47,13 @@ def _result(*, status: str = "ok", answer: str | None = "30 days.", trace_id: st
         {"node_name": "retrieve", "sequence": 2, "status": "ok", "started_at": now.isoformat(),
          "ended_at": now.isoformat(), "duration_ms": 4, "tokens": None, "cost_usd": None, "notes": "chunks=1"},
     ]
+    tool_calls = (
+        [{"tool_name": "ticket_status", "status": "ok", "duration_ms": 12, "error_type": None}]
+        if with_tool else []
+    )
     return AgentRunResult(
-        trace_id=trace_id, agent_name="trackflow-cx-agent", status=status,
-        route_taken="rag", answer=answer, started_at=now, ended_at=now, duration_ms=5, steps=steps,
+        trace_id=trace_id, agent_name="trackflow-cx-agent", status=status, route_taken="rag",
+        answer=answer, started_at=now, ended_at=now, duration_ms=5, steps=steps, tool_calls=tool_calls,
     )
 
 
@@ -128,7 +135,9 @@ def test_get_missing_run_is_404(
 # --------------------------------------------------------------------------- trace store persistence
 
 def test_persist_run_stores_metadata_without_content(engine: Engine) -> None:
-    recorder.persist_run(_result(trace_id="trace-persist"), env="test", input_summary=None, output_summary=None)
+    recorder.persist_run(
+        _result(trace_id="trace-persist", with_tool=True), env="test", input_summary=None, output_summary=None
+    )
 
     with Session(engine) as session:
         repo = AgentRepository(session)
@@ -138,6 +147,9 @@ def test_persist_run_stores_metadata_without_content(engine: Engine) -> None:
         assert run.input_summary is None and run.output_summary is None  # content-free by default
         steps = repo.steps_for(run.id)
         assert [step.node_name for step in steps] == ["receive_question", "retrieve"]
+        calls = repo.tool_calls_for(run.id)
+        assert [call.tool_name for call in calls] == ["ticket_status"]
+        assert calls[0].status == "ok" and calls[0].input_summary is None  # tool args not persisted
 
 
 def test_content_capture_is_opt_in(engine: Engine) -> None:

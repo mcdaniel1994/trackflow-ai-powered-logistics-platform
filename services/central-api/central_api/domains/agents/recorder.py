@@ -15,7 +15,7 @@ from sqlmodel import Session
 
 from ...db.session import get_engine
 from .graph import AgentRunResult
-from .models import AgentNodeStep, AgentRun
+from .models import AgentNodeStep, AgentRun, AgentToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +69,18 @@ def persist_run(
                         tokens=step.get("tokens"),
                         cost_usd=step.get("cost_usd"),
                         notes=step.get("notes"),
+                    )
+                )
+            for call in result.tool_calls:
+                session.add(
+                    AgentToolCall(
+                        run_id=run.id,  # type: ignore[arg-type]
+                        tool_name=call["tool_name"],
+                        status=call["status"],
+                        duration_ms=call.get("duration_ms"),
+                        error_type=call.get("error_type"),
+                        input_summary=None,  # tool arguments are not persisted by default (§8)
+                        output_summary=None,
                     )
                 )
             session.commit()

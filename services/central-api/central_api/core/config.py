@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     # (the Phase 1 graph reuses retrieve/generate_answer). See docs/agents/agent-design.md.
     agents_enabled: bool = False
     agent_name: str = "trackflow-cx-agent"
+    # OpenAI model for the agent's routing/tool decisions (Part 2). Generation still reuses the RAG
+    # pipeline. Uses the already-configured OPENAI_API_KEY.
+    agent_model: str = "gpt-4o-mini"
+    agent_route_timeout_seconds: float = 8.0
+    agent_ticket_timeout_seconds: float = 5.0
     # Content capture is opt-in: when False (default) no raw prompt/answer text is persisted to the
     # trace store — only safe metadata (telemetry standard §8). When True, redacted previews are stored.
     agents_store_content: bool = False
