@@ -1,10 +1,23 @@
+import type { ReactNode } from "react";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminUsersView } from "@/components/admin/AdminUsersView";
 import { AppShell } from "@/components/AppShell";
-import { createUser, listUsers } from "@/lib/auth/api";
+import { BackofficeViewProvider } from "@/lib/backoffice/view-context";
+import { ThemeProvider } from "@/lib/theme/context";
+import { createUser, listUsers, updateUserJurisdiction } from "@/lib/auth/api";
 import type { AuthUser, CreatedUser } from "@/lib/auth/types";
+
+function renderShell(children: ReactNode) {
+  return render(
+    <ThemeProvider>
+      <BackofficeViewProvider>
+        <AppShell>{children}</AppShell>
+      </BackofficeViewProvider>
+    </ThemeProvider>,
+  );
+}
 
 const authMocks = vi.hoisted(() => ({
   logout: vi.fn(),
@@ -37,6 +50,7 @@ vi.mock("@/lib/auth/api", () => ({
   createUser: vi.fn(),
   listUsers: vi.fn(),
   revokeUserSessions: vi.fn(),
+  updateUserJurisdiction: vi.fn(),
   updateUserStatus: vi.fn(),
 }));
 
@@ -47,6 +61,7 @@ const users: AuthUser[] = [
     email: "admin@example.com",
     role: "admin",
     status: "active",
+    jurisdiction: "US",
     must_change_password: false,
     created_at: "2026-06-20T00:00:00Z",
     last_login_at: "2026-06-20T00:00:00Z",
@@ -57,6 +72,7 @@ const users: AuthUser[] = [
     email: "hannah@example.com",
     role: "user",
     status: "suspended",
+    jurisdiction: "ES",
     must_change_password: false,
     created_at: "2026-06-20T00:00:00Z",
     last_login_at: "2026-06-20T00:00:00Z",
@@ -69,6 +85,7 @@ const createdUser: CreatedUser = {
   email: "new.worker@example.com",
   role: "user",
   status: "active",
+  jurisdiction: "US",
   must_change_password: true,
   created_at: "2026-06-20T00:00:00Z",
   last_login_at: null,
@@ -84,11 +101,7 @@ describe("Back Office responsive layout", () => {
   });
 
   it("opens mobile navigation from a hamburger drawer and closes after navigation", async () => {
-    render(
-      <AppShell>
-        <div>Shell content</div>
-      </AppShell>,
-    );
+    renderShell(<div>Shell content</div>);
 
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
 
@@ -103,10 +116,11 @@ describe("Back Office responsive layout", () => {
     expect(openButton).toHaveAttribute("aria-expanded", "true");
 
     const drawerNavigation = within(drawer as HTMLElement);
-    const drawerList = drawerNavigation.getByRole("list");
-    expect(drawerList).toHaveClass("space-y-2");
+    const drawerList = drawerNavigation.getAllByRole("list")[0];
+    expect(drawerList).toHaveClass("space-y-1.5");
     expect(drawerList).not.toHaveClass("overflow-x-auto");
-    expect(drawerNavigation.getByRole("link", { name: /operations overview/i })).toBeInTheDocument();
+    // Grouped, category-based navigation (Knowledge Base / Business / Technical Data / …).
+    expect(drawerNavigation.getByRole("link", { name: /overview/i })).toHaveAttribute("href", "/");
     expect(drawerNavigation.getByRole("link", { name: /carrier scoring/i })).toBeInTheDocument();
     expect(drawerNavigation.getByRole("link", { name: /business reporting/i })).toHaveAttribute(
       "href",
@@ -118,20 +132,17 @@ describe("Back Office responsive layout", () => {
     );
     expect(drawerNavigation.getByRole("link", { name: /user management/i })).toBeInTheDocument();
 
-    const accountLink = drawerNavigation.getByRole("link", { name: /account/i });
-    accountLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
-    await userEvent.click(accountLink);
+    // Account and sign-out moved to the header menu, so navigating any link closes the drawer.
+    const suppliersLink = drawerNavigation.getByRole("link", { name: /suppliers/i });
+    suppliersLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
+    await userEvent.click(suppliersLink);
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
   });
 
   it("uses one Inventory Management sidebar entry across every inventory route", () => {
     authMocks.pathname = "/backoffice/inventory/orders/outbound";
 
-    render(
-      <AppShell>
-        <div>Inventory content</div>
-      </AppShell>,
-    );
+    renderShell(<div>Inventory content</div>);
 
     const inventoryLink = screen.getByRole("link", { name: "Inventory Management" });
     expect(inventoryLink).toHaveAttribute("href", "/backoffice/inventory/products");
@@ -221,7 +232,7 @@ describe("Back Office responsive layout", () => {
     await userEvent.type(screen.getByLabelText(/^email$/i), "new.worker@example.com");
     await userEvent.click(screen.getByRole("button", { name: /^create user$/i }));
 
-    expect(createUser).toHaveBeenCalledWith("New Worker", "new.worker@example.com");
+    expect(createUser).toHaveBeenCalledWith("New Worker", "new.worker@example.com", "US");
     expect(await screen.findByText(/setup email sent to new\.worker@example\.com/i)).toBeInTheDocument();
     expect(screen.getByText("temporary-passphrase")).toBeInTheDocument();
   });
@@ -236,5 +247,18 @@ describe("Back Office responsive layout", () => {
 
     expect(await screen.findByText(/setup email could not be sent automatically/i)).toBeInTheDocument();
     expect(screen.getByText("temporary-passphrase")).toBeInTheDocument();
+  });
+
+  it("lets an administrator assign a user's policy jurisdiction", async () => {
+    vi.mocked(updateUserJurisdiction).mockResolvedValue({ ...users[1], jurisdiction: "US" });
+    render(<AdminUsersView />);
+
+    const selects = await screen.findAllByRole("combobox", {
+      name: "Policy jurisdiction for hannah@example.com",
+    });
+    await userEvent.selectOptions(selects[0], "US");
+
+    expect(updateUserJurisdiction).toHaveBeenCalledWith("user-1", "US");
+    expect(await screen.findByText(/hannah@example\.com now uses US policy jurisdiction/i)).toBeInTheDocument();
   });
 });

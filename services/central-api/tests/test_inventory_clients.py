@@ -1,5 +1,6 @@
 """Client administration, UUID ownership, and threshold contract tests."""
 
+from collections.abc import Callable
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -125,3 +126,16 @@ def test_client_and_product_update_not_found_and_duplicate_rename(
     empty_update = client.patch("/inventory/products/9999", json={}, headers=auth_headers)
     assert empty_update.status_code == 422
     assert first["client_id"] != second["client_id"]
+
+
+def test_inventory_oauth_tokens_are_read_only(
+    client: TestClient,
+    oauth_token_factory: Callable[..., str],
+    product_payload: dict[str, object],
+) -> None:
+    headers = {"Authorization": f"Bearer {oauth_token_factory(scopes='inventory:read')}"}
+    assert client.get("/inventory/products", headers=headers).status_code == 200
+    assert client.post("/inventory/products", json=product_payload, headers=headers).status_code == 401
+
+    wrong_scope = {"Authorization": f"Bearer {oauth_token_factory(scopes='incidents:read')}"}
+    assert client.get("/inventory/products", headers=wrong_scope).status_code == 403

@@ -18,9 +18,16 @@ from trackflow_auth import (
 
 from .config import IdentitySettings, get_settings
 from .constants import STATUS_DISABLED, STATUS_SUSPENDED
-from .dependencies import get_current_user, require_admin, require_password_current, require_self_or_admin, verifier_config
+from .dependencies import (
+    get_current_user,
+    require_admin,
+    require_password_current,
+    require_self_or_admin,
+    verifier_config,
+)
 from .email import ResendEmailSender
 from .models import (
+    AdminJurisdictionUpdate,
     AdminStatusUpdate,
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -34,15 +41,25 @@ from .models import (
     UserUpdate,
     to_public_user,
 )
+from .oauth import OAuthService
+from .oauth_routes import router as oauth_router
 from .repository import (
     DuplicateEmailError,
     TinyDBIdentityStore,
+    TinyDBOAuthClientRepository,
+    TinyDBOAuthCodeRepository,
     TinyDBPasswordResetRepository,
     TinyDBSessionRepository,
     TinyDBUserRepository,
 )
 from .security import clear_auth_cookies, set_auth_cookies, validate_jwt_signing_keys
-from .service import AuthService, AuthenticationError, NotFoundError, PasswordResetError, UserService
+from .service import (
+    AuthService,
+    AuthenticationError,
+    NotFoundError,
+    PasswordResetError,
+    UserService,
+)
 
 PASSWORD_RESET_MESSAGE = "If that address is registered, you'll receive a link shortly."
 
@@ -58,18 +75,33 @@ def create_app() -> FastAPI:
         user_repository = TinyDBUserRepository(store)
         session_repository = TinyDBSessionRepository(store)
         password_reset_repository = TinyDBPasswordResetRepository(store)
-        email_sender = ResendEmailSender(api_key=settings.resend_api_key, sender=settings.email_sender)
+        oauth_client_repository = TinyDBOAuthClientRepository(store)
+        oauth_code_repository = TinyDBOAuthCodeRepository(store)
+        email_sender = ResendEmailSender(
+            api_key=settings.resend_api_key, sender=settings.email_sender
+        )
         app.state.identity_settings = settings
         app.state.identity_store = store
         app.state.user_service = UserService(user_repository)
-        app.state.auth_service = AuthService(user_repository, session_repository, password_reset_repository, email_sender)
+        app.state.auth_service = AuthService(
+            user_repository, session_repository, password_reset_repository, email_sender
+        )
+        app.state.oauth_service = OAuthService(
+            user_repository,
+            oauth_client_repository,
+            oauth_code_repository,
+            settings,
+        )
         try:
             yield
         finally:
             store.close()
 
     app = FastAPI(title="TrackFlow Identity", version="0.1.0", lifespan=lifespan)
-    app.add_exception_handler(RequestValidationError, safe_request_validation_exception_handler)
+    app.include_router(oauth_router)
+    app.add_exception_handler(
+        RequestValidationError, safe_request_validation_exception_handler
+    )
 
     initial_settings = get_settings()
     app.add_middleware(
@@ -106,11 +138,15 @@ def create_app() -> FastAPI:
         return get_current_user(request, user_service(), settings())
 
     # Ensures temp-password users cannot use ordinary protected routes.
-    def password_current_user(user: dict[str, object] = Depends(current_user)) -> dict[str, object]:
+    def password_current_user(
+        user: dict[str, object] = Depends(current_user),
+    ) -> dict[str, object]:
         return require_password_current(user)
 
     # Ensures only admins can reach user-management endpoints.
-    def admin_user(user: dict[str, object] = Depends(password_current_user)) -> dict[str, object]:
+    def admin_user(
+        user: dict[str, object] = Depends(password_current_user),
+    ) -> dict[str, object]:
         return require_admin(user)
 
     # Applies double-submit CSRF checks to cookie-backed writes.
@@ -119,7 +155,9 @@ def create_app() -> FastAPI:
 
     # Returns a generic credential error to avoid account enumeration.
     def auth_error() -> HTTPException:
-        return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+        return HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
+        )
 
     # Blocks admin actions that would remove the operator's own access or the final active admin.
     def prevent_admin_lockout(user_id: str, admin: dict[str, object]) -> None:
@@ -129,7 +167,9 @@ def create_app() -> FastAPI:
                 detail="Admins cannot suspend or disable their own account",
             )
         try:
-            would_remove_last_admin = user_service().would_remove_last_active_admin(user_id)
+            would_remove_last_admin = user_service().would_remove_last_active_admin(
+                user_id
+            )
         except NotFoundError as exc:
             raise HTTPException(status_code=404, detail="User not found") from exc
         if would_remove_last_admin:
@@ -147,7 +187,9 @@ def create_app() -> FastAPI:
     @app.post("/auth/login", response_model=UserPublic)
     async def login(payload: LoginRequest, response: Response) -> UserPublic:
         try:
-            tokens = auth_service().login(email=payload.email, password=payload.password, settings=settings())
+            tokens = auth_service().login(
+                email=payload.email, password=payload.password, settings=settings()
+            )
         except AuthenticationError as exc:
             raise auth_error() from exc
         set_auth_cookies(
@@ -160,15 +202,23 @@ def create_app() -> FastAPI:
         return tokens.user
 
     # Rotates the refresh session and replaces auth cookies.
-    @app.post("/auth/refresh", response_model=UserPublic, dependencies=[Depends(csrf_guard)])
+    @app.post(
+        "/auth/refresh", response_model=UserPublic, dependencies=[Depends(csrf_guard)]
+    )
     async def refresh(request: Request, response: Response) -> UserPublic:
         refresh_token = request.cookies.get(REFRESH_COOKIE_NAME)
         if not refresh_token:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            )
         try:
-            tokens = auth_service().refresh(refresh_token=refresh_token, settings=settings())
+            tokens = auth_service().refresh(
+                refresh_token=refresh_token, settings=settings()
+            )
         except AuthenticationError as exc:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated"
+            ) from exc
         set_auth_cookies(
             response,
             access_token=tokens.access_token,
@@ -236,9 +286,14 @@ def create_app() -> FastAPI:
     @app.post("/auth/reset-password", response_model=StatusResponse)
     async def reset_password(payload: ResetPasswordRequest) -> StatusResponse:
         try:
-            auth_service().reset_password(token=payload.token, new_password=payload.new_password)
+            auth_service().reset_password(
+                token=payload.token, new_password=payload.new_password
+            )
         except PasswordResetError as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset token") from exc
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token",
+            ) from exc
         return StatusResponse(status="ok")
 
     # Creates a normal user with a one-time temporary password.
@@ -251,7 +306,9 @@ def create_app() -> FastAPI:
         try:
             created = user_service().create_user_with_temp_password(payload)
         except DuplicateEmailError as exc:
-            raise HTTPException(status_code=409, detail="Email is already registered") from exc
+            raise HTTPException(
+                status_code=409, detail="Email is already registered"
+            ) from exc
         setup_email_sent = auth_service().send_account_setup_email(
             user_id=created.id,
             to_email=created.email,
@@ -261,12 +318,16 @@ def create_app() -> FastAPI:
 
     # Lists safe user records for admin management.
     @app.get("/users", response_model=list[UserPublic])
-    async def list_users(_admin: dict[str, object] = Depends(admin_user)) -> list[UserPublic]:
+    async def list_users(
+        _admin: dict[str, object] = Depends(admin_user),
+    ) -> list[UserPublic]:
         return user_service().list_users()
 
     # Returns one safe user record after self-or-admin authorization.
     @app.get("/users/{user_id}", response_model=UserPublic)
-    async def get_user(user_id: str, user: dict[str, object] = Depends(password_current_user)) -> UserPublic:
+    async def get_user(
+        user_id: str, user: dict[str, object] = Depends(password_current_user)
+    ) -> UserPublic:
         require_self_or_admin(user, user_id)
         try:
             return user_service().get_public_user(user_id)
@@ -304,6 +365,18 @@ def create_app() -> FastAPI:
         if payload.status in {STATUS_SUSPENDED, STATUS_DISABLED}:
             auth_service().revoke_all_for_user(user_id)
         return user
+
+    @app.patch("/users/{user_id}/jurisdiction", response_model=UserPublic)
+    async def update_jurisdiction(
+        user_id: str,
+        payload: AdminJurisdictionUpdate,
+        _admin: dict[str, object] = Depends(admin_user),
+        _csrf: None = Depends(csrf_guard),
+    ) -> UserPublic:
+        try:
+            return user_service().set_jurisdiction(user_id, payload.jurisdiction)
+        except NotFoundError as exc:
+            raise HTTPException(status_code=404, detail="User not found") from exc
 
     # Lets admins revoke all refresh sessions without changing account status.
     @app.post("/users/{user_id}/sessions/revoke")

@@ -16,16 +16,16 @@ standard is the source of truth for *what* must pass; the workflows here are *ho
 | File | Trigger | Purpose |
 |---|---|---|
 | `release-checks.yml` | Reusable `workflow_call` | Runs production-target Ruff/mypy/pytest/coverage/build checks and npm type-check/lint/test/build checks with a non-fail-fast matrix. |
-| `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Calls release checks first, builds Linux AMD64 images on PRs, and publishes `main` plus immutable `sha-<commit>` tags only for non-PR runs. |
+| `container-images.yml` | Relevant PR, push to `main`, and manual dispatch | Calls release checks first, builds Linux AMD64 Identity, Central API, Back Office, and MCP images on PRs, and publishes `main` plus immutable `sha-<commit>` tags only for non-PR runs. |
 | `deploy-production.yml` | Reusable `workflow_call` and manual dispatch | Waits for Production approval, migrates/verifies the target image, deploys its immutable SHA, polls readiness and smoke tests, and restores the prior image on failure. Manual `image-rollback` never downgrades the database. |
 
-`container-images.yml` calls `deploy-production.yml` only after all three images publish from
+`container-images.yml` calls `deploy-production.yml` only after all four images publish from
 `main`. Pull requests run release checks and image builds but never publish or deploy. Production
 deployments are serialized and are not cancelled after they start.
 
 The release workflow now machine-enforces:
 
-- Identity, Central API, and Data Pipelines Ruff, mypy, pytest coverage, and package builds. Data
+- Identity, Central API, MCP, and Data Pipelines Ruff, mypy, pytest coverage, and package builds. Data
   Pipelines also executes its cache-disabled direct CLI before the test suite. Central API and Data
   Pipelines retain configured 90% coverage floors and test after applying the schema to ephemeral
   local PostgreSQL. Identity reports coverage without a hard floor.
@@ -51,10 +51,10 @@ Add these only when implemented with real behavior:
 
 ## How PRs, merges, and deployments interact
 
-- **Pull request →** relevant changes call `release-checks.yml` and build all three images without
+- **Pull request →** relevant changes call `release-checks.yml` and build all four images without
   publishing them. Future `ci.yml`, `e2e.yml`, and `security.yml` workflows should become required
   status checks when implemented.
-- **Merge to `main` →** relevant changes pass release checks, publish all three immutable images,
+- **Merge to `main` →** relevant changes pass release checks, publish all four immutable images,
   then wait at the GitHub `production` Environment approval gate.
 - **Production approval →** `deploy-production.yml` confirms manifests, runs the image's fail-closed
   migration/grant verifier, updates only the Coolify image tag, deploys, polls readiness, and checks

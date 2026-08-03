@@ -14,6 +14,10 @@ dependencies = [
   "trackflow-incidents",
   "trackflow-data-pipelines",
   "uvicorn[standard]>=0.35.0",
+  "langgraph>=1.2.10",
+  "langchain-openai>=1.4.1",
+  "langchain-mcp-adapters==0.3.1",
+  "mcp>=1.24,<2",
 ]
 
 [project.scripts]
@@ -21,12 +25,13 @@ seed-inventory = "central_api.domains.inventory.seed:entrypoint"
 seed-incidents = "central_api.domains.incidents.seed:entrypoint"
 seed-suppliers = "central_api.domains.suppliers.seed:entrypoint"
 central-api-migrate = "scripts.production_migrate:entrypoint"
+rag-index = "scripts.rag_index:entrypoint"
 
 [project.optional-dependencies]
 dev = [
   "build>=1.2.2",
   "httpx>=0.28.0",
-  "mypy>=1.16.0",
+  "mypy>=1.16,<2",
   "pytest>=8.4.0",
   "pytest-cov>=6.2.0",
   "ruff>=0.12.0",
@@ -41,6 +46,9 @@ trackflow-data-pipelines = { path = "../../data", editable = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["central_api"]
@@ -76,6 +84,23 @@ module = [
   "trackflow_auth",
   "trackflow_auth.*",
 ]
+ignore_missing_imports = true
+
+# The LangGraph/LangChain stack (Engagement 8) is typed but transitively pulls numpy, whose 1.26
+# stubs use 3.12-only `type` syntax that mypy rejects under python_version 3.11. Skip following into
+# these third-party libraries (treat as Any) rather than lowering our own strictness.
+[[tool.mypy.overrides]]
+module = [
+  "langgraph",
+  "langgraph.*",
+  "langchain_core",
+  "langchain_core.*",
+  "langchain_openai",
+  "langchain_openai.*",
+  "numpy",
+  "numpy.*",
+]
+follow_imports = "skip"
 ignore_missing_imports = true
 
 [tool.coverage.run]

@@ -89,7 +89,8 @@ jobs:
           for image in \
             ghcr.io/mcdaniel1994/trackflow-identity \
             ghcr.io/mcdaniel1994/trackflow-central-api \
-            ghcr.io/mcdaniel1994/trackflow-backoffice
+            ghcr.io/mcdaniel1994/trackflow-backoffice \
+            ghcr.io/mcdaniel1994/trackflow-mcp
           do
             docker buildx imagetools inspect "$image:$IMAGE_TAG" > /dev/null
           done

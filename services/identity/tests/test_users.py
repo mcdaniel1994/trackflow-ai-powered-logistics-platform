@@ -16,7 +16,9 @@ class RecordingEmailSender:
     def __init__(self) -> None:
         self.messages: list[dict[str, object]] = []
 
-    def send_password_reset(self, *, to_email: str, reset_link: str, expires_minutes: int) -> None:
+    def send_password_reset(
+        self, *, to_email: str, reset_link: str, expires_minutes: int
+    ) -> None:
         self.messages.append(
             {
                 "kind": "password_reset",
@@ -26,7 +28,9 @@ class RecordingEmailSender:
             }
         )
 
-    def send_account_setup(self, *, to_email: str, setup_link: str, expires_minutes: int) -> None:
+    def send_account_setup(
+        self, *, to_email: str, setup_link: str, expires_minutes: int
+    ) -> None:
         self.messages.append(
             {
                 "kind": "account_setup",
@@ -38,15 +42,27 @@ class RecordingEmailSender:
 
 
 class FailingAccountSetupSender:
-    def send_password_reset(self, *, to_email: str, reset_link: str, expires_minutes: int) -> None:
-        raise AssertionError("password reset email should not be sent during user creation")
+    def send_password_reset(
+        self, *, to_email: str, reset_link: str, expires_minutes: int
+    ) -> None:
+        raise AssertionError(
+            "password reset email should not be sent during user creation"
+        )
 
-    def send_account_setup(self, *, to_email: str, setup_link: str, expires_minutes: int) -> None:
+    def send_account_setup(
+        self, *, to_email: str, setup_link: str, expires_minutes: int
+    ) -> None:
         raise EmailDeliveryError("simulated provider failure")
 
 
-def create_normal_user(client: TestClient, email: str = "Worker@TrackFlow.test") -> dict:
-    response = client.post("/users", json={"name": "Worker User", "email": email}, headers=csrf_headers(client))
+def create_normal_user(
+    client: TestClient, email: str = "Worker@TrackFlow.test"
+) -> dict:
+    response = client.post(
+        "/users",
+        json={"name": "Worker User", "email": email, "jurisdiction": "US"},
+        headers=csrf_headers(client),
+    )
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -67,7 +83,9 @@ def _latest_token(sender: RecordingEmailSender) -> str:
     return token
 
 
-def test_admin_create_user_returns_temp_password_and_emails_setup_link(client: TestClient):
+def test_admin_create_user_returns_temp_password_and_emails_setup_link(
+    client: TestClient,
+):
     admin = create_admin(client)
     login(client, admin["email"], "admin-passphrase")
     sender = _use_email_sender(client, RecordingEmailSender())
@@ -77,6 +95,7 @@ def test_admin_create_user_returns_temp_password_and_emails_setup_link(client: T
     assert created["email"] == "worker@trackflow.test"
     assert created["role"] == "user"
     assert created["status"] == "active"
+    assert created["jurisdiction"] == "US"
     assert created["must_change_password"] is True
     assert created["temporary_password"]
     assert created["setup_email_sent"] is True
@@ -100,10 +119,22 @@ def test_admin_create_user_returns_temp_password_and_emails_setup_link(client: T
 
     duplicate = client.post(
         "/users",
-        json={"name": "Duplicate", "email": "worker@trackflow.test"},
+        json={
+            "name": "Duplicate",
+            "email": "worker@trackflow.test",
+            "jurisdiction": "US",
+        },
         headers=csrf_headers(client),
     )
     assert duplicate.status_code == 409
+
+    jurisdiction = client.patch(
+        f"/users/{created['id']}/jurisdiction",
+        json={"jurisdiction": "ES"},
+        headers=csrf_headers(client),
+    )
+    assert jurisdiction.status_code == 200
+    assert jurisdiction.json()["jurisdiction"] == "ES"
 
     reset = client.post(
         "/auth/reset-password",
@@ -111,8 +142,20 @@ def test_admin_create_user_returns_temp_password_and_emails_setup_link(client: T
     )
     assert reset.status_code == 200
     client.cookies.clear()
-    assert client.post("/auth/login", json={"email": created["email"], "password": created["temporary_password"]}).status_code == 401
-    assert client.post("/auth/login", json={"email": created["email"], "password": "new-safe-passphrase"}).status_code == 200
+    assert (
+        client.post(
+            "/auth/login",
+            json={"email": created["email"], "password": created["temporary_password"]},
+        ).status_code
+        == 401
+    )
+    assert (
+        client.post(
+            "/auth/login",
+            json={"email": created["email"], "password": "new-safe-passphrase"},
+        ).status_code
+        == 200
+    )
     assert client.get("/auth/me").json()["must_change_password"] is False
 
 
@@ -147,7 +190,10 @@ def test_must_change_password_lockout_and_change_password_flow(client: TestClien
 
     changed = client.post(
         "/auth/change-password",
-        json={"current_password": created["temporary_password"], "new_password": "new-safe-passphrase"},
+        json={
+            "current_password": created["temporary_password"],
+            "new_password": "new-safe-passphrase",
+        },
         headers=csrf_headers(client),
     )
     assert changed.status_code == 200
@@ -164,7 +210,10 @@ def test_user_authorization_and_no_idor(client: TestClient):
     login(client, first["email"], first["temporary_password"])
     client.post(
         "/auth/change-password",
-        json={"current_password": first["temporary_password"], "new_password": "first-passphrase"},
+        json={
+            "current_password": first["temporary_password"],
+            "new_password": "first-passphrase",
+        },
         headers=csrf_headers(client),
     )
 
@@ -197,7 +246,13 @@ def test_status_suspend_and_delete_revoke_sessions(client: TestClient):
     assert suspended.status_code == 200
     assert suspended.json()["status"] == "suspended"
 
-    assert client.post("/auth/login", json={"email": created["email"], "password": created["temporary_password"]}).status_code == 401
+    assert (
+        client.post(
+            "/auth/login",
+            json={"email": created["email"], "password": created["temporary_password"]},
+        ).status_code
+        == 401
+    )
     client.cookies.set(REFRESH_COOKIE_NAME, old_refresh)
     assert client.post("/auth/refresh", headers=csrf_headers(client)).status_code == 401
 
@@ -218,13 +273,18 @@ def test_admin_cannot_lock_out_own_account(client: TestClient):
             headers=csrf_headers(client),
         )
         assert response.status_code == 400
-        assert response.json()["detail"] == "Admins cannot suspend or disable their own account"
+        assert (
+            response.json()["detail"]
+            == "Admins cannot suspend or disable their own account"
+        )
         assert client.get(f"/users/{admin['id']}").json()["status"] == "active"
         assert client.get("/auth/me").status_code == 200
 
     deleted = client.delete(f"/users/{admin['id']}", headers=csrf_headers(client))
     assert deleted.status_code == 400
-    assert deleted.json()["detail"] == "Admins cannot suspend or disable their own account"
+    assert (
+        deleted.json()["detail"] == "Admins cannot suspend or disable their own account"
+    )
     assert client.get(f"/users/{admin['id']}").json()["status"] == "active"
     assert client.get("/auth/me").status_code == 200
 

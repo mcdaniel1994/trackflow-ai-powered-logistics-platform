@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .constants import VALID_STATUSES
+
+Jurisdiction = Literal["US", "ES"]
 
 
 # Applies the repo-wide lowercase email identity rule.
@@ -29,6 +31,7 @@ class UserCreate(BaseModel):
 
     name: str
     email: str
+    jurisdiction: Jurisdiction
 
     # Ensures users cannot be created without a display name.
     @field_validator("name")
@@ -128,6 +131,14 @@ class AdminStatusUpdate(BaseModel):
         return value
 
 
+class AdminJurisdictionUpdate(BaseModel):
+    """Admin-only policy-jurisdiction assignment for an Identity user."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    jurisdiction: Jurisdiction
+
+
 # Shapes user responses so hashes and tokens never leave the API.
 class UserPublic(BaseModel):
     id: str
@@ -135,6 +146,7 @@ class UserPublic(BaseModel):
     email: str
     role: str
     status: str
+    jurisdiction: Jurisdiction | None = None
     must_change_password: bool
     created_at: datetime
     last_login_at: datetime | None = None
@@ -151,6 +163,7 @@ class TokenClaims(BaseModel):
     sub: str
     role: str
     status: str
+    jurisdiction: Jurisdiction | None = None
     must_change_password: bool
     iss: str
     aud: str
@@ -169,6 +182,7 @@ def to_public_user(record: dict[str, Any]) -> UserPublic:
             "email": record["email"],
             "role": record["role"],
             "status": record["status"],
+            "jurisdiction": record.get("jurisdiction"),
             "must_change_password": bool(record["must_change_password"]),
             "created_at": record["created_at"],
             "last_login_at": record.get("last_login_at"),

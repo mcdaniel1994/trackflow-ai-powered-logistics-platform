@@ -1,0 +1,68 @@
+{
+  "description": "RAG evaluation questions for the TrackFlow knowledge base (Engagement 7). Each question maps to the source_document whose chunk must appear in the top-3 retrieval (Recall@3 >= 80%). 'must_include' lists facts a faithful answer must contain; 'must_not_promise' flags business constraints the answer must never violate.",
+  "k": 3,
+  "queries": [
+    {
+      "id": "returns-window",
+      "question": "What's the standard return window?",
+      "source_document": "returns-policy",
+      "must_include": ["30 days"]
+    },
+    {
+      "id": "returns-international",
+      "question": "How are international returns handled?",
+      "source_document": "returns-policy",
+      "must_include": ["manual"],
+      "must_not_promise": ["automatic"]
+    },
+    {
+      "id": "carrier-rural-aragon",
+      "question": "Which carrier best covers rural Aragón?",
+      "source_document": "carrier-coverage",
+      "must_include": ["SEUR"]
+    },
+    {
+      "id": "carrier-heavy-la",
+      "question": "Which carrier is best for heavy packages over 5 kg from Los Angeles?",
+      "source_document": "carrier-coverage",
+      "must_include": ["UPS"]
+    },
+    {
+      "id": "sla-standard",
+      "question": "How long does standard shipping take within the same country?",
+      "source_document": "sla-delivery",
+      "must_include": ["3 to 5 business days"]
+    },
+    {
+      "id": "sla-black-friday",
+      "question": "Can we guarantee our delivery SLA during Black Friday?",
+      "source_document": "sla-delivery",
+      "must_include": ["40%"],
+      "must_not_promise": ["guarantee the SLA", "guaranteed on-time"]
+    },
+    {
+      "id": "sla-compensation",
+      "question": "What compensation applies if on-time delivery falls below 90% two months in a row?",
+      "source_document": "sla-delivery",
+      "must_include": ["5%"]
+    },
+    {
+      "id": "storage-rate-zaragoza",
+      "question": "How much does storage cost per cubic meter per month in Zaragoza?",
+      "source_document": "storage-pricing",
+      "must_include": ["16 EUR"]
+    },
+    {
+      "id": "storage-grace-period",
+      "question": "Is there a grace period before storage charges start for new inventory?",
+      "source_document": "storage-pricing",
+      "must_include": ["30 days"]
+    },
+    {
+      "id": "storage-discount",
+      "question": "A large client wants a storage discount. Can I offer one?",
+      "source_document": "storage-pricing",
+      "must_include": ["Miguel Torres"]
+    }
+  ]
+}

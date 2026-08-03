@@ -10,11 +10,35 @@ reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and 
 owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
 an additive cadence identity at deployed head `20260728_0012`; its set-based production-cardinality
 correction awaits redeployment and exact live reconciliation.
-The release suite covers disposable-PostgreSQL
+Engagement 8 Phases 4–6 add jurisdiction-bound agent retrieval, layered input/output guardrails,
+creator-owned delegated incident access, safe guardrail aggregates, and human-confirmed structured
+memory at Alembic head `20260803_0016`. Phase 6 safely captures routing-model usage, derives run
+totals from the accounted graph step exactly once, and prunes one bounded batch of expired traces
+through daily maintenance. The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
-protection. The current Central API baseline is 174 passing tests with 91.69% branch-aware source
+protection. The Phase 6 Central API gate is 286 passing tests with 91.55% branch-aware source
 coverage.
+
+The August 3 disposable local MCP owner-review exercise verified delegated test-ticket operations,
+inventory list/get, local `INVENTORY_READ_ONLY` enforcement with no inventory delete reaching this
+service, and `INSUFFICIENT_SCOPE` without `incidents:write`. The safe evidence record is
+[`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](../../docs/agents/mcp-owner-review-evidence-2026-08-03.md);
+it was not a Codespaces or production exercise. The owner accepted this evidence and closed
+Engagement 8 on August 3, 2026, explicitly waiving rather than passing the unexecuted
+Codespaces-specific exercise.
+
+Routing cost is computed only for models in the explicit `MODEL_PRICES` configuration. The
+`gpt-4o-mini` and pinned `gpt-4o-mini-2024-07-18` prices were verified on August 3, 2026 against
+OpenAI's official [Prompt Caching pricing table](https://openai.com/index/api-prompt-caching/).
+Unknown prices keep safe token counts and leave cost null; absent or malformed usage leaves both
+fields null without failing the agent request. No prompt, completion, or provider payload is stored.
+
+`POST /agent/query` accepts `question`, optional `conversation_id`, and an optional typed
+`memory_decision` (`decision_id`, `proposal_id`, and `approve`, `reject`, or `edit`). Edits require a
+complete replacement candidate and remain pending until a later typed approval. The response always
+returns `answer`, `trace_id`, `conversation_id`, and the exact pending `memory_proposal` when one
+exists; plain text, including “yes,” never approves memory.
 
 The portfolio Supabase production project is migrated through Alembic revision
 `20260728_0011` as of the July 28 production acceptance rescan. Runtime-role CRUD, Central API
@@ -100,6 +124,12 @@ without confirming the target, recovery posture, and explicit approval.
 | `IDENTITY_JWT_ALGORITHM` | Must remain `RS256` |
 | `IDENTITY_JWT_ISSUER` | Expected access-token issuer |
 | `IDENTITY_JWT_AUDIENCE` | Expected access-token audience |
+| `IDENTITY_OAUTH_ISSUER_URL` | Public URL issuer for scoped OAuth resource tokens |
+| `IDENTITY_OAUTH_INTERNAL_URL` | Internal Identity origin used only for delegated token exchange |
+| `CENTRAL_API_OAUTH_RESOURCE_URL` | Exact public audience accepted on incident and read-only inventory routes |
+| `AGENT_MCP_URL` | Internal Streamable HTTP transport URL used by the LangGraph ticket node |
+| `AGENT_MCP_RESOURCE_URL` | Public MCP resource identifier requested during token exchange |
+| `AGENT_MCP_OAUTH_CLIENT_ID` / `AGENT_MCP_OAUTH_CLIENT_SECRET` | Confidential Central API client provisioned through Identity; never logged or persisted in graph state |
 | `SEED_USER_UUID` | Existing local Identity user's UUID for seeded movements |
 | `PREFECT_API_URL` | Internal Prefect API used by maintenance retention; no Prefect DB credential |
 | `PREFECT_RUN_RETENTION_DAYS` | Terminal Prefect history retention, default 30 days |

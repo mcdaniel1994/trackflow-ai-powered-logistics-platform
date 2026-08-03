@@ -7,12 +7,37 @@
 - Engagement 3 - Talent Pipeline Tracker (`docs/briefs/03-talent-pipeline-tracker.md`): delivered in `apps/talent-pipeline-tracker/`; code retired June 2026, now lives at `uis/backoffice/app/talent/` (see `docs/archive/talent-pipeline-tracker-retirement.md`).
 - Engagement 4 - AI-Driven Engineering Infrastructure (`docs/briefs/04-ai-driven-engineering.md`): delivered in `memory-bank/`, `AGENTS.md`, `.agents/`, `uis/website/`, `uis/backoffice/`, and `services/`.
 - Engagement 5 - Backend Inventory Management (`docs/briefs/05-backend-inventory-management.md`): delivered in `services/central-api/` with FastAPI, SQLModel, Alembic, PostgreSQL inventory movements, Identity token verification, idempotent seed data, and disposable-database tests.
+- Engagement 8 - Agent Engineering (LangGraph) (`docs/briefs/08-agent-engineering.md`): Phases 0–6
+  were accepted and the engagement was closed by the owner on August 3, 2026. Delivered scope
+  includes the explicit LangGraph agent, OAuth-protected MCP boundary, jurisdiction-aware layered
+  guardrails, confirmed structured memory, self-hosted Agent OS observability, safe routing-model
+  token/cost accounting, and bounded trace retention. The owner accepted the disposable local
+  MCP/Inspector evidence in `docs/agents/mcp-owner-review-evidence-2026-08-03.md` and waived the
+  unexecuted Codespaces-specific exercise; the waiver is not a passing result. Production exposure
+  and deployment remain separately owner-gated.
 - Production deployment checkpoint (verified July 2, 2026 America/Chicago):
   Coolify serves the authenticated Back Office over HTTPS while Identity and
   Central API remain private; Supabase is migrated through `20260702_0003`,
   inventory and suppliers are seeded, and production incidents remain empty.
 
 ## Active
+
+- Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
+  implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
+  deployed. A salesperson-voiced assistant over the four policy documents in
+  `docs/company-knowledge-base/`: pure semantic-section chunking (`data/process/rag.py`) and the four
+  modular functions `setup`/`embed`/`retrieve`/`query` (`data/pipelines/rag.py`) written directly
+  against the Qdrant and OpenAI SDKs (no orchestration framework). Vector store is self-hosted Qdrant
+  (collection `trackflow`, 1536-dim cosine, deterministic uuid5 point IDs, added to both Compose
+  files); embeddings use OpenAI `text-embedding-3-small`, generation uses DeepSeek `deepseek-chat`.
+  `POST /knowledge/query` is a new `rag` domain in `services/central-api/` that imports `query()` and
+  never returns raw chunks/scores; it stays `503` until `RAG_ENABLED=true` and both provider keys are
+  set. 22 pipeline/chunking unit tests and 5 endpoint tests pass; 10-question eval set at
+  `data/eval/rag/test-queries.json`. The Back Office was refactored (grouped sidebar, top-center
+  Business ↔ Technical/Agent-OS toggle, header account menu, home Ask-AI box, dark mode, Agent-OS
+  placeholder); all 126 frontend tests pass and the production build is clean. Design doc at
+  `docs/rag/rag-design.md`. Open before go-live: provider keys, a provisioned Qdrant, and running
+  `rag-index` + `rag-eval` (Recall@3 ≥ 80%, faithfulness) against live services.
 
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
   in progress. Reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
@@ -128,8 +153,6 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 8 - AI agents (LangGraph, tools, MCP server with OAuth, guardrails,
-  memory). Planning inputs only; no specification yet.
 - Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
   specification yet. This is LangGraph work, not n8n; the earlier "workflow
   automation with n8n" framing does not match the assignment documents.

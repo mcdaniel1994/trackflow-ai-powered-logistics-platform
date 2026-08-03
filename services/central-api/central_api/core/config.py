@@ -3,9 +3,9 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from trackflow_auth import TokenVerifierConfig  # type: ignore[import-untyped]
+from trackflow_auth import OAuthTokenVerifierConfig, TokenVerifierConfig  # type: ignore[import-untyped]
 
 SERVICE_ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,7 +42,41 @@ class Settings(BaseSettings):
     identity_jwt_algorithm: str = "RS256"
     identity_jwt_issuer: str = "trackflow-identity"
     identity_jwt_audience: str = "trackflow-backoffice"
+    identity_oauth_issuer_url: str = "http://localhost:8002"
+    identity_oauth_internal_url: str = "http://localhost:8002"
+    central_api_oauth_resource_url: str = "http://localhost:8003"
     seed_user_uuid: str | None = None
+    # RAG knowledge base (Engagement 7). The query endpoint is disabled unless a
+    # vector store and both model API keys are configured; see docs/rag/rag-design.md.
+    rag_enabled: bool = False
+    qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
+    rag_collection: str = "trackflow"
+    openai_api_key: str = ""
+    rag_embedding_model: str = "text-embedding-3-small"
+    rag_embedding_dim: int = 1536
+    deepseek_api_key: str = ""
+    deepseek_base_url: str = "https://api.deepseek.com"
+    rag_generation_model: str = "deepseek-chat"
+    rag_top_k: int = 5
+    rag_min_score: float = 0.35
+    # LangGraph agent (Engagement 8). Disabled unless enabled AND the RAG dependency is configured
+    # (the Phase 1 graph reuses retrieve/generate_answer). See docs/agents/agent-design.md.
+    agents_enabled: bool = False
+    agent_name: str = "trackflow-cx-agent"
+    # OpenAI model for the agent's routing/tool decisions (Part 2). Generation still reuses the RAG
+    # pipeline. Uses the already-configured OPENAI_API_KEY.
+    agent_model: str = "gpt-4o-mini"
+    agent_route_timeout_seconds: float = 8.0
+    agent_ticket_timeout_seconds: float = 5.0
+    agent_mcp_url: str = "http://localhost:8004/mcp"
+    agent_mcp_resource_url: str = "http://localhost:8004/mcp"
+    agent_mcp_oauth_client_id: str = ""
+    agent_mcp_oauth_client_secret: SecretStr = SecretStr("")
+    # Content capture is opt-in: when False (default) no raw prompt/answer text is persisted to the
+    # trace store — only safe metadata (telemetry standard §8). When True, redacted previews are stored.
+    agents_store_content: bool = False
+    agents_trace_retention_days: int = 7
 
     @field_validator("database_url")
     @classmethod
@@ -80,6 +114,16 @@ class Settings(BaseSettings):
             algorithm=self.identity_jwt_algorithm,
             issuer=self.identity_jwt_issuer,
             audience=self.identity_jwt_audience,
+        )
+
+    @property
+    def oauth_auth_config(self) -> OAuthTokenVerifierConfig:
+        """Adapt settings to scoped operational-route verification."""
+        return OAuthTokenVerifierConfig(
+            public_key=self.identity_jwt_public_key.replace("\\n", "\n").strip(),
+            issuer=self.identity_oauth_issuer_url.rstrip("/"),
+            audience=self.central_api_oauth_resource_url.rstrip("/"),
+            algorithm=self.identity_jwt_algorithm,
         )
 
 

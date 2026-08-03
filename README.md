@@ -198,6 +198,34 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### ✅ Engagement 8 — Agent Engineering *(Complete; owner accepted August 3, 2026)*
+
+- Explicit LangGraph routing across RAG, live ticket status, or both, with safe Postgres trace metadata.
+- Standalone Streamable HTTP MCP service at `/mcp`, protected by TrackFlow Identity OAuth and `mcpauth`.
+- Delegated, scoped ticket create/status/update and read-only inventory tools; inventory writes are denied locally.
+- The Central API agent uses the MCP transport only; no direct incident-service path remains in its agents domain.
+- Identity-derived US/Spain jurisdiction, creator-owned delegated incident access, jurisdiction-filtered RAG,
+  input/output graph guardrails, and safe admin-only guardrail aggregates are implemented in Phase 4.
+- Phase 5 adds owner-bound conversations, typed approve/reject/edit decisions, deterministic
+  never-store validation, carrier/jurisdiction-isolated consolidated facts, append-only audit/version
+  history, and bounded seven-day pending-proposal cleanup.
+- Phase 6 replaces the Back Office Agent OS placeholder with authenticated run and exact graph-path
+  observability, safely accounts routing-model tokens and configured cost, and adds bounded trace
+  retention to the maintenance worker.
+- A disposable local public-tunnel exercise on August 3 verified OAuth, exact four-tool discovery,
+  Inspector ticket/inventory calls, read-only inventory enforcement, and reduced-scope denial; its
+  safe evidence and temporary DCR compatibility limitation are recorded in
+  [`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](docs/agents/mcp-owner-review-evidence-2026-08-03.md).
+- On August 3 the owner accepted Phases 4–6 and closed Engagement 8 with the documented local
+  Inspector evidence. The Codespaces-specific Phase 3 exercise was waived at closeout; it was not
+  executed or passed. Cloudflare model-driven invocation was likewise not executed because the
+  hosted model returned rate-limit `3021` before a tool call.
+- Production domains, exposure, credentials, and deployment remain owner-gated.
+
+📁 Locations: `mcps/`, `services/identity/`, `services/central-api/`, and `docs/agents/`
+
+---
+
 ### ✅ Centralized Incident Manager *(delivered subproject)*
 
 - Browser-based incident registration across Central, Los Angeles, and Zaragoza
@@ -239,8 +267,8 @@ Future production changes and the final Supplier Directory retirement remain app
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
 | 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
-| 7 | RAG knowledge base & semantic search | ⏳ Planning inputs only — no spec yet |
-| 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
+| 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
+| 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 

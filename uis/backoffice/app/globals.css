@@ -16,6 +16,15 @@ body {
   @apply bg-neutral-50 font-sans text-navy-deep antialiased;
 }
 
+.dark body {
+  background-color: #0f1722;
+  color: #e6edf5;
+}
+
 *:focus-visible {
   @apply outline-none ring-2 ring-coral/70 ring-offset-2;
+}
+
+.dark *:focus-visible {
+  @apply ring-offset-ink-900;
 }

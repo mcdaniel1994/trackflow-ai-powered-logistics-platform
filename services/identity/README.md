@@ -25,10 +25,55 @@ The API exposes:
 - `GET /users/{id}`
 - `PUT /users/{id}`
 - `PATCH /users/{id}/status`
+- `PATCH /users/{id}/jurisdiction` (administrator-only; `US` or `ES`)
 - `POST /users/{id}/sessions/revoke`
 - `DELETE /users/{id}`
 
-There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`, and the first admin is created from the server CLI. When an admin creates a user, the API generates a one-time temporary password and automatically sends an account setup email with a time-limited password reset link when email delivery is configured. The temporary password is never emailed; it is returned once to the admin as a fallback if setup email delivery fails.
+Phase 3 also exposes the separate URL-issued OAuth surface:
+
+- `GET /.well-known/oauth-authorization-server`
+- `GET /oauth/jwks.json`
+- `GET/POST /oauth/authorize`
+- `POST /oauth/token`
+- `POST /oauth/register` (local/Codespaces only by default)
+
+There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`,
+and every new user requires an admin-selected `US` or `ES` jurisdiction. Existing users without a
+jurisdiction can still authenticate, but jurisdiction-sensitive agent behavior fails closed until
+an administrator assigns one; users cannot change it themselves. The first admin is created from
+the server CLI with an explicit `--jurisdiction US|ES`. When an admin creates a user, the API
+generates a one-time temporary password and automatically sends an account setup email with a
+time-limited password reset link when email delivery is configured. The temporary password is never
+emailed; it is returned once to the admin as a fallback if setup email delivery fails.
+
+## OAuth 2.1 for MCP
+
+OAuth tokens use `OAUTH_ISSUER_URL` as their URL issuer and expire after 15 minutes. Authorization
+codes require S256 PKCE, expire after five minutes, are stored as SHA-256 hashes, and are burned on
+their first redemption attempt. Identity issues no OAuth refresh tokens.
+
+Supported scopes are `mcp:connect`, `incidents:read`, `incidents:write`, and `inventory:read`.
+Authorization Code + PKCE supports public Playground clients. Confidential clients may use client
+credentials or RFC 8693 token exchange; exchanges preserve or reduce scopes and require an exact
+registered source audience and target resource.
+
+Create confidential clients server-side. The generated secret is displayed once and only its
+Argon2id hash is persisted:
+
+```bash
+uv run --project services/identity python -m identity.cli create-oauth-client \
+  --name trackflow-mcp \
+  --grants client_credentials,urn:ietf:params:oauth:grant-type:token-exchange \
+  --scopes incidents:read,incidents:write,inventory:read \
+  --resources https://api.example.test \
+  --source-audiences https://mcp.example.test/mcp
+```
+
+`APP_ENVIRONMENT=local|codespaces` enables public dynamic registration by default;
+`APP_ENVIRONMENT=production` disables it unless an operator explicitly overrides
+`OAUTH_DYNAMIC_REGISTRATION_ENABLED`. Hosted issuers, redirect URIs, and resource identifiers must
+use HTTPS. OAuth audit logs contain client ID, subject UUID, grant/outcome, and logger timestamp only.
+Never log credentials, codes, bearer tokens, emails, consent form payloads, or client secrets.
 
 Administrators may revoke a user's active refresh sessions without changing account status through `POST /users/{id}/sessions/revoke`. The route is CSRF-protected and intended for the Auth 2 Back Office user-management UI.
 
@@ -55,7 +100,7 @@ RESET_TOKEN_EXPIRE_MINUTES=30
 ## First Admin
 
 ```bash
-uv run --project services/identity python -m identity.cli create-admin
+uv run --project services/identity python -m identity.cli create-admin --jurisdiction US
 ```
 
 The command prompts for the admin name, email, and password, refuses duplicate email addresses, stores only an Argon2id hash, and never prints the password.

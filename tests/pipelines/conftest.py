@@ -9,6 +9,13 @@ import pytest
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.engine import make_url
 
+# The real tests live in the category subfolders (business_performance/, sales_forecasting/, rag/).
+# The milestone/graded root shims (test_pipeline.py, test_sales_forecasting.py, test_rag.py) re-export
+# them so evaluator commands that name a shim explicitly still work. Ignore the shims during recursive
+# directory collection so a bare `pytest tests/pipelines` collects each real test exactly once (no
+# import-file-mismatch, no double-run). Explicitly naming a shim on the command line still collects it.
+collect_ignore = ["test_pipeline.py", "test_sales_forecasting.py", "test_rag.py"]
+
 
 @pytest.fixture(scope="session")
 def database_url() -> str:

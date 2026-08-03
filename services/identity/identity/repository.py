@@ -64,6 +64,21 @@ class PasswordResetRepository(Protocol):
     def cleanup_expired(self) -> None: ...
 
 
+class OAuthClientRepository(Protocol):
+    """Persistence boundary for registered OAuth clients."""
+
+    def create(self, data: dict[str, object]) -> dict[str, object]: ...
+    def get(self, client_id: str) -> dict[str, object] | None: ...
+
+
+class OAuthCodeRepository(Protocol):
+    """Persistence boundary for short-lived, single-use authorization codes."""
+
+    def create(self, data: dict[str, object]) -> dict[str, object]: ...
+    def consume(self, token_hash: str) -> dict[str, object] | None: ...
+    def cleanup_expired(self) -> None: ...
+
+
 # Owns the TinyDB handle and write lock shared by both repositories.
 class TinyDBIdentityStore:
     # Opens the identity TinyDB file and prepares coordinated writes.
@@ -237,6 +252,69 @@ class TinyDBPasswordResetRepository:
             expired_ids = [
                 record.doc_id
                 for record in self.table.search(reset.used == False)  # noqa: E712
+                if str(record.get("expires_at", "")) <= now_utc().isoformat()
+            ]
+            if expired_ids:
+                self.table.update({"used": True}, doc_ids=expired_ids)
+
+
+class TinyDBOAuthClientRepository:
+    """Stores public/confidential OAuth client metadata without plaintext secrets."""
+
+    def __init__(self, store: TinyDBIdentityStore) -> None:
+        self.store = store
+        self.table = self.store.db.table("oauth_clients")
+
+    def create(self, data: dict[str, object]) -> dict[str, object]:
+        with self.store.lock:
+            record = dict(data)
+            client_id = str(record.get("client_id") or uuid4())
+            if self.get(client_id):
+                raise ValueError("OAuth client already exists")
+            record["client_id"] = client_id
+            record["created_at"] = now_iso()
+            record.setdefault("active", True)
+            self.table.insert(record)
+            return record
+
+    def get(self, client_id: str) -> dict[str, object] | None:
+        client = Query()
+        record = self.table.get(client.client_id == client_id)
+        return dict(record) if record else None
+
+
+class TinyDBOAuthCodeRepository:
+    """Stores authorization-code digests and burns each code on first redemption attempt."""
+
+    def __init__(self, store: TinyDBIdentityStore) -> None:
+        self.store = store
+        self.table = self.store.db.table("oauth_authorization_codes")
+
+    def create(self, data: dict[str, object]) -> dict[str, object]:
+        with self.store.lock:
+            record = dict(data)
+            record["id"] = str(uuid4())
+            record["created_at"] = now_iso()
+            record.setdefault("used", False)
+            self.table.insert(record)
+            return record
+
+    def consume(self, token_hash: str) -> dict[str, object] | None:
+        with self.store.lock:
+            code = Query()
+            found = self.table.search((code.token_hash == token_hash) & (code.used == False))  # noqa: E712
+            record = found[0] if found else None
+            if not record:
+                return None
+            self.table.update({"used": True}, doc_ids=[record.doc_id])
+            return dict(record)
+
+    def cleanup_expired(self) -> None:
+        with self.store.lock:
+            code = Query()
+            expired_ids = [
+                record.doc_id
+                for record in self.table.search(code.used == False)  # noqa: E712
                 if str(record.get("expires_at", "")) <= now_utc().isoformat()
             ]
             if expired_ids:

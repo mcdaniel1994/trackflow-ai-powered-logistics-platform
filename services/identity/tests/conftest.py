@@ -48,11 +48,16 @@ def csrf_headers(client: TestClient) -> dict[str, str]:
     return {CSRF_HEADER_NAME: token}
 
 
-def create_admin(client: TestClient, email: str = "Admin@TrackFlow.test", password: str = "admin-passphrase") -> dict:
+def create_admin(
+    client: TestClient,
+    email: str = "Admin@TrackFlow.test",
+    password: str = "admin-passphrase",
+) -> dict:
     return client.app.state.user_service.create_admin(
         name="Admin User",
         email=email,
         password=password,
+        jurisdiction="US",
     ).model_dump(mode="json")
 
 

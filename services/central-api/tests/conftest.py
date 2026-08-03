@@ -22,6 +22,7 @@ from central_api.domains.inventory.models import Client
 from central_api.main import create_app
 
 TokenFactory = Callable[..., str]
+OAuthTokenFactory = Callable[..., str]
 
 
 @pytest.fixture(scope="session")
@@ -45,7 +46,10 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
+                "TRUNCATE agent_memory_versions, agent_memory_decisions, agent_memory_proposals, "
+                "agent_memory_facts, agent_conversations, agent_guardrail_events, agent_runs, "
+                "agent_node_steps, agent_tool_calls, "
+                "telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
                 "operations_feed_control, reporting.weekly_warehouse_client_performance, "
                 "reporting.hourly_activity_rollups, reporting.rollup_state, "
@@ -67,12 +71,7 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
                 "VALUES (1, now()) ON CONFLICT (id) DO NOTHING"
             )
         )
-        connection.execute(
-            text(
-                "INSERT INTO reporting.rollup_state (id) VALUES (1) "
-                "ON CONFLICT (id) DO NOTHING"
-            )
-        )
+        connection.execute(text("INSERT INTO reporting.rollup_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING"))
     yield
 
 
@@ -113,6 +112,7 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
         must_change_password: bool = False,
         status: str = "active",
         role: str = "user",
+        jurisdiction: str | None = "US",
     ) -> str:
         now = datetime.now(UTC)
         claims: dict[str, Any] = {
@@ -127,6 +127,43 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
             "jti": str(uuid4()),
             "token_type": "access",
         }
+        if jurisdiction is not None:
+            claims["jurisdiction"] = jurisdiction
+        return str(jwt.encode(claims, private_key, algorithm="RS256"))
+
+    return create_token
+
+
+@pytest.fixture
+def oauth_token_factory(signing_keys: tuple[str, str]) -> OAuthTokenFactory:
+    private_key = signing_keys[0]
+
+    def create_token(
+        *,
+        scopes: str,
+        audience: str = "http://localhost:8003",
+        issuer: str = "http://localhost:8002",
+        expires_delta: timedelta = timedelta(minutes=10),
+        jurisdiction: str | None = "US",
+        user_id: str = "11111111-1111-4111-8111-111111111111",
+        role: str = "user",
+    ) -> str:
+        now = datetime.now(UTC)
+        claims: dict[str, Any] = {
+            "sub": user_id,
+            "client_id": "mcp-service",
+            "role": role,
+            "status": "active",
+            "scope": scopes,
+            "iss": issuer,
+            "aud": audience,
+            "exp": now + expires_delta,
+            "iat": now,
+            "jti": str(uuid4()),
+            "token_type": "access",
+        }
+        if jurisdiction is not None:
+            claims["jurisdiction"] = jurisdiction
         return str(jwt.encode(claims, private_key, algorithm="RS256"))
 
     return create_token

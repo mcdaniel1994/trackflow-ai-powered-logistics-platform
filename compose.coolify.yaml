@@ -146,12 +146,31 @@ services:
       resources:
         limits: {cpus: "0.15", memory: 128M}
 
+  # Qdrant vector store for the RAG knowledge base (Engagement 7).
+  qdrant:
+    <<: *runtime
+    image: qdrant/qdrant:v1.12.4
+    expose: ["6333"]
+    environment:
+      QDRANT__SERVICE__API_KEY: ${QDRANT_API_KEY:?required}
+    volumes:
+      - qdrant-storage:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c ':> /dev/tcp/127.0.0.1/6333' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 512M}
+
   identity:
     <<: *runtime
     image: ghcr.io/mcdaniel1994/trackflow-identity:${TRACKFLOW_IMAGE_TAG:?required}
     pull_policy: always
     expose: ["8000"]
     environment:
+      APP_ENVIRONMENT: production
       IDENTITY_DB_PATH: /app/services/identity/data/identity.json
       IDENTITY_JWT_PRIVATE_KEY: ${IDENTITY_JWT_PRIVATE_KEY:?required}
       IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
@@ -160,6 +179,8 @@ services:
       IDENTITY_CORS_ORIGINS: https://backoffice.forgehub.cloud
       RESEND_API_KEY: ${RESEND_API_KEY:?required}
       EMAIL_SENDER: ${EMAIL_SENDER:?required}
+      OAUTH_ISSUER_URL: ${IDENTITY_OAUTH_ISSUER_URL:?owner approval required}
+      OAUTH_DYNAMIC_REGISTRATION_ENABLED: "false"
     volumes: [identity-data:/app/services/identity/data]
     read_only: true
     tmpfs: ["/tmp"]
@@ -177,6 +198,13 @@ services:
       DATABASE_URL: ${DATABASE_URL:?required}
       CENTRAL_API_CORS_ORIGINS: https://backoffice.forgehub.cloud
       IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+      IDENTITY_OAUTH_ISSUER_URL: ${IDENTITY_OAUTH_ISSUER_URL:?owner approval required}
+      IDENTITY_OAUTH_INTERNAL_URL: http://identity:8000
+      CENTRAL_API_OAUTH_RESOURCE_URL: ${CENTRAL_API_OAUTH_RESOURCE_URL:?owner approval required}
+      AGENT_MCP_URL: http://mcp:8000/mcp
+      AGENT_MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:?owner approval required}
+      AGENT_MCP_OAUTH_CLIENT_ID: ${CENTRAL_API_MCP_OAUTH_CLIENT_ID:?required}
+      AGENT_MCP_OAUTH_CLIENT_SECRET: ${CENTRAL_API_MCP_OAUTH_CLIENT_SECRET:?required}
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       DATABASE_STATEMENT_TIMEOUT_MS: "15000"
       DATABASE_LOCK_TIMEOUT_MS: "5000"
@@ -188,11 +216,49 @@ services:
       REPORTING_ROLLUP_CUTOVER_ENABLED: ${REPORTING_ROLLUP_CUTOVER_ENABLED:-false}
       REPORTING_COMPUTATION_ENABLED: ${REPORTING_COMPUTATION_ENABLED:-true}
       REPORTING_FORCE_STALE: ${REPORTING_FORCE_STALE:-false}
+      # Engagement 7: RAG knowledge base. Disabled unless RAG_ENABLED=true and keys set.
+      RAG_ENABLED: ${RAG_ENABLED:-false}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:?required}
+      RAG_COLLECTION: ${RAG_COLLECTION:-trackflow}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-3-small}
+      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1536}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      RAG_GENERATION_MODEL: ${RAG_GENERATION_MODEL:-deepseek-chat}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
     read_only: true
     tmpfs: ["/tmp"]
     deploy:
       resources:
         limits: {cpus: "0.75", memory: 1G}
+
+  # Internal-only until the owner approves an MCP production domain and exposure.
+  mcp:
+    <<: *runtime
+    image: ghcr.io/mcdaniel1994/trackflow-mcp:${TRACKFLOW_IMAGE_TAG:?required}
+    pull_policy: always
+    expose: ["8000"]
+    environment:
+      APP_ENVIRONMENT: production
+      IDENTITY_OAUTH_ISSUER_URL: ${IDENTITY_OAUTH_ISSUER_URL:?owner approval required}
+      IDENTITY_OAUTH_INTERNAL_URL: http://identity:8000
+      IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY:?required}
+      OAUTH_CLIENT_ID: ${MCP_CENTRAL_API_OAUTH_CLIENT_ID:?required}
+      OAUTH_CLIENT_SECRET: ${MCP_CENTRAL_API_OAUTH_CLIENT_SECRET:?required}
+      MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:?owner approval required}
+      CENTRAL_API_URL: http://central-api:8000
+      CENTRAL_API_OAUTH_RESOURCE_URL: ${CENTRAL_API_OAUTH_RESOURCE_URL:?owner approval required}
+    depends_on:
+      identity: {condition: service_healthy}
+      central-api: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    deploy:
+      resources:
+        limits: {cpus: "0.50", memory: 512M}
 
   backoffice:
     <<: *runtime
@@ -398,3 +464,4 @@ volumes:
   identity-data:
   prefect-db:
   reporting-logs:
+  qdrant-storage:

@@ -33,6 +33,14 @@ jobs:
               uv run --project services/central-api --extra dev mypy --config-file services/central-api/pyproject.toml services/central-api/central_api
               uv run --project services/central-api --extra dev pytest -c services/central-api/pyproject.toml services/central-api/tests --cov=central_api --cov-config=services/central-api/pyproject.toml --cov-report=term-missing
               uv build --project services/central-api
+          - name: mcp
+            label: MCP service
+            runtime: python
+            command: |
+              uv run --project mcps --extra dev ruff check mcps
+              uv run --project mcps --extra dev mypy --config-file mcps/pyproject.toml mcps/trackflow_mcp mcps/tests
+              uv run --project mcps --extra dev pytest -c mcps/pyproject.toml mcps/tests --cov=trackflow_mcp --cov-report=term-missing
+              uv build --project mcps
           - name: data
             label: Data pipelines
             runtime: python
@@ -40,7 +48,7 @@ jobs:
               uv run --project data python data/pipelines/pipeline.py --week-start 2026-07-13
               uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
               uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process
-              uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
+              uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines/business_performance tests/pipelines/sales_forecasting tests/pipelines/rag tests/pipelines/agents --cov=pipelines --cov=process --cov-config=data/pyproject.toml --cov-report=term-missing
               uv build --project data
           - name: release-safety
             label: Release safety

@@ -1,0 +1,14 @@
+# Local-only override to enable the RAG/agent LLM path in the Back Office (not committed).
+services:
+  central-api:
+    env_file:
+      - services/central-api/.env
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ""
+      RAG_ENABLED: "true"
+      AGENTS_ENABLED: "true"
+      RAG_COLLECTION: trackflow
+    depends_on:
+      postgres: {condition: service_healthy}
+      qdrant: {condition: service_started}

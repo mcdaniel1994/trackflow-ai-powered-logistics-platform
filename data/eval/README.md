@@ -5,6 +5,19 @@ This folder is for **evaluation and validation**: evaluation datasets, golden se
 - **Main purpose**: centralize evaluation inputs and outputs so improvements stay measurable across project milestones.
 - **Recommendation**: document each evaluation set (what it measures, how it was built, success criteria) and avoid sensitive data; use synthetic or anonymized data when needed.
 
+## Layout
+
+Per-engagement evaluation artifacts are grouped by category:
+
+- `rag/` — Engagement 7 RAG eval set (`test-queries.json`), consumed by
+  `services/central-api/scripts/rag_eval.py`.
+- `sales_forecast_*` + `evaluation_report.md` — Engagement 6.5 sales-forecast artifacts (kept at the
+  folder root, where the approved spec `spec-6.5-sales-forecasting.md` and `scripts/train_sales_forecast.py`
+  reference them). See below.
+- `business_performance/` — created on demand by the reporting pipeline's optional
+  `publish_run_summary` step when `REPORTING_EVAL_OUTPUT_ENABLED=true` (not tracked; dev/CI only).
+- `agents/` — reserved for Engagement 8 (LangGraph agent) eval artifacts.
+
 ## Engagement 6.5 sales forecast
 
 The versioned `sales_forecast_*` artifacts are produced by

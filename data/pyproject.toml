@@ -7,9 +7,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "boto3>=1.40",
+  "openai>=1.54",
   "prefect>=3",
   "prefect-aws",
   "psycopg[binary]",
+  "qdrant-client>=1.12",
   "sqlalchemy>=2",
 ]
 
@@ -39,7 +41,15 @@ build-backend = "hatchling.build"
 packages = ["pipelines", "process"]
 
 [tool.pytest.ini_options]
-testpaths = ["../tests/pipelines"]
+# Category subfolders are targeted directly so the milestone/graded root shims
+# (tests/pipelines/test_pipeline.py, test_sales_forecasting.py, test_rag.py) are only collected
+# when named explicitly by an evaluator command, never double-collected in the full run.
+testpaths = [
+    "../tests/pipelines/business_performance",
+    "../tests/pipelines/sales_forecasting",
+    "../tests/pipelines/rag",
+    "../tests/pipelines/agents",
+]
 pythonpath = ["."]
 
 [tool.ruff]
@@ -54,7 +64,10 @@ python_version = "3.11"
 strict = true
 
 [[tool.mypy.overrides]]
-module = ["numpy", "numpy.*", "scipy", "scipy.*", "sklearn", "sklearn.*"]
+module = [
+    "numpy", "numpy.*", "scipy", "scipy.*", "sklearn", "sklearn.*",
+    "openai", "openai.*", "qdrant_client", "qdrant_client.*",
+]
 follow_imports = "skip"
 ignore_missing_imports = true
 disable_error_code = ["import-untyped"]

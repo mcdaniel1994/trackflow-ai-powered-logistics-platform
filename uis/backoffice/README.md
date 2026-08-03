@@ -32,6 +32,18 @@ allowlisted BFF and leaves the original Inventory + Carriers dashboard at `/` in
 - `/backoffice/inventory/orders/outbound` - record dispatches and confirmed losses.
 - `/backoffice/inventory/orders` - read-only movement history.
 
+Engagement 8 Phase 6 replaces `/agent-os` with an authenticated, responsive observability dashboard
+over the Central API's self-hosted trace store. It lists and filters authoritative runs, preserves
+the selected trace during auto-refresh, renders the exact ordered node path and safe tool metadata,
+and shows only the trace store's redacted/truncated final-output summary. The read-only
+`/api/agents` BFF has an explicit list/detail allowlist and replaces upstream error bodies with safe
+status messages.
+
+During the August 3 disposable local exercise, a fresh authenticated session returned successful
+allowlisted reads for incidents, telemetry aggregates, reporting health, and Agent OS runs. This was
+a local API smoke check rather than production evidence. The owner accepted Phase 6 and closed
+Engagement 8 on August 3, 2026; production exposure and deployment remain separately gated.
+
 ## Local Development
 
 ```bash

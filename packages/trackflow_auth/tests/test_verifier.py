@@ -13,7 +13,9 @@ from jose import jwt
 from trackflow_auth import (
     CSRF_COOKIE_NAME,
     CSRF_HEADER_NAME,
+    OAuthTokenVerifierConfig,
     TokenVerifierConfig,
+    authenticate_scoped_bearer,
     require_csrf,
     verify_access_token,
 )
@@ -27,10 +29,14 @@ def key_pair() -> tuple[str, str]:
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
-    public_pem = private_key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode("utf-8")
+    public_pem = (
+        private_key.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode("utf-8")
+    )
     return private_pem, public_pem
 
 
@@ -77,7 +83,9 @@ def request(method: str, headers: dict[str, str] | None = None) -> Request:
         (key.lower().encode("latin-1"), value.encode("latin-1"))
         for key, value in (headers or {}).items()
     ]
-    return Request({"type": "http", "method": method, "path": "/", "headers": header_items})
+    return Request(
+        {"type": "http", "method": method, "path": "/", "headers": header_items}
+    )
 
 
 def assert_auth_rejected(token: str, config: TokenVerifierConfig) -> None:
@@ -89,7 +97,9 @@ def assert_auth_rejected(token: str, config: TokenVerifierConfig) -> None:
 def test_valid_rs256_access_token_is_accepted(key_pair: tuple[str, str]):
     private_pem, public_pem = key_pair
 
-    claims = verify_access_token(encode_token(private_pem, access_claims()), verifier_config(public_pem))
+    claims = verify_access_token(
+        encode_token(private_pem, access_claims()), verifier_config(public_pem)
+    )
 
     assert claims["sub"] == "user-123"
     assert claims["token_type"] == "access"
@@ -171,8 +181,84 @@ def test_csrf_allows_matching_cookie_and_header_on_state_change():
         {"Cookie": f"{CSRF_COOKIE_NAME}=csrf-token", CSRF_HEADER_NAME: "other-token"},
     ],
 )
-def test_csrf_rejects_missing_or_mismatched_state_change_tokens(headers: dict[str, str]):
+def test_csrf_rejects_missing_or_mismatched_state_change_tokens(
+    headers: dict[str, str],
+):
     with pytest.raises(HTTPException) as exc_info:
         require_csrf(request("POST", headers))
 
     assert exc_info.value.status_code == 403
+
+
+def test_scoped_oauth_bearer_enforces_issuer_audience_and_scope(
+    key_pair: tuple[str, str],
+):
+    private_pem, public_pem = key_pair
+    claims = access_claims(
+        iss="https://identity.trackflow.test",
+        aud="https://api.trackflow.test",
+        client_id="mcp-service",
+        scope="incidents:read",
+        jurisdiction="ES",
+    )
+    token = encode_token(private_pem, claims)
+    config = OAuthTokenVerifierConfig(
+        public_key=public_pem,
+        issuer="https://identity.trackflow.test",
+        audience="https://api.trackflow.test",
+    )
+
+    principal = authenticate_scoped_bearer(
+        request("GET", {"Authorization": f"Bearer {token}"}),
+        config,
+        required_scopes=frozenset({"incidents:read"}),
+    )
+    assert principal.user_id == "user-123"
+    assert principal.client_id == "mcp-service"
+    assert principal.jurisdiction == "ES"
+
+    with pytest.raises(HTTPException) as exc_info:
+        authenticate_scoped_bearer(
+            request("GET", {"Authorization": f"Bearer {token}"}),
+            config,
+            required_scopes=frozenset({"incidents:write"}),
+        )
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"iss": "https://wrong.test"},
+        {"aud": "https://wrong.test"},
+        {"status": "disabled"},
+        {"token_type": "refresh"},
+    ],
+)
+def test_scoped_oauth_bearer_rejects_invalid_policy(
+    key_pair: tuple[str, str],
+    overrides: dict[str, object],
+) -> None:
+    private_pem, public_pem = key_pair
+    values: dict[str, object] = {
+        "iss": "https://identity.trackflow.test",
+        "aud": "https://api.trackflow.test",
+        "client_id": "mcp-service",
+        "scope": "incidents:read",
+    }
+    values.update(overrides)
+    claims = access_claims(**values)
+    config = OAuthTokenVerifierConfig(
+        public_key=public_pem,
+        issuer="https://identity.trackflow.test",
+        audience="https://api.trackflow.test",
+    )
+    with pytest.raises(HTTPException) as exc_info:
+        authenticate_scoped_bearer(
+            request(
+                "GET", {"Authorization": f"Bearer {encode_token(private_pem, claims)}"}
+            ),
+            config,
+            required_scopes=frozenset({"incidents:read"}),
+        )
+    assert exc_info.value.status_code == 401

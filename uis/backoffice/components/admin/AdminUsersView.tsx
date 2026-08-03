@@ -7,10 +7,11 @@ import {
   createUser,
   listUsers,
   revokeUserSessions,
+  updateUserJurisdiction,
   updateUserStatus,
 } from "@/lib/auth/api";
 import { errorMessage } from "@/lib/auth/errors";
-import type { AuthUser, CreatedUser, UserStatus } from "@/lib/auth/types";
+import type { AuthUser, CreatedUser, UserJurisdiction, UserStatus } from "@/lib/auth/types";
 import { Button } from "@/components/talent/ui/Button";
 import { Field } from "@/components/talent/ui/Field";
 import { Input } from "@/components/talent/ui/Input";
@@ -109,6 +110,7 @@ export function AdminUsersView() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newJurisdiction, setNewJurisdiction] = useState<UserJurisdiction>("US");
   const [createPending, setCreatePending] = useState(false);
   const [createError, setCreateError] = useState("");
   const [createdUser, setCreatedUser] = useState<CreatedUser | null>(null);
@@ -175,7 +177,7 @@ export function AdminUsersView() {
 
     setCreatePending(true);
     try {
-      const created = await createUser(newName.trim(), newEmail.trim());
+      const created = await createUser(newName.trim(), newEmail.trim(), newJurisdiction);
       setCreatedUser(created);
       setUsers((current) => [created, ...current.filter((user) => user.id !== created.id)]);
       setNewName("");
@@ -216,6 +218,21 @@ export function AdminUsersView() {
     }
   }
 
+  async function changeJurisdiction(user: AuthUser, jurisdiction: UserJurisdiction) {
+    setActionError("");
+    setActionSuccess("");
+    setActionPending(`${user.id}:jurisdiction`);
+    try {
+      const updated = await updateUserJurisdiction(user.id, jurisdiction);
+      setUsers((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setActionSuccess(`${updated.email} now uses ${jurisdiction} policy jurisdiction.`);
+    } catch (caught) {
+      setActionError(errorMessage(caught));
+    } finally {
+      setActionPending("");
+    }
+  }
+
   return (
     <div className="w-full max-w-full min-w-0 space-y-6">
       <header className="flex flex-col justify-between gap-4 border-b border-mist pb-6 lg:flex-row lg:items-end">
@@ -223,7 +240,7 @@ export function AdminUsersView() {
           <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">Administration</p>
           <h1 className="mt-2 text-2xl font-black text-navy-deep sm:text-3xl">User Management</h1>
           <p className="mt-3 max-w-3xl text-neutral-600">
-            Create Back Office users, manage account status, and revoke active sessions.
+            Create Back Office users, assign policy jurisdiction, manage account status, and revoke active sessions.
           </p>
         </div>
         <Button variant="secondary" className="w-fit gap-2" onClick={loadUsers} disabled={loading}>
@@ -237,7 +254,8 @@ export function AdminUsersView() {
           <section className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
             <h2 className="text-lg font-semibold text-navy-deep">Create user</h2>
             <p className="mt-1 text-sm text-neutral-600">
-              New users receive a one-time temporary password and must change it on first login.
+              New users receive a one-time temporary password, an administrator-assigned jurisdiction, and must
+              change their password on first login.
             </p>
 
             <form onSubmit={handleCreate} className="mt-4 space-y-4">
@@ -266,6 +284,18 @@ export function AdminUsersView() {
                   disabled={createPending}
                   autoComplete="email"
                 />
+              </Field>
+
+              <Field label="Policy jurisdiction" htmlFor="new-user-jurisdiction">
+                <Select
+                  id="new-user-jurisdiction"
+                  value={newJurisdiction}
+                  onChange={(event) => setNewJurisdiction(event.target.value as UserJurisdiction)}
+                  disabled={createPending}
+                >
+                  <option value="US">United States</option>
+                  <option value="ES">Spain</option>
+                </Select>
               </Field>
 
               <Button type="submit" className="gap-2" disabled={createPending}>
@@ -390,6 +420,17 @@ export function AdminUsersView() {
                       </td>
                       <td className="px-3 py-3 align-top">
                         <div className="flex w-full min-w-0 flex-wrap justify-end gap-2">
+                          <Select
+                            value={user.jurisdiction ?? ""}
+                            aria-label={`Policy jurisdiction for ${user.email}`}
+                            className="h-8 w-24 py-1 text-xs"
+                            disabled={Boolean(actionPending)}
+                            onChange={(event) => void changeJurisdiction(user, event.target.value as UserJurisdiction)}
+                          >
+                            <option value="" disabled>Set region</option>
+                            <option value="US">US</option>
+                            <option value="ES">ES</option>
+                          </Select>
                           {user.status === "active" ? (
                             <ActionTooltip
                               id={actionHelpId(user.id, "desktop", "suspend")}
@@ -503,6 +544,16 @@ export function AdminUsersView() {
                     </span>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-3">
+                    <Select
+                      value={user.jurisdiction ?? ""}
+                      aria-label={`Policy jurisdiction for ${user.email}`}
+                      disabled={Boolean(actionPending)}
+                      onChange={(event) => void changeJurisdiction(user, event.target.value as UserJurisdiction)}
+                    >
+                      <option value="" disabled>Set jurisdiction</option>
+                      <option value="US">United States</option>
+                      <option value="ES">Spain</option>
+                    </Select>
                     {user.status === "active" ? (
                       <ActionTooltip
                         id={actionHelpId(user.id, "mobile", "suspend")}

@@ -6,6 +6,11 @@ This package is intentionally small and security-boundary focused. The identity 
 
 It also exposes `safe_request_validation_exception_handler`, a shared `RequestValidationError` handler that preserves FastAPI's field-level 422 shape while stripping submitted `input`, `ctx`, tokens, passwords, emails, and raw exception detail from API responses.
 
+Engagement 8 adds `authenticate_scoped_bearer` for OAuth resource endpoints. It accepts bearer
+tokens only, verifies the URL issuer, exact audience, RS256 signature and lifetime, and enforces an
+explicit required-scope set. Existing Back Office cookie/bearer verification remains unchanged;
+each service decides which routes may additionally accept scoped OAuth principals.
+
 It is a Python package, not an npm workspace package.
 
 ## Tests

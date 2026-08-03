@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
+from trackflow_auth import ScopedPrincipal  # type: ignore[import-untyped]
 from trackflow_incidents import (
     BRANCH_VALUES,
     CATEGORY_VALUES,
@@ -92,20 +93,34 @@ class IncidentService:
             raise self._persistence_failure("list", exc) from exc
         return IncidentPage(items=[self._read(row) for row in rows], total=total, limit=limit, offset=offset)
 
-    def get(self, incident_id: int) -> IncidentRead:
+    @staticmethod
+    def _authorize_delegated(incident: Incident, principal: ScopedPrincipal | None) -> None:
+        if principal is None or principal.role == "admin":
+            return
+        if incident.created_by_user_uuid != principal.user_id:
+            raise IncidentError(403, "INCIDENT_ACCESS_DENIED", "Incident access is not authorized.")
+
+    def get(self, incident_id: int, principal: ScopedPrincipal | None = None) -> IncidentRead:
         try:
             incident = self.repository.get(incident_id)
         except SQLAlchemyError as exc:
             raise self._persistence_failure("get", exc) from exc
         if incident is None:
             raise IncidentError(404, "INCIDENT_NOT_FOUND", "Incident not found.")
+        self._authorize_delegated(incident, principal)
         return self._read(incident)
 
-    def update_status(self, incident_id: int, payload: IncidentStatusUpdate) -> IncidentRead:
+    def update_status(
+        self,
+        incident_id: int,
+        payload: IncidentStatusUpdate,
+        principal: ScopedPrincipal | None = None,
+    ) -> IncidentRead:
         try:
             incident = self.repository.get_for_update(incident_id)
             if incident is None:
                 raise IncidentError(404, "INCIDENT_NOT_FOUND", "Incident not found.")
+            self._authorize_delegated(incident, principal)
             current = IncidentStatus(incident.status)
             if payload.status not in ALLOWED_TRANSITIONS[current]:
                 raise IncidentError(
@@ -141,4 +156,3 @@ class IncidentService:
     @staticmethod
     def _filled_counts(values: tuple[str, ...], counts: dict[str, int]) -> dict[str, int]:
         return {value: counts.get(value, 0) for value in values}
-
