@@ -15,6 +15,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from .config import AgentConfig
+from .pricing import ModelUsage, usage_from_message
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ _SYSTEM = (
 class RouteDecision:
     route: str  # rag | ticket | both
     ticket_id: int | None
+    usage: ModelUsage | None = None
 
 
 class _RouteModel(BaseModel):
@@ -63,11 +65,15 @@ def route_question(question: str, config: AgentConfig) -> RouteDecision:
             timeout=config.route_timeout_seconds,
             max_retries=0,
         )
-        decision = llm.with_structured_output(_RouteModel).invoke(
+        response = llm.with_structured_output(_RouteModel, include_raw=True).invoke(
             [("system", _SYSTEM), ("human", question)]
         )
+        response_map = response if isinstance(response, dict) else {}
+        decision = response_map.get("parsed")
+        raw = response_map.get("raw")
         route = decision.route if isinstance(decision, _RouteModel) else "rag"
         ticket_id = decision.ticket_id if isinstance(decision, _RouteModel) else None
+        usage = usage_from_message(raw, config.agent_model)
     except Exception as exc:
         logger.warning("agent_route_llm_failed error_type=%s; using heuristic", type(exc).__name__)
         return _heuristic(question)
@@ -77,4 +83,4 @@ def route_question(question: str, config: AgentConfig) -> RouteDecision:
         ticket_id = _heuristic(question).ticket_id
     if route in ("ticket", "both") and ticket_id is None:
         return RouteDecision("rag", None)
-    return RouteDecision(route, ticket_id)
+    return RouteDecision(route, ticket_id, usage)

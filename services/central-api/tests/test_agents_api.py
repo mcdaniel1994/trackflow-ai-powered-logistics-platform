@@ -280,6 +280,39 @@ def test_persist_run_stores_metadata_without_content(engine: Engine) -> None:
         assert calls[0].status == "ok" and calls[0].input_summary is None  # tool args not persisted
 
 
+def test_persist_run_totals_safe_step_accounting_without_double_counting(engine: Engine) -> None:
+    result = _result(trace_id="trace-accounting")
+    result.steps[0]["tokens"] = 120
+    result.steps[0]["cost_usd"] = 0.000027
+    recorder.persist_run(result, env="test", input_summary=None, output_summary=None)
+
+    with Session(engine) as session:
+        run = AgentRepository(session).get_run("trace-accounting")
+        assert run is not None
+        assert run.total_tokens == 120
+        assert run.total_cost_usd == pytest.approx(0.000027)
+
+
+def test_trace_responses_exclude_prohibited_raw_fields(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+) -> None:
+    _configure_agent(app, settings)
+    recorder.persist_run(
+        _result(trace_id="trace-safe-fields", with_tool=True),
+        env="test",
+        input_summary=None,
+        output_summary=None,
+    )
+
+    body = client.get("/agents/runs/trace-safe-fields", headers=auth_headers).json()
+    serialized = str(body).casefold()
+    for prohibited in ("prompt", "completion", "retrieved", "tool_arguments", "provider_payload", "credentials"):
+        assert prohibited not in serialized
+
+
 def test_content_capture_is_opt_in(engine: Engine) -> None:
     recorder.persist_run(
         _result(trace_id="trace-content"),

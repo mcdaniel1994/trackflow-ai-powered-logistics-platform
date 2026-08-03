@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import Session, select
 
 from .models import AgentGuardrailEvent, AgentNodeStep, AgentRun, AgentToolCall
@@ -69,7 +69,15 @@ class AgentRepository:
             for category, rule, outcome, count in self.session.exec(statement).all()
         ]
 
-    def delete_before(self, cutoff: datetime) -> int:
-        """Prune runs created before ``cutoff``. Child rows cascade via ON DELETE CASCADE."""
-        result = self.session.execute(_run_table.delete().where(_run_table.c.created_at < cutoff))
+    def delete_before(self, cutoff: datetime, *, limit: int = 500) -> int:
+        """Prune one ordered batch before ``cutoff``; trace children cascade."""
+        if limit < 1 or limit > 5_000:
+            raise ValueError("limit must be between 1 and 5000")
+        expired_ids = (
+            select(AgentRun.id)
+            .where(AgentRun.created_at < cutoff)
+            .order_by(AgentRun.created_at, AgentRun.id)  # type: ignore[arg-type]
+            .limit(limit)
+        )
+        result = self.session.execute(delete(_run_table).where(_run_table.c.id.in_(expired_ids)))
         return int(cast(Any, result).rowcount or 0)

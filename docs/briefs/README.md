@@ -15,7 +15,7 @@ Each brief is owned by an internal stakeholder and frames the problem, scope, an
 | 05 | [Backend Inventory Management](05-backend-inventory-management.md) | Andrés Kim, CTO | ✅ Delivered | `services/central-api/` |
 | 06 | [Data Pipelines & Telemetry](06-data-pipelines-telemetry.md) | Andrés Kim, CTO | 🚧 6.1 closed by owner exception; 6.2 production-accepted; 6.3 owner-accepted by exception; 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending; independent 6.5.a–b complete offline | `data/`, `services/central-api/`, `services/identity/`, `uis/backoffice/`, `.github/workflows/` |
 | 07 | [RAG Knowledge Base](07-rag-knowledge-base.md) | Miguel Torres, Commercial Director | 🚧 Implemented on branch `engagement-7-rag-knowledge-base`; pending owner review, provider keys, and Qdrant provisioning (`/knowledge/query` disabled by default) | `docs/company-knowledge-base/`, `data/`, `services/central-api/`, `uis/backoffice/`, `docs/rag/` |
-| 08 | [Agent Engineering (LangGraph)](08-agent-engineering.md) | Valentina Cruz, Customer Experience Manager | 🚧 Phases 0–5 implemented; Phases 4–5 awaiting owner review, Phase 3 Codespaces exercise unverified | `services/central-api/`, `services/identity/`, `packages/trackflow_auth/`, `mcps/`, `uis/backoffice/`, `docs/agents/` |
+| 08 | [Agent Engineering (LangGraph)](08-agent-engineering.md) | Valentina Cruz, Customer Experience Manager | 🚧 Phases 0–6 implemented; Phases 4–6 awaiting owner review, Phase 3 Codespaces exercise unverified | `services/central-api/`, `services/identity/`, `packages/trackflow_auth/`, `mcps/`, `uis/backoffice/`, `docs/agents/` |
 
 ## Conventions
 

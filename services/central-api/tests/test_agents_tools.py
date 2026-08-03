@@ -17,6 +17,10 @@ class _RagCfg:
     openai_api_key = ""
 
 
+class _RagWithKey(_RagCfg):
+    openai_api_key = "mocked-key"
+
+
 def _config() -> AgentConfig:
     return AgentConfig(
         agent_name="a",
@@ -116,3 +120,28 @@ def test_client_repr_excludes_credentials() -> None:
 )
 def test_routing_heuristic_without_key(question: str, expected: RouteDecision) -> None:
     assert route_question(question, _config()) == expected
+
+
+def test_routing_provider_failure_keeps_request_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FailingChatOpenAI:
+        def __init__(self, **_kwargs: object) -> None:
+            raise RuntimeError("provider payload must not escape")
+
+    base = _config()
+    configured = AgentConfig(
+        agent_name=base.agent_name,
+        rag=_RagWithKey(),
+        min_score=base.min_score,
+        agent_model=base.agent_model,
+        route_timeout_seconds=base.route_timeout_seconds,
+        ticket_timeout_seconds=base.ticket_timeout_seconds,
+        mcp_url=base.mcp_url,
+        mcp_resource_url=base.mcp_resource_url,
+        oauth_token_url=base.oauth_token_url,
+        mcp_oauth_client_id=base.mcp_oauth_client_id,
+        mcp_oauth_client_secret=base.mcp_oauth_client_secret,
+        source_access_token=base.source_access_token,
+    )
+    monkeypatch.setattr("langchain_openai.ChatOpenAI", FailingChatOpenAI)
+
+    assert route_question("status of ticket 42?", configured) == RouteDecision("ticket", 42)

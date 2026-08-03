@@ -10,13 +10,21 @@ reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and 
 owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
 an additive cadence identity at deployed head `20260728_0012`; its set-based production-cardinality
 correction awaits redeployment and exact live reconciliation.
-Engagement 8 Phases 4–5 add jurisdiction-bound agent retrieval, layered input/output guardrails,
+Engagement 8 Phases 4–6 add jurisdiction-bound agent retrieval, layered input/output guardrails,
 creator-owned delegated incident access, safe guardrail aggregates, and human-confirmed structured
-memory at Alembic head `20260803_0016`. The release suite covers disposable-PostgreSQL
+memory at Alembic head `20260803_0016`. Phase 6 safely captures routing-model usage, derives run
+totals from the accounted graph step exactly once, and prunes one bounded batch of expired traces
+through daily maintenance. The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
-protection. The Phase 5 Central API gate is 270 passing tests with 91.25% branch-aware source
+protection. The Phase 6 Central API gate is 286 passing tests with 91.55% branch-aware source
 coverage.
+
+Routing cost is computed only for models in the explicit `MODEL_PRICES` configuration. The
+`gpt-4o-mini` and pinned `gpt-4o-mini-2024-07-18` prices were verified on August 3, 2026 against
+OpenAI's official [Prompt Caching pricing table](https://openai.com/index/api-prompt-caching/).
+Unknown prices keep safe token counts and leave cost null; absent or malformed usage leaves both
+fields null without failing the agent request. No prompt, completion, or provider payload is stored.
 
 `POST /agent/query` accepts `question`, optional `conversation_id`, and an optional typed
 `memory_decision` (`decision_id`, `proposal_id`, and `approve`, `reject`, or `edit`). Edits require a

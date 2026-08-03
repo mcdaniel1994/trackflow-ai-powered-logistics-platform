@@ -14,6 +14,7 @@ from pipelines.rag import GenerationResult
 from central_api.domains.agents import graph as g
 from central_api.domains.agents.config import AgentConfig
 from central_api.domains.agents.mcp_client import TicketLookupResult, TicketStatus
+from central_api.domains.agents.pricing import ModelUsage
 from central_api.domains.agents.routing import RouteDecision
 
 
@@ -89,6 +90,19 @@ def test_rag_route_flows_through_generate(monkeypatch: pytest.MonkeyPatch) -> No
         "memory_selfeval",
     ]
     assert result.route_taken == "rag" and not result.tool_calls
+
+
+def test_route_usage_is_attached_once_to_the_route_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    _route(monkeypatch, RouteDecision("rag", None, ModelUsage(100, 20, 120, cost_usd=0.000027)))
+    monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [{"text": "Documented."}])
+    monkeypatch.setattr(g, "generate_answer", lambda _q, _c, _cfg, **_k: "Answer.")
+
+    result = g.run_agent("documented question?", _config(), "US")
+
+    route_step = next(step for step in result.steps if step["node_name"] == "route")
+    assert route_step["tokens"] == 120
+    assert route_step["cost_usd"] == pytest.approx(0.000027)
+    assert sum(step["tokens"] or 0 for step in result.steps) == 120
 
 
 def test_answer_is_grounded_in_retrieved_context(monkeypatch: pytest.MonkeyPatch) -> None:

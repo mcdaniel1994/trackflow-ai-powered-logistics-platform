@@ -38,6 +38,8 @@ def persist_run(
 ) -> None:
     """Insert one run and its node steps; never raise."""
     try:
+        token_values = [step.get("tokens") for step in result.steps if step.get("tokens") is not None]
+        cost_values = [step.get("cost_usd") for step in result.steps if step.get("cost_usd") is not None]
         run = AgentRun(
             trace_id=result.trace_id,
             agent_name=result.agent_name,
@@ -47,8 +49,8 @@ def persist_run(
             started_at=result.started_at,
             ended_at=result.ended_at,
             duration_ms=result.duration_ms,
-            total_tokens=None,
-            total_cost_usd=None,
+            total_tokens=sum(token_values) if token_values else None,
+            total_cost_usd=sum(cost_values) if cost_values else None,
             guardrail_trigger_count=len(result.guardrail_events),
             input_summary=input_summary,
             output_summary=output_summary,

@@ -137,10 +137,14 @@ def build_graph(config: AgentConfig) -> Any:
     def route_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         decision = route_question(state["question"], config)
+        step = _step(state, "route", "ok", started, notes=f"route={decision.route}")
+        if decision.usage is not None:
+            step["tokens"] = decision.usage.total_tokens
+            step["cost_usd"] = decision.usage.cost_usd
         return {
             "route": decision.route,
             "ticket_id": decision.ticket_id,
-            "steps": [_step(state, "route", "ok", started, notes=f"route={decision.route}")],
+            "steps": [step],
         }
 
     def retrieve_node(state: AgentState) -> dict[str, Any]:
