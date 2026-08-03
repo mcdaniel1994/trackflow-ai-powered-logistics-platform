@@ -161,7 +161,10 @@ Poisoning is bounded because guardrails run first + human confirmation + the nev
    gains `docs/agents/` (this doc + the explainer); `docs/rag/` left in place.
 1. **LangGraph migration** — extract `generate_answer`, build graph, `POST /agent/query`, trace store,
    ≥3 mocked-CI evals incl. grounding; RAG tests still pass. PR label `part-1-langgraph`.
-2. **Tools** — ticket (required) + inventory (stretch); routing; ≥2 routing evals.
+2. **Tools** — ticket (required) + inventory (stretch); routing; ≥2 routing evals. **Done** (ticket
+   tool + OpenAI routing with heuristic fallback; tool result folded into generation; tool_call
+   traces; inventory stretch tool deferred). In-process `IncidentService` call (live data), swapped
+   for the MCP server in Part 3.
 3. **MCP + OAuth** — `mcps/` server; migrate agent; remove direct path; validate in MCP Playground.
 4. **Guardrails** — multi-layer + injection build-test. (Before Phase 5.)
 5. **Memory** — structured store + confirmation + audit; ≥2 full cycles. Branch `w23-d67-agent-memory`.
