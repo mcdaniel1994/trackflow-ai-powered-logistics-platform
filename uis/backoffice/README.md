@@ -39,6 +39,10 @@ and shows only the trace store's redacted/truncated final-output summary. The re
 `/api/agents` BFF has an explicit list/detail allowlist and replaces upstream error bodies with safe
 status messages.
 
+During the August 3 disposable local exercise, a fresh authenticated session returned successful
+allowlisted reads for incidents, telemetry aggregates, reporting health, and Agent OS runs. This was
+a local API smoke check rather than production evidence or Phase 6 owner approval.
+
 ## Local Development
 
 ```bash

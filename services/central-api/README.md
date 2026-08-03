@@ -20,6 +20,12 @@ separation, aggregate queries, lifecycle transitions, and concurrent inventory/i
 protection. The Phase 6 Central API gate is 286 passing tests with 91.55% branch-aware source
 coverage.
 
+The August 3 disposable local MCP owner-review exercise verified delegated test-ticket operations,
+inventory list/get, local `INVENTORY_READ_ONLY` enforcement with no inventory delete reaching this
+service, and `INSUFFICIENT_SCOPE` without `incidents:write`. The safe evidence record is
+[`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](../../docs/agents/mcp-owner-review-evidence-2026-08-03.md);
+it was not a Codespaces or production exercise.
+
 Routing cost is computed only for models in the explicit `MODEL_PRICES` configuration. The
 `gpt-4o-mini` and pinned `gpt-4o-mini-2024-07-18` prices were verified on August 3, 2026 against
 OpenAI's official [Prompt Caching pricing table](https://openai.com/index/api-prompt-caching/).

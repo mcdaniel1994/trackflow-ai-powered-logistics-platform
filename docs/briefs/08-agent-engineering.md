@@ -5,8 +5,12 @@
 ## Status
 
 🚧 In progress — Engagement 8 Phases 0–6 are implemented on `engagement-8-agentic-engineering`;
-Phases 4–6 layered guardrails, confirmed structured memory, and Agent OS observability await owner review. The Phase 3
-Codespaces MCP Playground exercise still lacks owner evidence and is not complete.
+Phases 4–6 layered guardrails, confirmed structured memory, and Agent OS observability await owner
+review. A disposable local public-tunnel exercise verified the approved MCP tools and security
+failures with the official Inspector; see
+[`mcp-owner-review-evidence-2026-08-03.md`](../agents/mcp-owner-review-evidence-2026-08-03.md).
+Because that exercise was not run in Codespaces, the Phase 3 Codespaces MCP Playground gate still
+lacks Codespaces-specific owner evidence and is not complete.
 
 ---
 

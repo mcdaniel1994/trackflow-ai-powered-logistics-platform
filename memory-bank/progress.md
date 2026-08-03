@@ -21,9 +21,11 @@
   owner-bound conversations, typed human decisions, never-store validation, consolidated carrier
   facts, append-only audit/version history, and seven-day pending cleanup. Phase 6 adds the
   authenticated Back Office Agent OS dashboard, safe routing-model token/cost accounting, and
-  bounded seven-day trace pruning. Phases 4–6 await owner review. The Phase 3 Codespaces MCP
-  Playground exercise still lacks owner evidence and remains
-  unverified.
+  bounded seven-day trace pruning. A disposable local public-tunnel exercise on August 3 verified
+  exact four-tool discovery, Inspector ticket/inventory calls, read-only inventory enforcement, and
+  reduced-scope denial; see `docs/agents/mcp-owner-review-evidence-2026-08-03.md`. Phases 4–6 await
+  owner review. Because the exercise was local, the Phase 3 Codespaces MCP Playground gate still
+  lacks Codespaces-specific owner evidence and remains unverified.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
@@ -157,8 +159,9 @@ implementing any of the items below.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
 - Engagement 8 - AI agents: Phases 0–6 implemented under the owner-approved design in
-  `docs/agents/agent-design.md`; Phases 4–6 await owner review, and the Phase 3 Codespaces MCP
-  Playground evidence gap remains open. See `docs/briefs/08-agent-engineering.md`.
+  `docs/agents/agent-design.md`; local tunneled MCP/Inspector evidence is recorded in
+  `docs/agents/mcp-owner-review-evidence-2026-08-03.md`, Phases 4–6 await owner review, and the Phase
+  3 Codespaces MCP Playground evidence gap remains open. See `docs/briefs/08-agent-engineering.md`.
 - Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
   specification yet. This is LangGraph work, not n8n; the earlier "workflow
   automation with n8n" framing does not match the assignment documents.

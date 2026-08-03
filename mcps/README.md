@@ -21,3 +21,7 @@ uv build --project mcps
 
 Runtime configuration and the end-to-end Codespaces authorization walkthrough are documented in
 [`docs/agents/mcp-codespaces-runbook.md`](../docs/agents/mcp-codespaces-runbook.md).
+Safe outcomes from the August 3 disposable local public-tunnel/Inspector exercise, including its
+temporary dynamic-registration compatibility limitation and cleanup, are recorded in
+[`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](../docs/agents/mcp-owner-review-evidence-2026-08-03.md).
+That local exercise does not complete the Codespaces-specific Phase 3 gate.
