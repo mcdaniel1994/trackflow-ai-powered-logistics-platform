@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
 from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
-from ...core.dependencies import current_principal, write_principal
+from ...core.dependencies import OperationalPrincipal, inventory_read_principal, write_principal
 from ...db.session import get_session
 from .schemas import (
     ClientCreate,
@@ -37,7 +37,7 @@ def inventory_service(session: Annotated[Session, Depends(get_session)]) -> Inve
 
 @router.get("/clients", response_model=list[ClientRead])
 def list_clients(
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(inventory_read_principal)],
     service: Annotated[InventoryService, Depends(inventory_service)],
 ) -> list[ClientRead]:
     return service.list_clients()
@@ -64,7 +64,7 @@ def rename_client(
 
 @router.get("/products", response_model=ProductPage)
 def list_products(
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(inventory_read_principal)],
     service: Annotated[InventoryService, Depends(inventory_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -84,7 +84,7 @@ def create_product(
 @router.get("/products/{sku_id}", response_model=SKURead)
 def get_product(
     sku_id: int,
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(inventory_read_principal)],
     service: Annotated[InventoryService, Depends(inventory_service)],
 ) -> SKURead:
     return service.get_product(sku_id)
@@ -130,7 +130,7 @@ def create_discrepancy(
 
 @router.get("/orders", response_model=MovementPage)
 def list_orders(
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(inventory_read_principal)],
     service: Annotated[InventoryService, Depends(inventory_service)],
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,

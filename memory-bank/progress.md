@@ -14,6 +14,13 @@
 
 ## Active
 
+- Engagement 8 - Agent Engineering (LangGraph) (`docs/briefs/08-agent-engineering.md`): Phases 0–2
+  are committed on `engagement-8-agentic-engineering`. The Central API owns the explicit LangGraph
+  runtime and self-hosted Postgres trace store; OpenAI `gpt-4o-mini` routes between RAG and the live
+  ticket-status tool. Phase 3 is implemented and pending owner review: ticket operations plus
+  read-only inventory now live behind a standalone Streamable HTTP MCP service protected by
+  TrackFlow Identity OAuth and `mcpauth`; the in-process incident path has been removed.
+
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
   deployed. A salesperson-voiced assistant over the four policy documents in
@@ -145,8 +152,8 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 8 - AI agents (LangGraph, tools, MCP server with OAuth, guardrails,
-  memory). Planning inputs only; no specification yet.
+- Engagement 8 - AI agents: active under the owner-approved design in
+  `docs/agents/agent-design.md`; see `docs/briefs/08-agent-engineering.md` for stakeholder scope.
 - Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
   specification yet. This is LangGraph work, not n8n; the earlier "workflow
   automation with n8n" framing does not match the assignment documents.

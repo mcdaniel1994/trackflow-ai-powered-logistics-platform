@@ -16,6 +16,8 @@ dependencies = [
   "uvicorn[standard]>=0.35.0",
   "langgraph>=1.2.10",
   "langchain-openai>=1.4.1",
+  "langchain-mcp-adapters==0.3.1",
+  "mcp>=1.24,<2",
 ]
 
 [project.scripts]
@@ -29,7 +31,7 @@ rag-index = "scripts.rag_index:entrypoint"
 dev = [
   "build>=1.2.2",
   "httpx>=0.28.0",
-  "mypy>=1.16.0",
+  "mypy>=1.16,<2",
   "pytest>=8.4.0",
   "pytest-cov>=6.2.0",
   "ruff>=0.12.0",
@@ -44,6 +46,9 @@ trackflow-data-pipelines = { path = "../../data", editable = true }
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["central_api"]

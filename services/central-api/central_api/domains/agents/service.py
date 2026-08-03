@@ -39,12 +39,17 @@ class AgentService:
         self._session = session
 
     # ------------------------------------------------------------------ query (write path)
-    def answer(self, question: str, background_tasks: BackgroundTasks) -> AgentQueryResponse:
+    def answer(
+        self,
+        question: str,
+        background_tasks: BackgroundTasks,
+        source_access_token: str,
+    ) -> AgentQueryResponse:
         """Run the graph, persist the trace off-path, and return the answer + trace id."""
         if not is_agents_configured(self.settings):
             raise AgentError(503, "The agent is not available right now.")
 
-        config = build_agent_config(self.settings)
+        config = build_agent_config(self.settings, source_access_token)
         result = run_agent(question, config)
         input_summary, output_summary = self._summaries(question, result.answer)
 

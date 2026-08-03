@@ -22,6 +22,7 @@ from central_api.domains.inventory.models import Client
 from central_api.main import create_app
 
 TokenFactory = Callable[..., str]
+OAuthTokenFactory = Callable[..., str]
 
 
 @pytest.fixture(scope="session")
@@ -129,6 +130,41 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
             "token_type": "access",
         }
         return str(jwt.encode(claims, private_key, algorithm="RS256"))
+
+    return create_token
+
+
+@pytest.fixture
+def oauth_token_factory(signing_keys: tuple[str, str]) -> OAuthTokenFactory:
+    private_key = signing_keys[0]
+
+    def create_token(
+        *,
+        scopes: str,
+        audience: str = "http://localhost:8003",
+        issuer: str = "http://localhost:8002",
+        expires_delta: timedelta = timedelta(minutes=10),
+    ) -> str:
+        now = datetime.now(UTC)
+        return str(
+            jwt.encode(
+                {
+                    "sub": "11111111-1111-4111-8111-111111111111",
+                    "client_id": "mcp-service",
+                    "role": "user",
+                    "status": "active",
+                    "scope": scopes,
+                    "iss": issuer,
+                    "aud": audience,
+                    "exp": now + expires_delta,
+                    "iat": now,
+                    "jti": str(uuid4()),
+                    "token_type": "access",
+                },
+                private_key,
+                algorithm="RS256",
+            )
+        )
 
     return create_token
 

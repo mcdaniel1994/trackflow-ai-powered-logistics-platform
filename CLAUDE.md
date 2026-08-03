@@ -129,7 +129,13 @@ Then read the active engagement brief and the README for every folder being modi
   in `docs/planning/remaining_planning/07_rag_knowledge_base/`. Still open: provider keys, a
   provisioned Qdrant, and running `rag-index` + `rag-eval` against live services.
 
-- **Engagement 8+** - planned from `docs/planning/remaining_planning/`.
+- **Engagement 8** - Agent Engineering (LangGraph)
+  Stakeholder brief: `docs/briefs/08-agent-engineering.md`. The graph and safe Postgres trace store
+  live in the Central API `agents` domain; the reusable OAuth-protected tool boundary lives under
+  `mcps/`; Identity owns OAuth issuance; later guardrails/memory extend the same graph and Agent OS
+  lives in `uis/backoffice/`.
+
+- **Engagement 9+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are
   requirements, not architecture). A project there with no approved specification is not ready to

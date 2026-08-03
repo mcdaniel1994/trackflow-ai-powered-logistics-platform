@@ -198,6 +198,18 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### 🚧 Engagement 8 — Agent Engineering *(Phase 3 pending owner review)*
+
+- Explicit LangGraph routing across RAG, live ticket status, or both, with safe Postgres trace metadata.
+- Standalone Streamable HTTP MCP service at `/mcp`, protected by TrackFlow Identity OAuth and `mcpauth`.
+- Delegated, scoped ticket create/status/update and read-only inventory tools; inventory writes are denied locally.
+- The Central API agent uses the MCP transport only; no direct incident-service path remains in its agents domain.
+- Production domains, exposure, credentials, and deployment remain owner-gated.
+
+📁 Locations: `mcps/`, `services/identity/`, `services/central-api/`, and `docs/agents/`
+
+---
+
 ### ✅ Centralized Incident Manager *(delivered subproject)*
 
 - Browser-based incident registration across Central, Los Angeles, and Zaragoza
@@ -240,7 +252,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
-| 8 | AI agents (LangGraph, tools, MCP server, guardrails, memory) | ⏳ Planning inputs only — no spec yet |
+| 8 | Agent Engineering (LangGraph) | 🚧 Phases 0–2 committed; Phase 3 OAuth-protected MCP tools implemented, pending owner review |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 

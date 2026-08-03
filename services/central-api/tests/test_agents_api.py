@@ -18,6 +18,7 @@ from sqlmodel import Session
 from central_api.core.config import Settings, get_settings
 from central_api.domains.agents import recorder
 from central_api.domains.agents import service as agent_service
+from central_api.domains.agents.config import AgentConfig
 from central_api.domains.agents.graph import AgentRunResult
 from central_api.domains.agents.repository import AgentRepository
 
@@ -31,6 +32,8 @@ def _configure_agent(app: FastAPI, base: Settings, *, store_content: bool = Fals
         rag_enabled=True,
         openai_api_key="test-openai",
         deepseek_api_key="test-deepseek",
+        agent_mcp_oauth_client_id="test-client",
+        agent_mcp_oauth_client_secret="test-secret",
     )
     app.dependency_overrides[get_settings] = lambda: configured
     return configured
@@ -71,6 +74,35 @@ def test_query_returns_answer_and_trace_id(
 
     assert response.status_code == 200
     assert response.json() == {"answer": "30 days.", "trace_id": "trace-abc"}
+
+
+def test_cookie_caller_token_is_ephemeral_mcp_config_only(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    cookie_auth: object,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_agent(app, settings)
+    captured: dict[str, object] = {}
+
+    def run(_question: str, config: object) -> AgentRunResult:
+        captured["config"] = config
+        return _result()
+
+    monkeypatch.setattr(agent_service, "run_agent", run)
+    monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: None)
+    authenticate = cookie_auth
+    assert callable(authenticate)
+    response = client.post("/agent/query", json={"question": "return window?"}, headers=authenticate())
+
+    assert response.status_code == 200
+    config = captured["config"]
+    assert isinstance(config, AgentConfig)
+    assert config.source_access_token
+    rendered = repr(config)
+    assert "source_access_token" not in rendered
+    assert "test-secret" not in rendered
 
 
 def test_query_requires_authentication(client: TestClient) -> None:

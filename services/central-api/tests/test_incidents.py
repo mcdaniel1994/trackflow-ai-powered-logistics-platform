@@ -1,5 +1,6 @@
 """Centralized incident API lifecycle, validation, filtering, and summary tests."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -46,6 +47,23 @@ def test_incident_routes_require_auth_and_cookie_writes_require_csrf(
     assert callable(authenticate)
     authenticate(csrf=False)
     assert client.post("/api/incidents", json=incident_payload).status_code == 403
+
+
+def test_incident_routes_accept_only_matching_oauth_scopes(
+    client: TestClient,
+    oauth_token_factory: Callable[..., str],
+    incident_payload: dict[str, object],
+) -> None:
+    read_headers = {"Authorization": f"Bearer {oauth_token_factory(scopes='incidents:read')}"}
+    write_headers = {"Authorization": f"Bearer {oauth_token_factory(scopes='incidents:write')}"}
+    assert client.get("/api/incidents", headers=read_headers).status_code == 200
+    assert client.post("/api/incidents", json=incident_payload, headers=read_headers).status_code == 403
+    assert client.post("/api/incidents", json=incident_payload, headers=write_headers).status_code == 201
+
+    wrong_audience = {
+        "Authorization": f"Bearer {oauth_token_factory(scopes='incidents:read', audience='https://wrong.test')}"
+    }
+    assert client.get("/api/incidents", headers=wrong_audience).status_code == 401
 
 
 def test_validation_returns_field_keyed_400(

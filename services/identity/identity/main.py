@@ -34,9 +34,13 @@ from .models import (
     UserUpdate,
     to_public_user,
 )
+from .oauth import OAuthService
+from .oauth_routes import router as oauth_router
 from .repository import (
     DuplicateEmailError,
     TinyDBIdentityStore,
+    TinyDBOAuthClientRepository,
+    TinyDBOAuthCodeRepository,
     TinyDBPasswordResetRepository,
     TinyDBSessionRepository,
     TinyDBUserRepository,
@@ -58,17 +62,26 @@ def create_app() -> FastAPI:
         user_repository = TinyDBUserRepository(store)
         session_repository = TinyDBSessionRepository(store)
         password_reset_repository = TinyDBPasswordResetRepository(store)
+        oauth_client_repository = TinyDBOAuthClientRepository(store)
+        oauth_code_repository = TinyDBOAuthCodeRepository(store)
         email_sender = ResendEmailSender(api_key=settings.resend_api_key, sender=settings.email_sender)
         app.state.identity_settings = settings
         app.state.identity_store = store
         app.state.user_service = UserService(user_repository)
         app.state.auth_service = AuthService(user_repository, session_repository, password_reset_repository, email_sender)
+        app.state.oauth_service = OAuthService(
+            user_repository,
+            oauth_client_repository,
+            oauth_code_repository,
+            settings,
+        )
         try:
             yield
         finally:
             store.close()
 
     app = FastAPI(title="TrackFlow Identity", version="0.1.0", lifespan=lifespan)
+    app.include_router(oauth_router)
     app.add_exception_handler(RequestValidationError, safe_request_validation_exception_handler)
 
     initial_settings = get_settings()

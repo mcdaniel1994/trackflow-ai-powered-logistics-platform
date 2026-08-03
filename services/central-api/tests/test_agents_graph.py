@@ -12,8 +12,8 @@ import pytest
 
 from central_api.domains.agents import graph as g
 from central_api.domains.agents.config import AgentConfig
+from central_api.domains.agents.mcp_client import TicketLookupResult, TicketStatus
 from central_api.domains.agents.routing import RouteDecision
-from central_api.domains.agents.tools.incidents import TicketLookupResult, TicketStatus
 
 
 class _RagCfg:
@@ -25,6 +25,9 @@ def _config() -> AgentConfig:
     return AgentConfig(
         agent_name="trackflow-cx-agent", rag=_RagCfg(), min_score=0.5,
         agent_model="gpt-4o-mini", route_timeout_seconds=8.0, ticket_timeout_seconds=5.0,
+        mcp_url="http://mcp.test/mcp", mcp_resource_url="https://mcp.trackflow.test/mcp",
+        oauth_token_url="http://identity.test/oauth/token", mcp_oauth_client_id="client",
+        mcp_oauth_client_secret="secret", source_access_token="source-token",
     )
 
 
@@ -50,7 +53,7 @@ def _ok_ticket(monkeypatch: pytest.MonkeyPatch, ticket_id: int = 42) -> None:
     ticket = TicketStatus(ticket_id=ticket_id, status="resolved", category="lost_parcel",
                           created_at="2026-07-01T00:00:00+00:00", updated_at="2026-07-05T00:00:00+00:00")
     monkeypatch.setattr(
-        g, "lookup_ticket_status", lambda _id, timeout_seconds=5.0: TicketLookupResult("ok", ticket, 12)
+        g, "lookup_ticket_status", lambda _id, _config: TicketLookupResult("ok", ticket, 12)
     )
 
 
@@ -149,7 +152,7 @@ def test_both_route_runs_rag_then_tool(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_tool_timeout_falls_back_without_fabricating(monkeypatch: pytest.MonkeyPatch) -> None:
     _route(monkeypatch, RouteDecision("ticket", 99))
     monkeypatch.setattr(
-        g, "lookup_ticket_status", lambda _id, timeout_seconds=5.0: TicketLookupResult("timeout", None, 5000)
+        g, "lookup_ticket_status", lambda _id, _config: TicketLookupResult("timeout", None, 5000)
     )
     seen: dict[str, object] = {}
     monkeypatch.setattr(g, "generate_answer", _capturing_generate(seen, "I couldn't confirm that."))
@@ -166,7 +169,7 @@ def test_routing_heuristic_extracts_ticket_id_without_a_key(monkeypatch: pytest.
     """With no OpenAI key, real route_question must still route a ticket question via the heuristic."""
     captured: dict[str, int] = {}
 
-    def fake_lookup(ticket_id: int, timeout_seconds: float = 5.0) -> TicketLookupResult:
+    def fake_lookup(ticket_id: int, _config: AgentConfig) -> TicketLookupResult:
         captured["id"] = ticket_id
         return TicketLookupResult("not_found", None, 3)
 

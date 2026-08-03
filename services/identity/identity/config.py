@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Keeps local Back Office origins explicit for credentialed cookie requests.
 DEFAULT_CORS_ORIGINS = ("http://localhost:3000", "http://127.0.0.1:3000")
@@ -32,6 +33,12 @@ class IdentitySettings:
     cors_origins: list[str]
     cookie_secure: bool
     cookie_samesite: str
+    oauth_issuer_url: str
+    oauth_access_token_expire_minutes: int
+    oauth_authorization_code_expire_minutes: int
+    oauth_dynamic_registration_enabled: bool
+    oauth_allow_insecure_http: bool
+    app_environment: str
 
 
 # Converts escaped PEM newlines from .env-compatible values.
@@ -81,7 +88,8 @@ def get_cors_origins() -> list[str]:
 
 # Builds one settings object from all identity-related env vars.
 def get_settings() -> IdentitySettings:
-    return IdentitySettings(
+    app_environment = os.getenv("APP_ENVIRONMENT", "local").strip().lower() or "local"
+    settings = IdentitySettings(
         db_path=get_db_path(),
         jwt_private_key=_pem_from_env(os.getenv("IDENTITY_JWT_PRIVATE_KEY", "")),
         jwt_public_key=_pem_from_env(os.getenv("IDENTITY_JWT_PUBLIC_KEY", "")),
@@ -97,4 +105,28 @@ def get_settings() -> IdentitySettings:
         cors_origins=get_cors_origins(),
         cookie_secure=_get_bool("AUTH_COOKIE_SECURE", False),
         cookie_samesite=os.getenv("AUTH_COOKIE_SAMESITE", "lax").strip().lower() or "lax",
+        oauth_issuer_url=(os.getenv("OAUTH_ISSUER_URL", "http://localhost:8002").strip() or "http://localhost:8002").rstrip("/"),
+        oauth_access_token_expire_minutes=_get_int("OAUTH_ACCESS_TOKEN_EXPIRE_MINUTES", 15),
+        oauth_authorization_code_expire_minutes=_get_int("OAUTH_AUTHORIZATION_CODE_EXPIRE_MINUTES", 5),
+        oauth_dynamic_registration_enabled=_get_bool(
+            "OAUTH_DYNAMIC_REGISTRATION_ENABLED",
+            app_environment in {"local", "codespaces"},
+        ),
+        oauth_allow_insecure_http=_get_bool("OAUTH_ALLOW_INSECURE_HTTP", False),
+        app_environment=app_environment,
     )
+    parsed_issuer = urlparse(settings.oauth_issuer_url)
+    local_http = (
+        parsed_issuer.scheme == "http"
+        and parsed_issuer.hostname in {"localhost", "127.0.0.1"}
+        and settings.app_environment != "production"
+    )
+    explicitly_allowed = settings.oauth_allow_insecure_http and settings.app_environment != "production"
+    if (
+        not parsed_issuer.netloc
+        or parsed_issuer.query
+        or parsed_issuer.fragment
+        or (parsed_issuer.scheme != "https" and not local_http and not explicitly_allowed)
+    ):
+        raise ValueError("OAUTH_ISSUER_URL must use HTTPS except for explicitly allowed non-production HTTP")
+    return settings

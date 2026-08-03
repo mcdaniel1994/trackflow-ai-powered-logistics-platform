@@ -8,9 +8,9 @@ provider calls); the read endpoints require an authenticated principal.
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 from sqlmodel import Session
-from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
+from trackflow_auth import AuthenticatedPrincipal, extract_access_token  # type: ignore[import-untyped]
 
 from ...core.config import Settings, get_settings
 from ...core.dependencies import current_principal, write_principal
@@ -35,11 +35,12 @@ def _read_service(
 @router.post("/agent/query", response_model=AgentQueryResponse)
 def query_agent(
     payload: AgentQueryRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     _principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
     service: Annotated[AgentService, Depends(_query_service)],
 ) -> AgentQueryResponse:
-    return service.answer(payload.question, background_tasks)
+    return service.answer(payload.question, background_tasks, extract_access_token(request))
 
 
 @router.get("/agents/runs", response_model=list[RunSummary])

@@ -100,6 +100,12 @@ without confirming the target, recovery posture, and explicit approval.
 | `IDENTITY_JWT_ALGORITHM` | Must remain `RS256` |
 | `IDENTITY_JWT_ISSUER` | Expected access-token issuer |
 | `IDENTITY_JWT_AUDIENCE` | Expected access-token audience |
+| `IDENTITY_OAUTH_ISSUER_URL` | Public URL issuer for scoped OAuth resource tokens |
+| `IDENTITY_OAUTH_INTERNAL_URL` | Internal Identity origin used only for delegated token exchange |
+| `CENTRAL_API_OAUTH_RESOURCE_URL` | Exact public audience accepted on incident and read-only inventory routes |
+| `AGENT_MCP_URL` | Internal Streamable HTTP transport URL used by the LangGraph ticket node |
+| `AGENT_MCP_RESOURCE_URL` | Public MCP resource identifier requested during token exchange |
+| `AGENT_MCP_OAUTH_CLIENT_ID` / `AGENT_MCP_OAUTH_CLIENT_SECRET` | Confidential Central API client provisioned through Identity; never logged or persisted in graph state |
 | `SEED_USER_UUID` | Existing local Identity user's UUID for seeded movements |
 | `PREFECT_API_URL` | Internal Prefect API used by maintenance retention; no Prefect DB credential |
 | `PREFECT_RUN_RETENTION_DAYS` | Terminal Prefect history retention, default 30 days |

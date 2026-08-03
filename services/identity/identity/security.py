@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import secrets
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -93,6 +94,79 @@ def hash_refresh_token(token: str) -> str:
 # Stores only a digest of reset tokens in TinyDB.
 def hash_password_reset_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_oauth_token(token: str) -> str:
+    """Hash one-time OAuth codes before persistence."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def oauth_key_id(settings: IdentitySettings) -> str:
+    """Return a stable, non-secret identifier for the configured RSA public key."""
+    return hashlib.sha256(settings.jwt_public_key.encode("utf-8")).hexdigest()[:16]
+
+
+def oauth_jwks(settings: IdentitySettings) -> dict[str, object]:
+    """Expose the configured RS256 public key as a minimal JWKS document."""
+    public_key = load_pem_public_key(settings.jwt_public_key.encode("utf-8"))
+    if not isinstance(public_key, rsa.RSAPublicKey):
+        raise JWTConfigurationError(JWT_CONFIGURATION_MESSAGE)
+    numbers = public_key.public_numbers()
+
+    def encode_int(value: int) -> str:
+        raw = value.to_bytes((value.bit_length() + 7) // 8, "big")
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    return {
+        "keys": [
+            {
+                "kty": "RSA",
+                "use": "sig",
+                "alg": "RS256",
+                "kid": oauth_key_id(settings),
+                "n": encode_int(numbers.n),
+                "e": encode_int(numbers.e),
+            }
+        ]
+    }
+
+
+def sign_oauth_access_token(
+    *,
+    subject: str,
+    client_id: str,
+    scopes: frozenset[str],
+    audience: str,
+    settings: IdentitySettings,
+    role: str = "service",
+    status: str = "active",
+    actor: str | None = None,
+) -> tuple[str, int]:
+    """Sign a short-lived OAuth resource token with explicit audience and scopes."""
+    issued_at = now_utc()
+    expires_in = settings.oauth_access_token_expire_minutes * 60
+    claims: dict[str, object] = {
+        "sub": subject,
+        "client_id": client_id,
+        "role": role,
+        "status": status,
+        "scope": " ".join(sorted(scopes)),
+        "iss": settings.oauth_issuer_url,
+        "aud": audience,
+        "iat": int(issued_at.timestamp()),
+        "exp": int(issued_at.timestamp()) + expires_in,
+        "jti": str(uuid4()),
+        "token_type": TOKEN_TYPE_ACCESS,
+    }
+    if actor:
+        claims["act"] = {"sub": actor}
+    token = jwt.encode(
+        claims,
+        settings.jwt_private_key,
+        algorithm=settings.jwt_algorithm,
+        headers={"kid": oauth_key_id(settings)},
+    )
+    return str(token), expires_in
 
 
 # Generates the non-HttpOnly double-submit CSRF token.

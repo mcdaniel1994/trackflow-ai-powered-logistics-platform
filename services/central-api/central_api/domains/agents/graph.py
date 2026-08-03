@@ -1,9 +1,9 @@
-"""The Engagement 8 LangGraph agent — Parts 1-2 (RAG migration + tools).
+"""The Engagement 8 LangGraph agent — Phases 1-3 (RAG, routing, and OAuth-protected MCP tools).
 
 Part 1 made the RAG flow an explicit, traceable state machine. Part 2 adds automatic routing and a
 live tool: the agent decides on its own whether a question needs the knowledge base (RAG), a live
-support-ticket lookup (tool), or both — without the user specifying — and the trace shows which ran
-and in what order.
+support-ticket lookup through the standalone MCP server, or both — without the user specifying —
+and the trace shows which ran and in what order.
 
 Nodes: ``receive_question`` -> ``route`` -> (conditional) ``retrieve`` / ``ticket_tool`` ->
 ``generate`` | ``no_context`` -> END. Retrieval and generation reuse the pipeline's ``retrieve`` and
@@ -28,8 +28,8 @@ from langgraph.graph import END, START, StateGraph
 from pipelines.rag import generate_answer, retrieve  # type: ignore[import-untyped]
 
 from .config import AgentConfig
+from .mcp_client import lookup_ticket_status
 from .routing import route_question
-from .tools.incidents import lookup_ticket_status
 
 logger = logging.getLogger(__name__)
 
@@ -130,7 +130,7 @@ def build_graph(config: AgentConfig) -> Any:
             return {"tool_context": [block], "tool_calls": [call],
                     "steps": [_step(state, "ticket_tool", "error", started, notes="missing ticket id")]}
 
-        result = lookup_ticket_status(ticket_id, timeout_seconds=config.ticket_timeout_seconds)
+        result = lookup_ticket_status(ticket_id, config)
         if result.outcome == "ok" and result.ticket is not None:
             ticket = result.ticket
             text = (

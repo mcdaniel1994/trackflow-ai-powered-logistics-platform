@@ -4,10 +4,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
-from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 from trackflow_incidents import Branch, IncidentCategory, IncidentOrigin, IncidentStatus
 
-from ...core.dependencies import current_principal, write_principal
+from ...core.dependencies import (
+    OperationalPrincipal,
+    incidents_read_principal,
+    incidents_write_principal,
+)
 from ...db.session import get_session
 from .schemas import IncidentCreate, IncidentPage, IncidentRead, IncidentStatusUpdate, IncidentSummary
 from .service import IncidentService
@@ -22,7 +25,7 @@ def incident_service(session: Annotated[Session, Depends(get_session)]) -> Incid
 @router.post("", response_model=IncidentRead, status_code=status.HTTP_201_CREATED)
 def create_incident(
     payload: IncidentCreate,
-    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    principal: Annotated[OperationalPrincipal, Depends(incidents_write_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentRead:
     return service.create(payload, principal.user_id)
@@ -30,7 +33,7 @@ def create_incident(
 
 @router.get("", response_model=IncidentPage)
 def list_incidents(
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(incidents_read_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
     incident_status: Annotated[IncidentStatus | None, Query(alias="status")] = None,
     origin: IncidentOrigin | None = None,
@@ -51,7 +54,7 @@ def list_incidents(
 
 @router.get("/summary", response_model=IncidentSummary)
 def incident_summary(
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(incidents_read_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentSummary:
     return service.summary()
@@ -60,7 +63,7 @@ def incident_summary(
 @router.get("/{incident_id}", response_model=IncidentRead)
 def get_incident(
     incident_id: int,
-    _principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(incidents_read_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentRead:
     return service.get(incident_id)
@@ -70,8 +73,7 @@ def get_incident(
 def update_incident_status(
     incident_id: int,
     payload: IncidentStatusUpdate,
-    _principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    _principal: Annotated[OperationalPrincipal, Depends(incidents_write_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentRead:
     return service.update_status(incident_id, payload)
-

@@ -34,6 +34,20 @@ class AuthenticatedPrincipal(BaseModel):
     token_source: Literal["cookie", "bearer"]
 
 
+class ScopedPrincipal(BaseModel):
+    """Verified OAuth bearer principal used for least-privilege service access."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str
+    client_id: str
+    role: str
+    status: str
+    scopes: frozenset[str]
+    token_id: str
+    token_source: Literal["bearer"] = "bearer"
+
+
 # Carries public-key verification settings for one service.
 @dataclass(frozen=True)
 class TokenVerifierConfig:
@@ -44,6 +58,16 @@ class TokenVerifierConfig:
     access_cookie_name: str = ACCESS_COOKIE_NAME
     csrf_cookie_name: str = CSRF_COOKIE_NAME
     csrf_header_name: str = CSRF_HEADER_NAME
+
+
+@dataclass(frozen=True)
+class OAuthTokenVerifierConfig:
+    """Verification policy for one OAuth resource-server audience."""
+
+    public_key: str
+    issuer: str
+    audience: str
+    algorithm: str = "RS256"
 
 
 # Builds the standard 401 response for failed authentication.
@@ -129,6 +153,73 @@ def authenticate_request(
         must_change_password=bool(claims["must_change_password"]),
         token_id=str(claims["jti"]),
         token_source=source,
+    )
+
+
+def authenticate_scoped_bearer(
+    request: Request,
+    config: OAuthTokenVerifierConfig,
+    *,
+    required_scopes: frozenset[str] = frozenset(),
+) -> ScopedPrincipal:
+    """Verify an OAuth bearer token and enforce the requested resource scopes.
+
+    OAuth resource tokens are never accepted from cookies, so state-changing service calls do not
+    accidentally inherit browser CSRF semantics. Issuer, audience, signature, lifetime, token type,
+    and required claims are validated before scope authorization.
+    """
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip() or not config.public_key.strip():
+        raise _auth_error()
+
+    try:
+        header = jwt.get_unverified_header(token)
+    except JWTError as exc:
+        raise _auth_error() from exc
+    if header.get("alg") != config.algorithm or config.algorithm != "RS256":
+        raise _auth_error()
+
+    try:
+        claims = jwt.decode(
+            token.strip(),
+            config.public_key,
+            algorithms=[config.algorithm],
+            issuer=config.issuer,
+            audience=config.audience,
+        )
+    except JWTError as exc:
+        raise _auth_error() from exc
+
+    required = {"sub", "client_id", "scope", "iss", "aud", "exp", "iat", "jti", "token_type"}
+    if (
+        required.difference(claims)
+        or claims.get("token_type") != "access"
+        or claims.get("status", "active") != "active"
+        or not str(claims.get("sub", "")).strip()
+        or not str(claims.get("client_id", "")).strip()
+    ):
+        raise _auth_error()
+
+    raw_scope = claims.get("scope")
+    if not isinstance(raw_scope, str):
+        raise _auth_error()
+    scopes = frozenset(part for part in raw_scope.split(" ") if part)
+    missing = required_scopes.difference(scopes)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient scope",
+            headers={"WWW-Authenticate": 'Bearer error="insufficient_scope"'},
+        )
+
+    return ScopedPrincipal(
+        user_id=str(claims["sub"]),
+        client_id=str(claims["client_id"]),
+        role=str(claims.get("role", "service")),
+        status=str(claims.get("status", "active")),
+        scopes=scopes,
+        token_id=str(claims["jti"]),
     )
 
 

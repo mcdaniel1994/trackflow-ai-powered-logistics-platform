@@ -60,6 +60,19 @@ dependency.
 | [zstandard](https://pypi.org/project/zstandard/) | 0.25.0 | BSD-3-Clause | Transitive | Compression |
 | [requests-toolbelt](https://pypi.org/project/requests-toolbelt/) | 1.0.0 | Apache-2.0 | Transitive (`langsmith`) | HTTP multipart helper |
 
+### Phase 3 MCP and OAuth additions
+
+Added for the standalone MCP resource server and Central API transport adapter. All three approved
+direct dependencies are permissive; `mcp<2` is an explicit compatibility constraint because
+`langchain-mcp-adapters==0.3.1` does not import successfully with MCP SDK 2.0.
+
+| Package | Version | License | Direct / Transitive | Notes |
+|---|---|---|---|---|
+| [mcpauth](https://pypi.org/project/mcpauth/) | 0.2.0b1 | MIT | Direct (`mcps`) | Owner-approved beta required for RFC 9728 Protected Resource Metadata |
+| [fastmcp](https://pypi.org/project/fastmcp/) | 3.4.5 | Apache-2.0 | Direct (`mcps`) | Streamable HTTP MCP server; its built-in auth is deliberately not used |
+| [langchain-mcp-adapters](https://pypi.org/project/langchain-mcp-adapters/) | 0.3.1 | MIT | Direct (`services/central-api`) | Typed LangChain client adapter for MCP tool discovery/invocation |
+| [mcp](https://pypi.org/project/mcp/) | 1.29.0 | MIT | Direct compatibility constraint (`services/central-api`), transitive (`mcps`) | `<2` prevents adapter 0.3.1 from resolving an incompatible SDK major |
+
 ## Copyleft / weak-copyleft dependencies
 
 | Package | Version | License | Ecosystem | Direct / Transitive | Notes |
