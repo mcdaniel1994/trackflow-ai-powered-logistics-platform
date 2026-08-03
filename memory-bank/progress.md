@@ -14,12 +14,14 @@
 
 ## Active
 
-- Engagement 8 - Agent Engineering (LangGraph) (`docs/briefs/08-agent-engineering.md`): Phases 0–4
+- Engagement 8 - Agent Engineering (LangGraph) (`docs/briefs/08-agent-engineering.md`): Phases 0–5
   are implemented on `engagement-8-agentic-engineering`. Phase 4 adds Identity-owned US/Spain
   jurisdiction, creator-owned delegated incident access, jurisdiction-filtered RAG, graph input and
-  output guardrails, safe guardrail telemetry, and an admin-only aggregate endpoint. It is awaiting
-  owner review before Phase 5 confirmed structured memory. The Phase 3 Codespaces MCP Playground
-  exercise still lacks owner evidence and remains unverified.
+  output guardrails, safe guardrail telemetry, and an admin-only aggregate endpoint. Phase 5 adds
+  owner-bound conversations, typed human decisions, never-store validation, consolidated carrier
+  facts, append-only audit/version history, and seven-day pending cleanup. Phases 4–5 await owner
+  review. The Phase 3 Codespaces MCP Playground exercise still lacks owner evidence and remains
+  unverified.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
@@ -152,9 +154,9 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 8 - AI agents: Phases 0–4 implemented under the owner-approved design in
-  `docs/agents/agent-design.md`; Phase 4 awaits owner review, Phase 5 is pending, and the Phase 3
-  Codespaces MCP Playground evidence gap remains open. See `docs/briefs/08-agent-engineering.md`.
+- Engagement 8 - AI agents: Phases 0–5 implemented under the owner-approved design in
+  `docs/agents/agent-design.md`; Phases 4–5 await owner review, and the Phase 3 Codespaces MCP
+  Playground evidence gap remains open. See `docs/briefs/08-agent-engineering.md`.
 - Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
   specification yet. This is LangGraph work, not n8n; the earlier "workflow
   automation with n8n" framing does not match the assignment documents.

@@ -13,8 +13,10 @@ never enter these tables (telemetry standard §8). Rows are pruned by retention 
 
 from datetime import UTC, datetime
 from typing import ClassVar
+from uuid import uuid4
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Column,
     DateTime,
@@ -24,6 +26,8 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
+    text,
 )
 from sqlalchemy.sql.schema import SchemaItem
 from sqlmodel import Field, SQLModel
@@ -144,4 +148,162 @@ class AgentGuardrailEvent(SQLModel, table=True):
     category: str = Field(sa_column=Column(String(16), nullable=False))
     outcome: str = Field(sa_column=Column(String(16), nullable=False))
     duration_ms: int = Field(default=0, sa_column=Column(Integer, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+MEMORY_KINDS: tuple[str, ...] = (
+    "carrier_coverage_correction",
+    "carrier_assignment_correction",
+    "recurring_operational_pattern",
+    "carrier_b2b_reporting_preference",
+)
+
+
+class AgentConversation(SQLModel, table=True):
+    """Durable owner boundary for a sequence of agent turns."""
+
+    __tablename__ = "agent_conversations"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        CheckConstraint("jurisdiction IN ('US', 'ES')", name="ck_agent_conversations_jurisdiction"),
+        Index("ix_agent_conversations_owner_updated", "owner_user_uuid", "updated_at"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, max_length=36)
+    owner_user_uuid: str = Field(sa_column=Column(String(36), nullable=False))
+    jurisdiction: str = Field(sa_column=Column(String(2), nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class AgentMemoryProposal(SQLModel, table=True):
+    """One human-visible, validated candidate awaiting a typed decision."""
+
+    __tablename__ = "agent_memory_proposals"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        CheckConstraint(
+            "status IN ('pending', 'approved', 'rejected', 'discarded')",
+            name="ck_agent_memory_proposals_status",
+        ),
+        CheckConstraint("jurisdiction IN ('US', 'ES')", name="ck_agent_memory_proposals_jurisdiction"),
+        CheckConstraint(
+            "kind IN ('carrier_coverage_correction', 'carrier_assignment_correction', "
+            "'recurring_operational_pattern', 'carrier_b2b_reporting_preference')",
+            name="ck_agent_memory_proposals_kind",
+        ),
+        CheckConstraint("recurrence_count >= 2", name="ck_agent_memory_proposals_recurrence"),
+        Index(
+            "uq_agent_memory_proposals_one_pending",
+            "conversation_id",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_agent_memory_proposals_pending_updated", "status", "updated_at"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, max_length=36)
+    conversation_id: str = Field(
+        sa_column=Column(
+            String(36),
+            ForeignKey("agent_conversations.id", ondelete="CASCADE"),
+            nullable=False,
+        )
+    )
+    carrier_id: str = Field(sa_column=Column(String(36), ForeignKey("suppliers.id"), nullable=False))
+    jurisdiction: str = Field(sa_column=Column(String(2), nullable=False))
+    kind: str = Field(sa_column=Column(String(48), nullable=False))
+    subject_key: str = Field(sa_column=Column(String(160), nullable=False))
+    fact: str = Field(sa_column=Column(Text, nullable=False))
+    recurrence_count: int = Field(sa_column=Column(Integer, nullable=False))
+    effective_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    status: str = Field(default="pending", sa_column=Column(String(16), nullable=False))
+    trace_id: str = Field(sa_column=Column(String(64), nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    decided_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+
+
+class AgentMemoryFact(SQLModel, table=True):
+    """Consolidated active structured memory, unique by carrier/jurisdiction/subject."""
+
+    __tablename__ = "agent_memory_facts"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        CheckConstraint("jurisdiction IN ('US', 'ES')", name="ck_agent_memory_facts_jurisdiction"),
+        CheckConstraint(
+            "kind IN ('carrier_coverage_correction', 'carrier_assignment_correction', "
+            "'recurring_operational_pattern', 'carrier_b2b_reporting_preference')",
+            name="ck_agent_memory_facts_kind",
+        ),
+        CheckConstraint("recurrence_count >= 2", name="ck_agent_memory_facts_recurrence"),
+        CheckConstraint("confirmation_count >= 1", name="ck_agent_memory_facts_confirmations"),
+        CheckConstraint("version >= 1", name="ck_agent_memory_facts_version"),
+        UniqueConstraint(
+            "carrier_id",
+            "jurisdiction",
+            "kind",
+            "subject_key",
+            name="uq_agent_memory_facts_consolidation",
+        ),
+        Index("ix_agent_memory_facts_carrier_jurisdiction_active", "carrier_id", "jurisdiction", "active"),
+    )
+
+    id: str = Field(default_factory=lambda: str(uuid4()), primary_key=True, max_length=36)
+    carrier_id: str = Field(sa_column=Column(String(36), ForeignKey("suppliers.id"), nullable=False))
+    jurisdiction: str = Field(sa_column=Column(String(2), nullable=False))
+    kind: str = Field(sa_column=Column(String(48), nullable=False))
+    subject_key: str = Field(sa_column=Column(String(160), nullable=False))
+    fact: str = Field(sa_column=Column(Text, nullable=False))
+    recurrence_count: int = Field(sa_column=Column(Integer, nullable=False))
+    effective_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    confirmation_count: int = Field(default=1, sa_column=Column(Integer, nullable=False))
+    version: int = Field(default=1, sa_column=Column(Integer, nullable=False))
+    active: bool = Field(default=True, sa_column=Column(Boolean, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+    updated_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class AgentMemoryDecision(SQLModel, table=True):
+    """Append-only safe decision record; no message or candidate payload is stored."""
+
+    __tablename__ = "agent_memory_decisions"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        CheckConstraint("action IN ('approve', 'reject', 'edit')", name="ck_agent_memory_decisions_action"),
+        Index("ix_agent_memory_decisions_conversation_created", "conversation_id", "created_at"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    decision_id: str = Field(sa_column=Column(String(36), nullable=False, unique=True))
+    proposal_id: str = Field(sa_column=Column(String(36), nullable=False))
+    conversation_id: str = Field(sa_column=Column(String(36), ForeignKey("agent_conversations.id"), nullable=False))
+    actor_user_uuid: str = Field(sa_column=Column(String(36), nullable=False))
+    trace_id: str = Field(sa_column=Column(String(64), nullable=False))
+    action: str = Field(sa_column=Column(String(16), nullable=False))
+    outcome: str = Field(sa_column=Column(String(32), nullable=False))
+    reason_code: str = Field(sa_column=Column(String(48), nullable=False))
+    fact_id: str | None = Field(default=None, sa_column=Column(String(36), nullable=True))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
+class AgentMemoryVersion(SQLModel, table=True):
+    """Append-only fact snapshot for every approved consolidation version."""
+
+    __tablename__ = "agent_memory_versions"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        UniqueConstraint("fact_id", "version", name="uq_agent_memory_versions_fact_version"),
+        CheckConstraint("version >= 1", name="ck_agent_memory_versions_version"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    fact_id: str = Field(sa_column=Column(String(36), ForeignKey("agent_memory_facts.id"), nullable=False))
+    version: int = Field(sa_column=Column(Integer, nullable=False))
+    carrier_id: str = Field(sa_column=Column(String(36), nullable=False))
+    jurisdiction: str = Field(sa_column=Column(String(2), nullable=False))
+    kind: str = Field(sa_column=Column(String(48), nullable=False))
+    subject_key: str = Field(sa_column=Column(String(160), nullable=False))
+    fact: str = Field(sa_column=Column(Text, nullable=False))
+    recurrence_count: int = Field(sa_column=Column(Integer, nullable=False))
+    effective_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
+    actor_user_uuid: str = Field(sa_column=Column(String(36), nullable=False))
+    proposal_id: str = Field(sa_column=Column(String(36), nullable=False))
+    decision_id: str = Field(sa_column=Column(String(36), nullable=False))
+    trace_id: str = Field(sa_column=Column(String(64), nullable=False))
     created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))

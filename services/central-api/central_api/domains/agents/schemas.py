@@ -9,18 +9,55 @@ retrieved text, tool arguments, and secrets are never persisted or returned (tel
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class APIModel(BaseModel):
     model_config = ConfigDict(extra="forbid", from_attributes=True)
 
 
+MemoryKind = Literal[
+    "carrier_coverage_correction",
+    "carrier_assignment_correction",
+    "recurring_operational_pattern",
+    "carrier_b2b_reporting_preference",
+]
+
+
+class MemoryCandidate(APIModel):
+    carrier_id: UUID
+    jurisdiction: Literal["US", "ES"]
+    kind: MemoryKind
+    subject_key: str = Field(min_length=1, max_length=160, pattern=r"^[a-z0-9][a-z0-9._:-]*$")
+    fact: str = Field(min_length=1, max_length=500)
+    recurrence_count: int = Field(ge=2, le=1_000_000)
+    effective_at: datetime | None = None
+
+
+class MemoryDecisionRequest(APIModel):
+    decision_id: UUID
+    proposal_id: UUID
+    action: Literal["approve", "reject", "edit"]
+    edited_candidate: MemoryCandidate | None = None
+
+    @model_validator(mode="after")
+    def edit_contract(self) -> MemoryDecisionRequest:
+        if self.action == "edit" and self.edited_candidate is None:
+            raise ValueError("edited_candidate is required for edit")
+        if self.action != "edit" and self.edited_candidate is not None:
+            raise ValueError("edited_candidate is allowed only for edit")
+        return self
+
+
 class AgentQueryRequest(APIModel):
-    """A single natural-language question routed through the agent graph."""
+    """A typed conversation turn; plain text can never imply a memory decision."""
 
     question: str = Field(min_length=1, max_length=1000)
+    conversation_id: UUID | None = None
+    memory_decision: MemoryDecisionRequest | None = None
 
     @field_validator("question")
     @classmethod
@@ -31,11 +68,18 @@ class AgentQueryRequest(APIModel):
         return stripped
 
 
+class MemoryProposalResponse(APIModel):
+    proposal_id: UUID
+    candidate: MemoryCandidate
+
+
 class AgentQueryResponse(APIModel):
-    """The agent's answer plus the id of the persisted run trace."""
+    """The guarded answer, conversation, trace, and exact pending proposal when one exists."""
 
     answer: str
     trace_id: str
+    conversation_id: UUID
+    memory_proposal: MemoryProposalResponse | None = None
 
 
 class ToolCallRead(APIModel):

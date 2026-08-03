@@ -28,8 +28,11 @@ def _require_admin(principal: AuthenticatedPrincipal) -> None:
         raise HTTPException(status_code=403, detail="Admin role required")
 
 
-def _query_service(settings: Annotated[Settings, Depends(get_settings)]) -> AgentService:
-    return AgentService(settings)
+def _query_service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[Session, Depends(get_session)],
+) -> AgentService:
+    return AgentService(settings, session)
 
 
 def _read_service(
@@ -47,7 +50,7 @@ def query_agent(
     principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
     service: Annotated[AgentService, Depends(_query_service)],
 ) -> AgentQueryResponse:
-    return service.answer(payload.question, background_tasks, extract_access_token(request), principal)
+    return service.answer(payload, background_tasks, extract_access_token(request), principal)
 
 
 @router.get("/agents/runs", response_model=list[RunSummary])

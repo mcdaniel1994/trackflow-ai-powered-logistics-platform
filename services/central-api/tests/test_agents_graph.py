@@ -9,6 +9,7 @@ ordered trace of node steps and tool calls carrying only safe metadata.
 from __future__ import annotations
 
 import pytest
+from pipelines.rag import GenerationResult
 
 from central_api.domains.agents import graph as g
 from central_api.domains.agents.config import AgentConfig
@@ -85,6 +86,7 @@ def test_rag_route_flows_through_generate(monkeypatch: pytest.MonkeyPatch) -> No
         "retrieve",
         "generate",
         "guardrail_output",
+        "memory_selfeval",
     ]
     assert result.route_taken == "rag" and not result.tool_calls
 
@@ -101,6 +103,60 @@ def test_answer_is_grounded_in_retrieved_context(monkeypatch: pytest.MonkeyPatch
     assert seen["chunks"] == [chunk]  # the RAG context reached generation
 
 
+def test_current_rag_evidence_outranks_conflicting_memory(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+    current = {
+        "source_document": "carrier-coverage",
+        "section": "UPS Ground",
+        "text": "UPS Ground currently covers the continental US.",
+        "subject_key": "coverage",
+    }
+    memory = {
+        "source_document": "confirmed-memory",
+        "carrier_name": "UPS Ground",
+        "subject_key": "coverage",
+        "text": "UPS Ground no longer covers the continental US.",
+    }
+    _route(monkeypatch, RouteDecision("rag", None))
+    monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [current])
+    monkeypatch.setattr(g, "generate_answer", _capturing_generate(seen, "Current coverage applies."))
+
+    result = g.run_agent("Does UPS Ground cover this region?", _config(), "US", [memory])
+
+    assert seen["chunks"] == [current]
+    assert any(event["rule_id"] == "memory_authority_omitted" for event in result.guardrail_events)
+
+
+def test_candidate_from_single_generation_call_runs_selfeval_after_output_guardrail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = {
+        "carrier_id": "11111111-1111-4111-8111-111111111111",
+        "jurisdiction": "US",
+        "kind": "recurring_operational_pattern",
+        "subject_key": "late_scan_pattern",
+        "fact": "Late scans recur during Tuesday handoffs.",
+        "recurrence_count": 3,
+        "effective_at": None,
+    }
+    calls = 0
+
+    def generate(*_args: object, **_kwargs: object) -> GenerationResult:
+        nonlocal calls
+        calls += 1
+        return GenerationResult("The current documented pattern applies.", candidate)
+
+    _route(monkeypatch, RouteDecision("rag", None))
+    monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [{"text": "Documented pattern."}])
+    monkeypatch.setattr(g, "generate_answer", generate)
+
+    result = g.run_agent("What pattern applies?", _config(), "US")
+
+    assert calls == 1
+    assert result.memory_candidate == candidate
+    assert _names(result)[-2:] == ["guardrail_output", "memory_selfeval"]
+
+
 def test_no_context_routes_to_honest_node(monkeypatch: pytest.MonkeyPatch) -> None:
     _route(monkeypatch, RouteDecision("rag", None))
     monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [])
@@ -115,6 +171,7 @@ def test_no_context_routes_to_honest_node(monkeypatch: pytest.MonkeyPatch) -> No
         "retrieve",
         "no_context",
         "guardrail_output",
+        "memory_selfeval",
     ]
     assert result.route_taken == "rag:no_context"
 
@@ -159,6 +216,7 @@ def test_ticket_route_calls_tool_and_grounds_answer(monkeypatch: pytest.MonkeyPa
         "ticket_tool",
         "generate",
         "guardrail_output",
+        "memory_selfeval",
     ]
     assert result.route_taken == "ticket"
     assert [call["tool_name"] for call in result.tool_calls] == ["ticket_status"]
@@ -184,6 +242,7 @@ def test_both_route_runs_rag_then_tool(monkeypatch: pytest.MonkeyPatch) -> None:
         "ticket_tool",
         "generate",
         "guardrail_output",
+        "memory_selfeval",
     ]
     assert result.route_taken == "both"
     texts = " ".join(chunk["text"] for chunk in seen["chunks"])  # type: ignore[index,union-attr]

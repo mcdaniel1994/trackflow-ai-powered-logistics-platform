@@ -10,8 +10,7 @@ runbooks for TrackFlow's LangGraph customer-experience agent.
 - [`mcp-codespaces-runbook.md`](mcp-codespaces-runbook.md) covers Phase 3 OAuth client provisioning
   and the owner-review MCP Playground gate.
 
-Phases 0–4 are implemented. Phase 4 layered guardrails await owner review, Phase 5 confirmed
-structured memory is pending, and the Phase 3 Codespaces MCP Playground exercise remains
-unverified.
+Phases 0–5 are implemented. Phase 4 layered guardrails and Phase 5 confirmed structured memory
+await owner review, and the Phase 3 Codespaces MCP Playground exercise remains unverified.
 
 Implementation status is tracked in [`docs/briefs/08-agent-engineering.md`](../briefs/08-agent-engineering.md).

@@ -4,10 +4,9 @@
 
 ## Status
 
-🚧 In progress — Engagement 8 Phases 0–3 are implemented on `engagement-8-agentic-engineering`;
-Phase 4 layered guardrails are implemented and awaiting owner review. The Phase 3 Codespaces MCP
-Playground exercise still lacks owner evidence and is not complete. Phase 5 confirmed structured
-memory remains pending.
+🚧 In progress — Engagement 8 Phases 0–5 are implemented on `engagement-8-agentic-engineering`;
+Phases 4–5 layered guardrails and confirmed structured memory await owner review. The Phase 3
+Codespaces MCP Playground exercise still lacks owner evidence and is not complete.
 
 ---
 

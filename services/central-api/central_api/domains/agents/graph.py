@@ -1,4 +1,4 @@
-"""The Engagement 8 LangGraph agent — Phases 1-4.
+"""The Engagement 8 LangGraph agent — Phases 1-5.
 
 Part 1 made the RAG flow an explicit, traceable state machine. Part 2 adds automatic routing and a
 live tool: the agent decides on its own whether a question needs the knowledge base (RAG), a live
@@ -12,7 +12,8 @@ generation reuse the pipeline's ``retrieve`` and
 ``generate_answer`` (a tool result is folded in as an extra context block, so generation stays
 reused, not duplicated). Every node records safe timing/status metadata; every tool call records a
 typed ``tool_call``. The OpenAI routing model and the ticket tool have explicit timeouts and honest
-fallbacks — a tool outage never fabricates a status. Confirmed memory arrives in Phase 5.
+fallbacks — a tool outage never fabricates a status. Phase 5 adds lower-authority, human-confirmed
+structured memory and a post-guardrail candidate self-evaluation node.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from uuid import uuid4
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from pipelines.rag import generate_answer, retrieve  # type: ignore[import-untyped]
+from pipelines.rag import GenerationResult, generate_answer, retrieve  # type: ignore[import-untyped]
 
 from .config import AgentConfig
 from .guardrails import (
@@ -58,6 +59,8 @@ class AgentState(TypedDict):
     route: str
     ticket_id: int | None
     retrieved: list[dict[str, object]] | None
+    memory_evidence: list[dict[str, object]]
+    memory_candidate: dict[str, object] | None
     tool_context: Annotated[list[dict[str, object]], operator.add]
     tool_calls: Annotated[list[dict[str, Any]], operator.add]
     answer: str | None
@@ -82,6 +85,7 @@ class AgentRunResult:
     steps: list[dict[str, Any]]
     tool_calls: list[dict[str, Any]]
     guardrail_events: list[dict[str, Any]] = field(default_factory=list)
+    memory_candidate: dict[str, object] | None = None
 
 
 def _step(state: AgentState, node_name: str, status: str, started: float, *, notes: str | None) -> dict[str, Any]:
@@ -246,39 +250,97 @@ def build_graph(config: AgentConfig) -> Any:
             "steps": [_step(state, "ticket_tool", step_status, started, notes=notes)],
         }
 
+    def usable_memory(state: AgentState) -> tuple[list[dict[str, object]], list[dict[str, Any]]]:
+        current = list(state.get("retrieved") or []) + list(state.get("tool_context") or [])
+        current_text = " ".join(str(chunk.get("text", "")) for chunk in current).casefold()
+        current_subjects = {str(chunk.get("subject_key")) for chunk in current if chunk.get("subject_key")}
+        usable: list[dict[str, object]] = []
+        omitted = False
+        for memory in state.get("memory_evidence") or []:
+            carrier_name = str(memory.get("carrier_name", "")).casefold()
+            subject_key = str(memory.get("subject_key", ""))
+            conflict = subject_key in current_subjects or bool(carrier_name and carrier_name in current_text)
+            if conflict or not evidence_is_safe(str(memory.get("text", ""))):
+                omitted = True
+                continue
+            usable.append(memory)
+        events = (
+            [
+                {
+                    "layer": "memory",
+                    "rule_id": "memory_authority_omitted",
+                    "category": "content",
+                    "outcome": "blocked",
+                    "duration_ms": 0,
+                }
+            ]
+            if omitted
+            else []
+        )
+        return usable, events
+
     def generate_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        context = list(state.get("retrieved") or []) + list(state.get("tool_context") or [])
+        memory, events = usable_memory(state)
+        context = list(state.get("retrieved") or []) + list(state.get("tool_context") or []) + memory
         try:
-            answer = generate_answer(state["question"], context, config.rag, jurisdiction=state.get("jurisdiction"))
+            generated = generate_answer(
+                state["question"],
+                context,
+                config.rag,
+                jurisdiction=state.get("jurisdiction"),
+                include_memory_candidate=True,
+            )
         except Exception as exc:
             logger.warning("agent_generate_failed error_type=%s", type(exc).__name__)
             return {
                 "error": "generation_failed",
                 "steps": [_step(state, "generate", "error", started, notes="generation failed")],
             }
-        return {"answer": answer, "steps": [_step(state, "generate", "ok", started, notes="grounded answer")]}
+        answer = generated.answer if isinstance(generated, GenerationResult) else generated
+        candidate = generated.memory_candidate if isinstance(generated, GenerationResult) else None
+        return {
+            "answer": answer,
+            "memory_candidate": candidate,
+            "guardrail_events": events,
+            "steps": [_step(state, "generate", "ok", started, notes="grounded answer")],
+        }
 
     def no_context_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
+        memory, events = usable_memory(state)
         try:
-            answer = generate_answer(state["question"], [], config.rag, jurisdiction=state.get("jurisdiction"))
+            generated = generate_answer(
+                state["question"],
+                memory,
+                config.rag,
+                jurisdiction=state.get("jurisdiction"),
+                include_memory_candidate=True,
+            )
         except Exception as exc:
             logger.warning("agent_no_context_failed error_type=%s", type(exc).__name__)
             return {
                 "error": "generation_failed",
                 "steps": [_step(state, "no_context", "error", started, notes="generation failed")],
             }
-        return {"answer": answer, "steps": [_step(state, "no_context", "ok", started, notes="no grounded context")]}
+        answer = generated.answer if isinstance(generated, GenerationResult) else generated
+        candidate = generated.memory_candidate if isinstance(generated, GenerationResult) else None
+        return {
+            "answer": answer,
+            "memory_candidate": candidate,
+            "guardrail_events": events,
+            "steps": [_step(state, "no_context", "ok", started, notes="no current context")],
+        }
 
     def guardrail_output_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         answer = state.get("answer") or ""
+        memory, _events = usable_memory(state)
         rule_id = validate_output(
             answer,
             state.get("jurisdiction"),
             authoritative_status=state.get("authoritative_status"),
-            has_grounded_evidence=bool(state.get("retrieved") or state.get("tool_context")),
+            has_grounded_evidence=bool(state.get("retrieved") or state.get("tool_context") or memory),
         )
         if rule_id:
             return {
@@ -296,6 +358,11 @@ def build_graph(config: AgentConfig) -> Any:
                 "steps": [_step(state, "guardrail_output", "ok", started, notes="outcome=blocked")],
             }
         return {"steps": [_step(state, "guardrail_output", "ok", started, notes="outcome=allowed")]}
+
+    def memory_selfeval_node(state: AgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        outcome = "candidate" if state.get("memory_candidate") is not None else "none"
+        return {"steps": [_step(state, "memory_selfeval", "ok", started, notes=f"outcome={outcome}")]}
 
     def after_receive(state: AgentState) -> str:
         return "reject" if state.get("route") == "reject" else "guardrail_input"
@@ -315,6 +382,9 @@ def build_graph(config: AgentConfig) -> Any:
             return "ticket_tool"
         return "generate" if state.get("retrieved") else "no_context"
 
+    def after_output(state: AgentState) -> str:
+        return "end" if state.get("route") == "reject" else "memory_selfeval"
+
     graph = StateGraph(AgentState)
     graph.add_node("receive_question", receive_question)
     graph.add_node("guardrail_input", guardrail_input_node)
@@ -324,6 +394,7 @@ def build_graph(config: AgentConfig) -> Any:
     graph.add_node("generate", generate_node)
     graph.add_node("no_context", no_context_node)
     graph.add_node("guardrail_output", guardrail_output_node)
+    graph.add_node("memory_selfeval", memory_selfeval_node)
 
     graph.add_edge(START, "receive_question")
     graph.add_conditional_edges(
@@ -339,7 +410,12 @@ def build_graph(config: AgentConfig) -> Any:
     graph.add_edge("ticket_tool", "generate")
     graph.add_edge("generate", "guardrail_output")
     graph.add_edge("no_context", "guardrail_output")
-    graph.add_edge("guardrail_output", END)
+    graph.add_conditional_edges(
+        "guardrail_output",
+        after_output,
+        {"end": END, "memory_selfeval": "memory_selfeval"},
+    )
+    graph.add_edge("memory_selfeval", END)
 
     return graph.compile(checkpointer=MemorySaver())
 
@@ -359,7 +435,12 @@ def _route_taken(state: AgentState, reject: bool) -> str:
     return "rag"
 
 
-def run_agent(question: str, config: AgentConfig, jurisdiction: str | None = None) -> AgentRunResult:
+def run_agent(
+    question: str,
+    config: AgentConfig,
+    jurisdiction: str | None = None,
+    memory_evidence: list[dict[str, object]] | None = None,
+) -> AgentRunResult:
     """Invoke the compiled graph once and return a structured, persistable run result."""
     graph = build_graph(config)
     trace_id = uuid4().hex
@@ -374,6 +455,8 @@ def run_agent(question: str, config: AgentConfig, jurisdiction: str | None = Non
         "route": "",
         "ticket_id": None,
         "retrieved": None,
+        "memory_evidence": memory_evidence or [],
+        "memory_candidate": None,
         "tool_context": [],
         "tool_calls": [],
         "answer": None,
@@ -406,4 +489,5 @@ def run_agent(question: str, config: AgentConfig, jurisdiction: str | None = Non
         steps=final.get("steps", []),
         tool_calls=final.get("tool_calls", []),
         guardrail_events=final.get("guardrail_events", []),
+        memory_candidate=final.get("memory_candidate"),
     )

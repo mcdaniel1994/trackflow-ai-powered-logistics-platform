@@ -50,6 +50,13 @@ Phases 6.5.a–b as a complete offline evaluation on 2026-07-28; the model remai
 serving and operational use. Forecasting/ML packages are optional and are absent from the
 production Central API virtualenv.
 
+Engagement 8 Phase 5 extends `pipelines/rag.py` with an opt-in structured generation result so the
+agent can produce one guarded answer and, normally, no memory candidate in the same mocked/provider
+call. The ordinary RAG `query()` contract remains a plain string. Candidate persistence and all
+human-decision enforcement remain Central API responsibilities; the data package never stores
+conversation or memory content. The current full data gate is 180 passing tests, one skipped, and
+90.94% branch-aware source coverage.
+
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
 uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process

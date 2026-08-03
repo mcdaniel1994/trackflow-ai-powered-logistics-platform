@@ -46,7 +46,9 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE agent_guardrail_events, agent_runs, agent_node_steps, agent_tool_calls, "
+                "TRUNCATE agent_memory_versions, agent_memory_decisions, agent_memory_proposals, "
+                "agent_memory_facts, agent_conversations, agent_guardrail_events, agent_runs, "
+                "agent_node_steps, agent_tool_calls, "
                 "telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
                 "operations_feed_control, reporting.weekly_warehouse_client_performance, "
@@ -69,12 +71,7 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
                 "VALUES (1, now()) ON CONFLICT (id) DO NOTHING"
             )
         )
-        connection.execute(
-            text(
-                "INSERT INTO reporting.rollup_state (id) VALUES (1) "
-                "ON CONFLICT (id) DO NOTHING"
-            )
-        )
+        connection.execute(text("INSERT INTO reporting.rollup_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING"))
     yield
 
 
@@ -153,18 +150,18 @@ def oauth_token_factory(signing_keys: tuple[str, str]) -> OAuthTokenFactory:
     ) -> str:
         now = datetime.now(UTC)
         claims: dict[str, Any] = {
-                    "sub": user_id,
-                    "client_id": "mcp-service",
-                    "role": role,
-                    "status": "active",
-                    "scope": scopes,
-                    "iss": issuer,
-                    "aud": audience,
-                    "exp": now + expires_delta,
-                    "iat": now,
-                    "jti": str(uuid4()),
-                    "token_type": "access",
-                }
+            "sub": user_id,
+            "client_id": "mcp-service",
+            "role": role,
+            "status": "active",
+            "scope": scopes,
+            "iss": issuer,
+            "aud": audience,
+            "exp": now + expires_delta,
+            "iat": now,
+            "jti": str(uuid4()),
+            "token_type": "access",
+        }
         if jurisdiction is not None:
             claims["jurisdiction"] = jurisdiction
         return str(jwt.encode(claims, private_key, algorithm="RS256"))

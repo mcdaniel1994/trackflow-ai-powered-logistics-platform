@@ -40,45 +40,89 @@ def _configure_agent(app: FastAPI, base: Settings, *, store_content: bool = Fals
 
 
 def _result(
-    *, status: str = "ok", answer: str | None = "30 days.", trace_id: str = "trace-abc",
-    with_tool: bool = False, with_guardrail: bool = False,
+    *,
+    status: str = "ok",
+    answer: str | None = "30 days.",
+    trace_id: str = "trace-abc",
+    with_tool: bool = False,
+    with_guardrail: bool = False,
 ) -> AgentRunResult:
     now = datetime.now(UTC)
     steps = [
-        {"node_name": "receive_question", "sequence": 1, "status": "ok", "started_at": now.isoformat(),
-         "ended_at": now.isoformat(), "duration_ms": 1, "tokens": None, "cost_usd": None, "notes": None},
-        {"node_name": "retrieve", "sequence": 2, "status": "ok", "started_at": now.isoformat(),
-         "ended_at": now.isoformat(), "duration_ms": 4, "tokens": None, "cost_usd": None, "notes": "chunks=1"},
+        {
+            "node_name": "receive_question",
+            "sequence": 1,
+            "status": "ok",
+            "started_at": now.isoformat(),
+            "ended_at": now.isoformat(),
+            "duration_ms": 1,
+            "tokens": None,
+            "cost_usd": None,
+            "notes": None,
+        },
+        {
+            "node_name": "retrieve",
+            "sequence": 2,
+            "status": "ok",
+            "started_at": now.isoformat(),
+            "ended_at": now.isoformat(),
+            "duration_ms": 4,
+            "tokens": None,
+            "cost_usd": None,
+            "notes": "chunks=1",
+        },
     ]
     tool_calls = (
-        [{"tool_name": "ticket_status", "status": "ok", "duration_ms": 12, "error_type": None}]
-        if with_tool else []
+        [{"tool_name": "ticket_status", "status": "ok", "duration_ms": 12, "error_type": None}] if with_tool else []
     )
     return AgentRunResult(
-        trace_id=trace_id, agent_name="trackflow-cx-agent", status=status, route_taken="rag",
-        answer=answer, started_at=now, ended_at=now, duration_ms=5, steps=steps, tool_calls=tool_calls,
+        trace_id=trace_id,
+        agent_name="trackflow-cx-agent",
+        status=status,
+        route_taken="rag",
+        answer=answer,
+        started_at=now,
+        ended_at=now,
+        duration_ms=5,
+        steps=steps,
+        tool_calls=tool_calls,
         guardrail_events=(
-            [{"layer": "input", "rule_id": "instruction_override", "category": "security",
-              "outcome": "blocked", "duration_ms": 1}]
-            if with_guardrail else []
+            [
+                {
+                    "layer": "input",
+                    "rule_id": "instruction_override",
+                    "category": "security",
+                    "outcome": "blocked",
+                    "duration_ms": 1,
+                }
+            ]
+            if with_guardrail
+            else []
         ),
     )
 
 
 # --------------------------------------------------------------------------- endpoint
 
+
 def test_query_returns_answer_and_trace_id(
-    app: FastAPI, client: TestClient, settings: Settings, auth_headers: dict[str, str],
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_agent(app, settings)
-    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j: _result())
+    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j, _m: _result())
     monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: None)
 
     response = client.post("/agent/query", json={"question": "return window?"}, headers=auth_headers)
 
     assert response.status_code == 200
-    assert response.json() == {"answer": "30 days.", "trace_id": "trace-abc"}
+    assert response.json()["answer"] == "30 days."
+    assert response.json()["trace_id"] == "trace-abc"
+    assert response.json()["conversation_id"]
+    assert response.json()["memory_proposal"] is None
 
 
 def test_cookie_caller_token_is_ephemeral_mcp_config_only(
@@ -91,7 +135,12 @@ def test_cookie_caller_token_is_ephemeral_mcp_config_only(
     _configure_agent(app, settings)
     captured: dict[str, object] = {}
 
-    def run(_question: str, config: object, _jurisdiction: str | None) -> AgentRunResult:
+    def run(
+        _question: str,
+        config: object,
+        _jurisdiction: str | None,
+        _memory: list[dict[str, object]],
+    ) -> AgentRunResult:
         captured["config"] = config
         return _result()
 
@@ -115,7 +164,10 @@ def test_query_requires_authentication(client: TestClient) -> None:
 
 
 def test_query_rejects_blank_question(
-    app: FastAPI, client: TestClient, settings: Settings, auth_headers: dict[str, str],
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
 ) -> None:
     _configure_agent(app, settings)
     assert client.post("/agent/query", json={"question": "   "}, headers=auth_headers).status_code == 422
@@ -127,11 +179,18 @@ def test_query_unavailable_when_disabled(client: TestClient, auth_headers: dict[
 
 
 def test_query_translates_run_failure(
-    app: FastAPI, client: TestClient, settings: Settings, auth_headers: dict[str, str],
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_agent(app, settings)
-    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j: _result(status="error", answer=None))
+    monkeypatch.setattr(
+        agent_service,
+        "run_agent",
+        lambda _q, _c, _j, _m: _result(status="error", answer=None),
+    )
     monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: None)
 
     response = client.post("/agent/query", json={"question": "x"}, headers=auth_headers)
@@ -142,8 +201,13 @@ def test_query_translates_run_failure(
 
 # --------------------------------------------------------------------------- trace read endpoints
 
+
 def test_list_and_get_run_endpoints(
-    app: FastAPI, client: TestClient, settings: Settings, engine: Engine, auth_headers: dict[str, str],
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    engine: Engine,
+    auth_headers: dict[str, str],
 ) -> None:
     _configure_agent(app, settings)
     # Insert a run directly through the recorder (its own session), then read via the API.
@@ -163,7 +227,10 @@ def test_list_and_get_run_endpoints(
 
 
 def test_get_missing_run_is_404(
-    app: FastAPI, client: TestClient, settings: Settings, auth_headers: dict[str, str],
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
 ) -> None:
     _configure_agent(app, settings)
     assert client.get("/agents/runs/does-not-exist", headers=auth_headers).status_code == 404
@@ -193,6 +260,7 @@ def test_guardrail_summary_is_admin_only_and_contains_safe_counts(
 
 
 # --------------------------------------------------------------------------- trace store persistence
+
 
 def test_persist_run_stores_metadata_without_content(engine: Engine) -> None:
     recorder.persist_run(

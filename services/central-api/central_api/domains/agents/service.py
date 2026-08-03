@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from uuid import UUID
 
 from fastapi import BackgroundTasks
 from sqlmodel import Session
@@ -17,9 +18,18 @@ from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped
 from ...core.config import Settings
 from .config import build_agent_config, is_agents_configured
 from .graph import run_agent
+from .memory_service import AgentMemoryError, AgentMemoryService
 from .recorder import persist_run
 from .repository import AgentRepository
-from .schemas import AgentQueryResponse, GuardrailSummary, NodeStepRead, RunDetail, RunSummary, ToolCallRead
+from .schemas import (
+    AgentQueryRequest,
+    AgentQueryResponse,
+    GuardrailSummary,
+    NodeStepRead,
+    RunDetail,
+    RunSummary,
+    ToolCallRead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +52,7 @@ class AgentService:
     # ------------------------------------------------------------------ query (write path)
     def answer(
         self,
-        question: str,
+        payload: AgentQueryRequest,
         background_tasks: BackgroundTasks,
         source_access_token: str,
         principal: AuthenticatedPrincipal,
@@ -51,10 +61,51 @@ class AgentService:
         if not is_agents_configured(self.settings):
             raise AgentError(503, "The agent is not available right now.")
 
+        memory = AgentMemoryService(self._require_session())
+        try:
+            conversation = memory.conversation(
+                conversation_id=str(payload.conversation_id) if payload.conversation_id else None,
+                owner_user_uuid=principal.user_id,
+                jurisdiction=principal.jurisdiction,
+            )
+            if payload.memory_decision is None:
+                memory.discard_pending(conversation.id)
+            evidence = memory.evidence(payload.question, conversation.jurisdiction)
+        except AgentMemoryError as exc:
+            raise AgentError(exc.status_code, exc.detail) from exc
+
         config = build_agent_config(self.settings, source_access_token)
-        result = run_agent(question, config, principal.jurisdiction)
+        result = run_agent(payload.question, config, principal.jurisdiction, evidence)
+        try:
+            if payload.memory_decision is not None:
+                memory.decide(
+                    conversation=conversation,
+                    decision=payload.memory_decision,
+                    actor_user_uuid=principal.user_id,
+                    trace_id=result.trace_id,
+                )
+            if result.status == "ok":
+                _proposal, rejection_reason = memory.create_proposal(
+                    conversation=conversation,
+                    raw_candidate=result.memory_candidate,
+                    trace_id=result.trace_id,
+                    question=payload.question,
+                )
+                if rejection_reason:
+                    result.guardrail_events.append(
+                        {
+                            "layer": "memory",
+                            "rule_id": rejection_reason,
+                            "category": "content",
+                            "outcome": "blocked",
+                            "duration_ms": 0,
+                        }
+                    )
+            pending = memory.pending_response(conversation.id)
+        except AgentMemoryError as exc:
+            raise AgentError(exc.status_code, exc.detail) from exc
         input_summary, output_summary = (
-            (None, None) if result.guardrail_events else self._summaries(question, result.answer)
+            (None, None) if result.guardrail_events else self._summaries(payload.question, result.answer)
         )
 
         if result.answer and result.status in {"ok", "rejected"}:
@@ -66,7 +117,12 @@ class AgentService:
                 input_summary=input_summary,
                 output_summary=output_summary,
             )
-            return AgentQueryResponse(answer=result.answer, trace_id=result.trace_id)
+            return AgentQueryResponse(
+                answer=result.answer,
+                trace_id=result.trace_id,
+                conversation_id=UUID(conversation.id),
+                memory_proposal=pending,
+            )
 
         # Error/rejected: persist synchronously (still swallowing) so failed runs are not lost.
         persist_run(result, env=self.settings.app_env, input_summary=input_summary, output_summary=output_summary)

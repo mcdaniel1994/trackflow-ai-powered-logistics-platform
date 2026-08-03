@@ -6,6 +6,7 @@ Qdrant client; ``query`` is tested with ``retrieve`` and the generation client b
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -211,6 +212,57 @@ def test_query_rejects_empty_model_output(monkeypatch: pytest.MonkeyPatch) -> No
 
     with pytest.raises(rag.RagPipelineError):
         rag.query("anything", _config())
+
+
+def test_structured_generation_returns_answer_and_candidate_in_one_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    candidate = {
+        "carrier_id": "11111111-1111-4111-8111-111111111111",
+        "jurisdiction": "US",
+        "kind": "recurring_operational_pattern",
+        "subject_key": "late_scan_pattern",
+        "fact": "Late scans recur during Tuesday handoffs.",
+        "recurrence_count": 3,
+        "effective_at": None,
+    }
+    stub = _StubChat(
+        json.dumps(
+            {
+                "answer": "The repeated pattern is documented.",
+                "memory_candidate": candidate,
+            }
+        )
+    )
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+
+    result = rag.generate_answer(
+        "What pattern applies?",
+        [{"text": "A repeated operational pattern."}],
+        _config(),
+        "US",
+        include_memory_candidate=True,
+    )
+
+    assert isinstance(result, rag.GenerationResult)
+    assert result.answer == "The repeated pattern is documented."
+    assert result.memory_candidate == candidate
+    assert stub.received["response_format"] == {"type": "json_object"}
+    assert (
+        "memory_candidate must normally be null"
+        in stub.received["messages"][-1]["content"]
+    )
+
+
+def test_structured_generation_rejects_malformed_provider_output(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: _StubChat("not-json"))
+
+    with pytest.raises(rag.RagPipelineError, match="invalid structured answer"):
+        rag.generate_answer(
+            "anything", [], _config(), "US", include_memory_candidate=True
+        )
 
 
 # --------------------------------------------------------------------------- chunking

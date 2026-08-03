@@ -50,9 +50,10 @@ def test_worker_runs_guard_and_both_prunes(monkeypatch: pytest.MonkeyPatch) -> N
         return {"inventory_discrepancies": 3, "stockout_events": 4}
 
     monkeypatch.setattr(maintenance_worker, "prune_business_events", prune_business)
+    monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 2)
     monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: calls.append("prefect") or 5)
     maintenance_worker.run_worker(stop=stop, schedule=DueSchedule(), tick_seconds=0.01)  # type: ignore[arg-type]
-    assert calls == ["guard", "telemetry", "business", "reporting_logs", "prefect"]
+    assert calls == ["guard", "telemetry", "business", "memory", "reporting_logs", "prefect"]
 
 
 def test_signal_handler_requests_shutdown() -> None:
@@ -117,10 +118,11 @@ def test_prefect_retention_failure_does_not_repeat_business_prune(
         "prune_reporting_logs",
         lambda: calls.append("reporting_logs") or {"files_deleted": 0, "bytes_deleted": 0},
     )
+    monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 0)
     monkeypatch.setattr(
         maintenance_worker,
         "prune_prefect_runs",
         lambda: (_ for _ in ()).throw(OSError("orchestrator unavailable")),
     )
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "reporting_logs"]
+    assert calls == ["telemetry", "business", "memory", "reporting_logs"]

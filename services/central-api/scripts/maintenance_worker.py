@@ -13,6 +13,7 @@ from types import FrameType
 from zoneinfo import ZoneInfo
 
 from scripts.db_size_guard import guard_once
+from scripts.prune_agent_memory import prune_once as prune_agent_memory
 from scripts.prune_business_events import prune_once as prune_business_events
 from scripts.prune_prefect_runs import prune_once as prune_prefect_runs
 from scripts.prune_reporting_logs import prune_once as prune_reporting_logs
@@ -67,15 +68,17 @@ def run_worker(
             try:
                 telemetry = prune_telemetry_events()
                 business = prune_business_events()
+                memory_proposals = prune_agent_memory()
                 reporting_logs = prune_reporting_logs()
                 logger.info(
                     "maintenance_prune_complete telemetry_operational=%s telemetry_security=%s "
-                    "business_discrepancies=%s business_stockouts=%s reporting_log_files=%s "
+                    "business_discrepancies=%s business_stockouts=%s memory_proposals=%s reporting_log_files=%s "
                     "reporting_log_bytes=%s",
                     telemetry["operational"],
                     telemetry["security"],
                     business["inventory_discrepancies"],
                     business["stockout_events"],
+                    memory_proposals,
                     reporting_logs["files_deleted"],
                     reporting_logs["bytes_deleted"],
                 )

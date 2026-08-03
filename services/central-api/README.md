@@ -10,13 +10,19 @@ reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and 
 owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
 an additive cadence identity at deployed head `20260728_0012`; its set-based production-cardinality
 correction awaits redeployment and exact live reconciliation.
-Engagement 8 Phase 4 adds jurisdiction-bound agent retrieval, layered input/output guardrails,
-creator-owned delegated incident access, and safe guardrail aggregates at Alembic head
-`20260803_0015`. The release suite covers disposable-PostgreSQL
+Engagement 8 Phases 4–5 add jurisdiction-bound agent retrieval, layered input/output guardrails,
+creator-owned delegated incident access, safe guardrail aggregates, and human-confirmed structured
+memory at Alembic head `20260803_0016`. The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
-protection. The Phase 4 Central API gate is 239 passing tests with 91.46% branch-aware source
+protection. The Phase 5 Central API gate is 270 passing tests with 91.25% branch-aware source
 coverage.
+
+`POST /agent/query` accepts `question`, optional `conversation_id`, and an optional typed
+`memory_decision` (`decision_id`, `proposal_id`, and `approve`, `reject`, or `edit`). Edits require a
+complete replacement candidate and remain pending until a later typed approval. The response always
+returns `answer`, `trace_id`, `conversation_id`, and the exact pending `memory_proposal` when one
+exists; plain text, including “yes,” never approves memory.
 
 The portfolio Supabase production project is migrated through Alembic revision
 `20260728_0011` as of the July 28 production acceptance rescan. Runtime-role CRUD, Central API
