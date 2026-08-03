@@ -30,6 +30,9 @@ POINT_ID_NAMESPACE = uuid.UUID("6f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b")
 
 COMPANY = "trackflow"
 LANGUAGE = "en"
+JURISDICTIONS = frozenset({"US", "ES", "GLOBAL"})
+_US_MARKERS = ("united states", "los angeles", "california", "ups", "fedex")
+_ES_MARKERS = ("spain", "zaragoza", "aragón", "madrid", "mrw", "seur")
 
 _LIST_ITEM = re.compile(r"^\s*(?:[-*+]\s|\d+[.)]\s)")
 _LABEL_LEAD = re.compile(r"^([A-Z][^.:\n]{2,44}):")
@@ -45,6 +48,7 @@ class Chunk:
     text: str
     company: str = COMPANY
     language: str = LANGUAGE
+    jurisdiction: str = "GLOBAL"
 
     @property
     def point_id(self) -> str:
@@ -60,6 +64,7 @@ class Chunk:
             "language": self.language,
             "chunk_index": self.chunk_index,
             "text": self.text,
+            "jurisdiction": self.jurisdiction,
         }
 
 
@@ -139,6 +144,18 @@ def _extract_title(markdown: str) -> tuple[str, str]:
     return "", markdown
 
 
+def _jurisdiction(text: str) -> str:
+    """Classify explicit country-only passages; shared or mixed policy stays GLOBAL."""
+    normalized = text.casefold()
+    has_us = any(marker in normalized for marker in _US_MARKERS)
+    has_es = any(marker in normalized for marker in _ES_MARKERS)
+    if has_us and not has_es:
+        return "US"
+    if has_es and not has_us:
+        return "ES"
+    return "GLOBAL"
+
+
 def chunk_document(markdown: str, source_document: str) -> list[Chunk]:
     """Split one knowledge-base document into ordered, self-contained chunks.
 
@@ -156,6 +173,7 @@ def chunk_document(markdown: str, source_document: str) -> list[Chunk]:
             section=_derive_section(title, text),
             chunk_index=index,
             text=text,
+            jurisdiction=_jurisdiction(text),
         )
         for index, text in enumerate(texts)
     ]

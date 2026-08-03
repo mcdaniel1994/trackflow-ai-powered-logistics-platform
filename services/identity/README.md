@@ -25,6 +25,7 @@ The API exposes:
 - `GET /users/{id}`
 - `PUT /users/{id}`
 - `PATCH /users/{id}/status`
+- `PATCH /users/{id}/jurisdiction` (administrator-only; `US` or `ES`)
 - `POST /users/{id}/sessions/revoke`
 - `DELETE /users/{id}`
 
@@ -36,7 +37,14 @@ Phase 3 also exposes the separate URL-issued OAuth surface:
 - `POST /oauth/token`
 - `POST /oauth/register` (local/Codespaces only by default)
 
-There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`, and the first admin is created from the server CLI. When an admin creates a user, the API generates a one-time temporary password and automatically sends an account setup email with a time-limited password reset link when email delivery is configured. The temporary password is never emailed; it is returned once to the admin as a fallback if setup email delivery fails.
+There is no `/auth/register` endpoint. User creation is administrator-only through `POST /users`,
+and every new user requires an admin-selected `US` or `ES` jurisdiction. Existing users without a
+jurisdiction can still authenticate, but jurisdiction-sensitive agent behavior fails closed until
+an administrator assigns one; users cannot change it themselves. The first admin is created from
+the server CLI with an explicit `--jurisdiction US|ES`. When an admin creates a user, the API
+generates a one-time temporary password and automatically sends an account setup email with a
+time-limited password reset link when email delivery is configured. The temporary password is never
+emailed; it is returned once to the admin as a fallback if setup email delivery fails.
 
 ## OAuth 2.1 for MCP
 
@@ -92,7 +100,7 @@ RESET_TOKEN_EXPIRE_MINUTES=30
 ## First Admin
 
 ```bash
-uv run --project services/identity python -m identity.cli create-admin
+uv run --project services/identity python -m identity.cli create-admin --jurisdiction US
 ```
 
 The command prompts for the admin name, email, and password, refuses duplicate email addresses, stores only an Argon2id hash, and never prints the password.

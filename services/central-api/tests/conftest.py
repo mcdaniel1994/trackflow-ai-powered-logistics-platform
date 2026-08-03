@@ -46,7 +46,7 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE agent_runs, agent_node_steps, agent_tool_calls, "
+                "TRUNCATE agent_guardrail_events, agent_runs, agent_node_steps, agent_tool_calls, "
                 "telemetry_events, suppliers, incidents, inventory_discrepancies, stockout_events, "
                 "stock_exits, stock_entries, skus, clients, "
                 "operations_feed_control, reporting.weekly_warehouse_client_performance, "
@@ -115,6 +115,7 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
         must_change_password: bool = False,
         status: str = "active",
         role: str = "user",
+        jurisdiction: str | None = "US",
     ) -> str:
         now = datetime.now(UTC)
         claims: dict[str, Any] = {
@@ -129,6 +130,8 @@ def token_factory(signing_keys: tuple[str, str]) -> TokenFactory:
             "jti": str(uuid4()),
             "token_type": "access",
         }
+        if jurisdiction is not None:
+            claims["jurisdiction"] = jurisdiction
         return str(jwt.encode(claims, private_key, algorithm="RS256"))
 
     return create_token
@@ -144,14 +147,15 @@ def oauth_token_factory(signing_keys: tuple[str, str]) -> OAuthTokenFactory:
         audience: str = "http://localhost:8003",
         issuer: str = "http://localhost:8002",
         expires_delta: timedelta = timedelta(minutes=10),
+        jurisdiction: str | None = "US",
+        user_id: str = "11111111-1111-4111-8111-111111111111",
+        role: str = "user",
     ) -> str:
         now = datetime.now(UTC)
-        return str(
-            jwt.encode(
-                {
-                    "sub": "11111111-1111-4111-8111-111111111111",
+        claims: dict[str, Any] = {
+                    "sub": user_id,
                     "client_id": "mcp-service",
-                    "role": "user",
+                    "role": role,
                     "status": "active",
                     "scope": scopes,
                     "iss": issuer,
@@ -160,11 +164,10 @@ def oauth_token_factory(signing_keys: tuple[str, str]) -> OAuthTokenFactory:
                     "iat": now,
                     "jti": str(uuid4()),
                     "token_type": "access",
-                },
-                private_key,
-                algorithm="RS256",
-            )
-        )
+                }
+        if jurisdiction is not None:
+            claims["jurisdiction"] = jurisdiction
+        return str(jwt.encode(claims, private_key, algorithm="RS256"))
 
     return create_token
 

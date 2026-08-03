@@ -12,7 +12,10 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, VerifyMismatchError
 from cryptography.exceptions import UnsupportedAlgorithm
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from cryptography.hazmat.primitives.serialization import (
+    load_pem_private_key,
+    load_pem_public_key,
+)
 from fastapi import Response
 from jose import jwt
 
@@ -36,10 +39,14 @@ def validate_jwt_signing_keys(settings: IdentitySettings) -> None:
         if settings.jwt_algorithm != "RS256":
             raise ValueError("unsupported JWT algorithm")
 
-        private_key = load_pem_private_key(settings.jwt_private_key.encode("utf-8"), password=None)
+        private_key = load_pem_private_key(
+            settings.jwt_private_key.encode("utf-8"), password=None
+        )
         public_key = load_pem_public_key(settings.jwt_public_key.encode("utf-8"))
 
-        if not isinstance(private_key, rsa.RSAPrivateKey) or not isinstance(public_key, rsa.RSAPublicKey):
+        if not isinstance(private_key, rsa.RSAPrivateKey) or not isinstance(
+            public_key, rsa.RSAPublicKey
+        ):
             raise ValueError("JWT keys must be RSA")
         if private_key.public_key().public_numbers() != public_key.public_numbers():
             raise ValueError("JWT key pair does not match")
@@ -141,6 +148,7 @@ def sign_oauth_access_token(
     role: str = "service",
     status: str = "active",
     actor: str | None = None,
+    jurisdiction: str | None = None,
 ) -> tuple[str, int]:
     """Sign a short-lived OAuth resource token with explicit audience and scopes."""
     issued_at = now_utc()
@@ -160,6 +168,8 @@ def sign_oauth_access_token(
     }
     if actor:
         claims["act"] = {"sub": actor}
+    if jurisdiction in {"US", "ES"}:
+        claims["jurisdiction"] = jurisdiction
     token = jwt.encode(
         claims,
         settings.jwt_private_key,
@@ -175,10 +185,12 @@ def generate_csrf_token() -> str:
 
 
 # Builds minimal, non-secret claims for the short-lived access JWT.
-def build_access_claims(user: dict[str, object], settings: IdentitySettings) -> dict[str, object]:
+def build_access_claims(
+    user: dict[str, object], settings: IdentitySettings
+) -> dict[str, object]:
     issued_at = now_utc()
     expires_at = issued_at + timedelta(minutes=settings.access_token_expire_minutes)
-    return {
+    claims: dict[str, object] = {
         "sub": str(user["id"]),
         "role": str(user["role"]),
         "status": str(user["status"]),
@@ -190,13 +202,20 @@ def build_access_claims(user: dict[str, object], settings: IdentitySettings) -> 
         "jti": str(uuid4()),
         "token_type": TOKEN_TYPE_ACCESS,
     }
+    if user.get("jurisdiction") in {"US", "ES"}:
+        claims["jurisdiction"] = str(user["jurisdiction"])
+    return claims
 
 
 # Signs access tokens with the identity-only RS256 private key.
 def sign_access_token(user: dict[str, object], settings: IdentitySettings) -> str:
     if settings.jwt_algorithm != "RS256" or not settings.jwt_private_key:
         raise RuntimeError("Identity RS256 private key is not configured.")
-    return jwt.encode(build_access_claims(user, settings), settings.jwt_private_key, algorithm=settings.jwt_algorithm)
+    return jwt.encode(
+        build_access_claims(user, settings),
+        settings.jwt_private_key,
+        algorithm=settings.jwt_algorithm,
+    )
 
 
 # Sets access, refresh, and CSRF cookies with environment-driven flags.
@@ -240,4 +259,9 @@ def set_auth_cookies(
 # Clears every Auth 1 cookie during logout.
 def clear_auth_cookies(response: Response, settings: IdentitySettings) -> None:
     for name in (ACCESS_COOKIE_NAME, REFRESH_COOKIE_NAME, CSRF_COOKIE_NAME):
-        response.delete_cookie(name, path="/", secure=settings.cookie_secure, samesite=settings.cookie_samesite)
+        response.delete_cookie(
+            name,
+            path="/",
+            secure=settings.cookie_secure,
+            samesite=settings.cookie_samesite,
+        )

@@ -1,6 +1,6 @@
 import { fetchWithAuth } from "@/lib/auth/client-http";
 import { parseAPIError } from "@/lib/auth/errors";
-import type { AuthUser, CreatedUser } from "@/lib/auth/types";
+import type { AuthUser, CreatedUser, UserJurisdiction } from "@/lib/auth/types";
 
 async function jsonRequest<T>(path: string, init?: RequestInit, retryOnUnauthorized = true): Promise<T> {
   const body = typeof init?.body === "string" ? init.body : undefined;
@@ -96,10 +96,17 @@ export async function listUsers() {
   return jsonRequest<AuthUser[]>("/api/users");
 }
 
-export async function createUser(name: string, email: string) {
+export async function createUser(name: string, email: string, jurisdiction: UserJurisdiction) {
   return jsonRequest<CreatedUser>("/api/users", {
     method: "POST",
-    body: JSON.stringify({ name, email }),
+    body: JSON.stringify({ name, email, jurisdiction }),
+  });
+}
+
+export async function updateUserJurisdiction(userId: string, jurisdiction: UserJurisdiction) {
+  return jsonRequest<AuthUser>(`/api/users/${encodeURIComponent(userId)}/jurisdiction`, {
+    method: "PATCH",
+    body: JSON.stringify({ jurisdiction }),
   });
 }
 

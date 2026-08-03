@@ -132,8 +132,9 @@ Then read the active engagement brief and the README for every folder being modi
 - **Engagement 8** - Agent Engineering (LangGraph)
   Stakeholder brief: `docs/briefs/08-agent-engineering.md`. The graph and safe Postgres trace store
   live in the Central API `agents` domain; the reusable OAuth-protected tool boundary lives under
-  `mcps/`; Identity owns OAuth issuance; later guardrails/memory extend the same graph and Agent OS
-  lives in `uis/backoffice/`.
+  `mcps/`; Identity owns OAuth issuance and user jurisdiction. Phase 4 guardrails extend the same
+  graph and are awaiting owner review; Phase 5 memory is pending. Agent OS lives in
+  `uis/backoffice/`, and the Phase 3 Codespaces MCP Playground evidence gap remains open.
 
 - **Engagement 9+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the

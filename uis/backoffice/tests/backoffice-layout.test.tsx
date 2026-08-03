@@ -6,7 +6,7 @@ import { AdminUsersView } from "@/components/admin/AdminUsersView";
 import { AppShell } from "@/components/AppShell";
 import { BackofficeViewProvider } from "@/lib/backoffice/view-context";
 import { ThemeProvider } from "@/lib/theme/context";
-import { createUser, listUsers } from "@/lib/auth/api";
+import { createUser, listUsers, updateUserJurisdiction } from "@/lib/auth/api";
 import type { AuthUser, CreatedUser } from "@/lib/auth/types";
 
 function renderShell(children: ReactNode) {
@@ -50,6 +50,7 @@ vi.mock("@/lib/auth/api", () => ({
   createUser: vi.fn(),
   listUsers: vi.fn(),
   revokeUserSessions: vi.fn(),
+  updateUserJurisdiction: vi.fn(),
   updateUserStatus: vi.fn(),
 }));
 
@@ -60,6 +61,7 @@ const users: AuthUser[] = [
     email: "admin@example.com",
     role: "admin",
     status: "active",
+    jurisdiction: "US",
     must_change_password: false,
     created_at: "2026-06-20T00:00:00Z",
     last_login_at: "2026-06-20T00:00:00Z",
@@ -70,6 +72,7 @@ const users: AuthUser[] = [
     email: "hannah@example.com",
     role: "user",
     status: "suspended",
+    jurisdiction: "ES",
     must_change_password: false,
     created_at: "2026-06-20T00:00:00Z",
     last_login_at: "2026-06-20T00:00:00Z",
@@ -82,6 +85,7 @@ const createdUser: CreatedUser = {
   email: "new.worker@example.com",
   role: "user",
   status: "active",
+  jurisdiction: "US",
   must_change_password: true,
   created_at: "2026-06-20T00:00:00Z",
   last_login_at: null,
@@ -228,7 +232,7 @@ describe("Back Office responsive layout", () => {
     await userEvent.type(screen.getByLabelText(/^email$/i), "new.worker@example.com");
     await userEvent.click(screen.getByRole("button", { name: /^create user$/i }));
 
-    expect(createUser).toHaveBeenCalledWith("New Worker", "new.worker@example.com");
+    expect(createUser).toHaveBeenCalledWith("New Worker", "new.worker@example.com", "US");
     expect(await screen.findByText(/setup email sent to new\.worker@example\.com/i)).toBeInTheDocument();
     expect(screen.getByText("temporary-passphrase")).toBeInTheDocument();
   });
@@ -243,5 +247,18 @@ describe("Back Office responsive layout", () => {
 
     expect(await screen.findByText(/setup email could not be sent automatically/i)).toBeInTheDocument();
     expect(screen.getByText("temporary-passphrase")).toBeInTheDocument();
+  });
+
+  it("lets an administrator assign a user's policy jurisdiction", async () => {
+    vi.mocked(updateUserJurisdiction).mockResolvedValue({ ...users[1], jurisdiction: "US" });
+    render(<AdminUsersView />);
+
+    const selects = await screen.findAllByRole("combobox", {
+      name: "Policy jurisdiction for hannah@example.com",
+    });
+    await userEvent.selectOptions(selects[0], "US");
+
+    expect(updateUserJurisdiction).toHaveBeenCalledWith("user-1", "US");
+    expect(await screen.findByText(/hannah@example\.com now uses US policy jurisdiction/i)).toBeInTheDocument();
   });
 });

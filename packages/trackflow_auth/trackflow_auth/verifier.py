@@ -32,6 +32,7 @@ class AuthenticatedPrincipal(BaseModel):
     must_change_password: bool
     token_id: str
     token_source: Literal["cookie", "bearer"]
+    jurisdiction: Literal["US", "ES"] | None = None
 
 
 class ScopedPrincipal(BaseModel):
@@ -46,6 +47,7 @@ class ScopedPrincipal(BaseModel):
     scopes: frozenset[str]
     token_id: str
     token_source: Literal["bearer"] = "bearer"
+    jurisdiction: Literal["US", "ES"] | None = None
 
 
 # Carries public-key verification settings for one service.
@@ -85,7 +87,9 @@ def _forbidden(detail: str) -> HTTPException:
 
 
 # Reads access tokens from cookies first, then bearer headers.
-def extract_access_token(request: Request, cookie_name: str = ACCESS_COOKIE_NAME) -> tuple[str, Literal["cookie", "bearer"]]:
+def extract_access_token(
+    request: Request, cookie_name: str = ACCESS_COOKIE_NAME
+) -> tuple[str, Literal["cookie", "bearer"]]:
     cookie_token = request.cookies.get(cookie_name)
     if cookie_token:
         return cookie_token, "cookie"
@@ -122,7 +126,18 @@ def verify_access_token(token: str, config: TokenVerifierConfig) -> dict[str, An
     except JWTError as exc:
         raise _auth_error() from exc
 
-    required = {"sub", "role", "status", "must_change_password", "iss", "aud", "exp", "iat", "jti", "token_type"}
+    required = {
+        "sub",
+        "role",
+        "status",
+        "must_change_password",
+        "iss",
+        "aud",
+        "exp",
+        "iat",
+        "jti",
+        "token_type",
+    }
     if required.difference(claims):
         raise _auth_error()
     if claims.get("token_type") != "access":
@@ -143,7 +158,10 @@ def authenticate_request(
 
     if claims.get("status") != "active":
         raise _auth_error()
-    if claims.get("must_change_password") is True and not allow_password_change_required:
+    if (
+        claims.get("must_change_password") is True
+        and not allow_password_change_required
+    ):
         raise _forbidden("Password change required")
 
     return AuthenticatedPrincipal(
@@ -153,6 +171,9 @@ def authenticate_request(
         must_change_password=bool(claims["must_change_password"]),
         token_id=str(claims["jti"]),
         token_source=source,
+        jurisdiction=claims.get("jurisdiction")
+        if claims.get("jurisdiction") in {"US", "ES"}
+        else None,
     )
 
 
@@ -191,7 +212,17 @@ def authenticate_scoped_bearer(
     except JWTError as exc:
         raise _auth_error() from exc
 
-    required = {"sub", "client_id", "scope", "iss", "aud", "exp", "iat", "jti", "token_type"}
+    required = {
+        "sub",
+        "client_id",
+        "scope",
+        "iss",
+        "aud",
+        "exp",
+        "iat",
+        "jti",
+        "token_type",
+    }
     if (
         required.difference(claims)
         or claims.get("token_type") != "access"
@@ -220,6 +251,9 @@ def authenticate_scoped_bearer(
         status=str(claims.get("status", "active")),
         scopes=scopes,
         token_id=str(claims["jti"]),
+        jurisdiction=claims.get("jurisdiction")
+        if claims.get("jurisdiction") in {"US", "ES"}
+        else None,
     )
 
 
@@ -233,5 +267,12 @@ def require_csrf(request: Request, config: TokenVerifierConfig | None = None) ->
     cookie_token = request.cookies.get(csrf_cookie_name, "")
     header_token = request.headers.get(csrf_header_name, "")
 
-    if not cookie_token or not header_token or not hmac.compare_digest(cookie_token, header_token):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF token missing or invalid")
+    if (
+        not cookie_token
+        or not header_token
+        or not hmac.compare_digest(cookie_token, header_token)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="CSRF token missing or invalid",
+        )

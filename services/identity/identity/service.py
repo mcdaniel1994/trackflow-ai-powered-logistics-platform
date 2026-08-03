@@ -11,7 +11,15 @@ from uuid import uuid4
 from .config import IdentitySettings
 from .constants import ROLE_ADMIN, ROLE_USER, STATUS_ACTIVE, STATUS_DISABLED
 from .email import EmailDeliveryError, EmailSender
-from .models import UserCreate, UserCreated, UserPublic, UserUpdate, normalize_email, to_public_user
+from .models import (
+    Jurisdiction,
+    UserCreate,
+    UserCreated,
+    UserPublic,
+    UserUpdate,
+    normalize_email,
+    to_public_user,
+)
 from .repository import PasswordResetRepository, SessionRepository, UserRepository
 from .security import (
     generate_password_reset_token,
@@ -69,8 +77,15 @@ class UserService:
         self.repository = repository
 
     # Creates the first trusted admin from CLI-supplied credentials.
-    def create_admin(self, *, name: str, email: str, password: str) -> UserPublic:
-        payload = UserCreate(name=name, email=email)
+    def create_admin(
+        self,
+        *,
+        name: str,
+        email: str,
+        password: str,
+        jurisdiction: Jurisdiction,
+    ) -> UserPublic:
+        payload = UserCreate(name=name, email=email, jurisdiction=jurisdiction)
         record = self.repository.create_user(
             {
                 "name": payload.name,
@@ -78,6 +93,7 @@ class UserService:
                 "hashed_password": hash_password(password),
                 "role": ROLE_ADMIN,
                 "status": STATUS_ACTIVE,
+                "jurisdiction": payload.jurisdiction,
                 "must_change_password": False,
                 "last_login_at": None,
             }
@@ -94,6 +110,7 @@ class UserService:
                 "hashed_password": hash_password(temporary_password),
                 "role": ROLE_USER,
                 "status": STATUS_ACTIVE,
+                "jurisdiction": payload.jurisdiction,
                 "must_change_password": True,
                 "last_login_at": None,
             }
@@ -142,6 +159,15 @@ class UserService:
             raise NotFoundError("User not found")
         return to_public_user(record)
 
+    def set_jurisdiction(self, user_id: str, jurisdiction: str) -> UserPublic:
+        """Apply an administrator-controlled policy jurisdiction to an Identity user."""
+        if jurisdiction not in {"US", "ES"}:
+            raise ValueError("Jurisdiction must be US or ES")
+        record = self.repository.update_user(user_id, {"jurisdiction": jurisdiction})
+        if not record:
+            raise NotFoundError("User not found")
+        return to_public_user(record)
+
     # Changes the single account-status field used by auth checks.
     def set_status(self, user_id: str, status: str) -> UserPublic:
         record = self.repository.update_user(user_id, {"status": status})
@@ -170,7 +196,9 @@ class AuthService:
         self.email_sender = email_sender
 
     # Verifies credentials and issues a fresh cookie/session set.
-    def login(self, *, email: str, password: str, settings: IdentitySettings) -> AuthTokens:
+    def login(
+        self, *, email: str, password: str, settings: IdentitySettings
+    ) -> AuthTokens:
         # Safe audit: outcome + opaque reason only. Never the email or password, and the
         # same reason for every failure so log lines cannot enumerate valid accounts.
         user = self.users.get_by_email(email)
@@ -209,7 +237,12 @@ class AuthService:
             raise AuthenticationError("Invalid refresh session")
 
         self.sessions.revoke_session(str(session["id"]))
-        return self._issue_tokens(user, settings, family_id=str(session["family_id"]), rotated_from=str(session["id"]))
+        return self._issue_tokens(
+            user,
+            settings,
+            family_id=str(session["family_id"]),
+            rotated_from=str(session["id"]),
+        )
 
     # Revokes the current refresh session if one is presented.
     def logout(self, refresh_token: str | None) -> None:
@@ -236,7 +269,9 @@ class AuthService:
 
         current_session_id = None
         if current_refresh_token:
-            session = self.sessions.get_by_token_hash(hash_refresh_token(current_refresh_token))
+            session = self.sessions.get_by_token_hash(
+                hash_refresh_token(current_refresh_token)
+            )
             if session and session.get("revoked") is not True:
                 current_session_id = str(session["id"])
 
@@ -250,7 +285,9 @@ class AuthService:
         if not updated:
             raise AuthenticationError("Invalid email or password")
 
-        self.sessions.revoke_user_sessions(user_id, except_session_id=current_session_id)
+        self.sessions.revoke_user_sessions(
+            user_id, except_session_id=current_session_id
+        )
         return updated
 
     # Creates and emails a reset token without revealing account existence.
@@ -260,7 +297,9 @@ class AuthService:
             return
 
         user_id = str(user["id"])
-        token = self._create_reset_token(user_id=user_id, settings=settings, purpose=PASSWORD_RESET_PURPOSE)
+        token = self._create_reset_token(
+            user_id=user_id, settings=settings, purpose=PASSWORD_RESET_PURPOSE
+        )
 
         try:
             self.email_sender.send_password_reset(
@@ -276,8 +315,12 @@ class AuthService:
             )
 
     # Sends a new-user setup email without exposing the temporary password.
-    def send_account_setup_email(self, *, user_id: str, to_email: str, settings: IdentitySettings) -> bool:
-        token = self._create_reset_token(user_id=user_id, settings=settings, purpose=ACCOUNT_SETUP_PURPOSE)
+    def send_account_setup_email(
+        self, *, user_id: str, to_email: str, settings: IdentitySettings
+    ) -> bool:
+        token = self._create_reset_token(
+            user_id=user_id, settings=settings, purpose=ACCOUNT_SETUP_PURPOSE
+        )
 
         try:
             self.email_sender.send_account_setup(
@@ -333,7 +376,9 @@ class AuthService:
         self.sessions.revoke_user_sessions(user_id)
 
     # Reissues an access token after claims change without rotating refresh.
-    def issue_access_token(self, user: dict[str, object], settings: IdentitySettings) -> str:
+    def issue_access_token(
+        self, user: dict[str, object], settings: IdentitySettings
+    ) -> str:
         return sign_access_token(user, settings)
 
     # Creates access, refresh, and CSRF tokens for one authenticated user.
@@ -347,7 +392,9 @@ class AuthService:
     ) -> AuthTokens:
         refresh_token = generate_refresh_token()
         session_family_id = family_id or str(uuid4())
-        expires_at = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(
+            days=settings.refresh_token_expire_days
+        )
         self.sessions.create_session(
             {
                 "user_id": str(user["id"]),
@@ -374,10 +421,14 @@ class AuthService:
 
     # Builds the public Back Office reset URL without logging the token.
     def _reset_link(self, token: str, settings: IdentitySettings) -> str:
-        return f"{settings.frontend_base_url}/reset-password?{urlencode({'token': token})}"
+        return (
+            f"{settings.frontend_base_url}/reset-password?{urlencode({'token': token})}"
+        )
 
     # Creates one reset/set-password token and stores only its digest.
-    def _create_reset_token(self, *, user_id: str, settings: IdentitySettings, purpose: str) -> str:
+    def _create_reset_token(
+        self, *, user_id: str, settings: IdentitySettings, purpose: str
+    ) -> str:
         token = generate_password_reset_token()
         expires_at = now_utc() + timedelta(minutes=settings.reset_token_expire_minutes)
 

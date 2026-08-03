@@ -1,16 +1,18 @@
-"""The Engagement 8 LangGraph agent — Phases 1-3 (RAG, routing, and OAuth-protected MCP tools).
+"""The Engagement 8 LangGraph agent — Phases 1-4.
 
 Part 1 made the RAG flow an explicit, traceable state machine. Part 2 adds automatic routing and a
 live tool: the agent decides on its own whether a question needs the knowledge base (RAG), a live
 support-ticket lookup through the standalone MCP server, or both — without the user specifying —
-and the trace shows which ran and in what order.
+and the trace shows which ran and in what order. Phase 4 wraps routing/evidence/generation with
+deterministic jurisdiction, injection, tool-argument, and output controls.
 
-Nodes: ``receive_question`` -> ``route`` -> (conditional) ``retrieve`` / ``ticket_tool`` ->
-``generate`` | ``no_context`` -> END. Retrieval and generation reuse the pipeline's ``retrieve`` and
+Nodes: ``receive_question`` -> ``guardrail_input`` -> ``route`` -> (conditional) ``retrieve`` /
+``ticket_tool`` -> ``generate`` | ``no_context`` -> ``guardrail_output`` -> END. Retrieval and
+generation reuse the pipeline's ``retrieve`` and
 ``generate_answer`` (a tool result is folded in as an extra context block, so generation stays
 reused, not duplicated). Every node records safe timing/status metadata; every tool call records a
 typed ``tool_call``. The OpenAI routing model and the ticket tool have explicit timeouts and honest
-fallbacks — a tool outage never fabricates a status. Guardrail and memory nodes arrive in Parts 4-5.
+fallbacks — a tool outage never fabricates a status. Confirmed memory arrives in Phase 5.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from __future__ import annotations
 import logging
 import operator
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
 from uuid import uuid4
@@ -28,6 +30,14 @@ from langgraph.graph import END, START, StateGraph
 from pipelines.rag import generate_answer, retrieve  # type: ignore[import-untyped]
 
 from .config import AgentConfig
+from .guardrails import (
+    JURISDICTION_REQUIRED,
+    OUTPUT_FALLBACK,
+    evidence_is_safe,
+    validate_input,
+    validate_output,
+    validate_ticket_argument,
+)
 from .mcp_client import lookup_ticket_status
 from .routing import route_question
 
@@ -44,12 +54,15 @@ class AgentState(TypedDict):
     question: str
     trace_id: str
     agent_name: str
+    jurisdiction: str | None
     route: str
     ticket_id: int | None
     retrieved: list[dict[str, object]] | None
     tool_context: Annotated[list[dict[str, object]], operator.add]
     tool_calls: Annotated[list[dict[str, Any]], operator.add]
     answer: str | None
+    authoritative_status: str | None
+    guardrail_events: Annotated[list[dict[str, Any]], operator.add]
     error: str | None
     steps: Annotated[list[dict[str, Any]], operator.add]
 
@@ -68,6 +81,7 @@ class AgentRunResult:
     duration_ms: int
     steps: list[dict[str, Any]]
     tool_calls: list[dict[str, Any]]
+    guardrail_events: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _step(state: AgentState, node_name: str, status: str, started: float, *, notes: str | None) -> dict[str, Any]:
@@ -97,9 +111,24 @@ def build_graph(config: AgentConfig) -> Any:
     def receive_question(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         if not state["question"].strip():
-            return {"route": "reject", "error": "empty_question",
-                    "steps": [_step(state, "receive_question", "error", started, notes="empty question")]}
+            return {
+                "route": "reject",
+                "error": "empty_question",
+                "steps": [_step(state, "receive_question", "error", started, notes="empty question")],
+            }
         return {"steps": [_step(state, "receive_question", "ok", started, notes=None)]}
+
+    def guardrail_input_node(state: AgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        decision = validate_input(state["question"], state.get("jurisdiction"))
+        if decision.action != "allow":
+            return {
+                "route": "reject",
+                "answer": decision.answer,
+                "guardrail_events": [decision.event.as_dict()] if decision.event else [],
+                "steps": [_step(state, "guardrail_input", "ok", started, notes=f"outcome={decision.action}")],
+            }
+        return {"steps": [_step(state, "guardrail_input", "ok", started, notes="outcome=allowed")]}
 
     def route_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -112,24 +141,61 @@ def build_graph(config: AgentConfig) -> Any:
 
     def retrieve_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
+        if state.get("jurisdiction") not in {"US", "ES"}:
+            return {
+                "route": "reject",
+                "answer": JURISDICTION_REQUIRED,
+                "guardrail_events": [
+                    {
+                        "layer": "retrieval",
+                        "rule_id": "jurisdiction_missing",
+                        "category": "security",
+                        "outcome": "clarification",
+                        "duration_ms": 0,
+                    }
+                ],
+                "steps": [_step(state, "retrieve", "error", started, notes="jurisdiction missing")],
+            }
         try:
-            chunks = retrieve(state["question"], config=config.rag)
+            chunks = retrieve(state["question"], config=config.rag, jurisdiction=state.get("jurisdiction"))
         except Exception as exc:
             logger.warning("agent_retrieve_failed error_type=%s", type(exc).__name__)
-            return {"retrieved": [], "error": "retrieval_failed",
-                    "steps": [_step(state, "retrieve", "error", started, notes="retrieval failed")]}
-        return {"retrieved": chunks,
-                "steps": [_step(state, "retrieve", "ok", started, notes=f"chunks={len(chunks)}")]}
+            return {
+                "retrieved": [],
+                "error": "retrieval_failed",
+                "steps": [_step(state, "retrieve", "error", started, notes="retrieval failed")],
+            }
+        safe_chunks = [chunk for chunk in chunks if evidence_is_safe(str(chunk.get("text", "")))]
+        events: list[dict[str, Any]] = []
+        if len(safe_chunks) != len(chunks):
+            events.append(
+                {
+                    "layer": "evidence",
+                    "rule_id": "retrieved_instruction",
+                    "category": "security",
+                    "outcome": "blocked",
+                    "duration_ms": max(0, int((time.perf_counter() - started) * 1000)),
+                }
+            )
+        return {
+            "retrieved": safe_chunks,
+            "guardrail_events": events,
+            "steps": [_step(state, "retrieve", "ok", started, notes=f"chunks={len(safe_chunks)}")],
+        }
 
     def ticket_tool_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         ticket_id = state.get("ticket_id")
-        if ticket_id is None:  # routing guarantees an id for tool routes; defensive only
+        if not validate_ticket_argument(ticket_id):
             block = {"source_document": "ticket", "section": "status", "text": "No ticket id was provided."}
             call = {"tool_name": "ticket_status", "status": "error", "duration_ms": 0, "error_type": "missing_id"}
-            return {"tool_context": [block], "tool_calls": [call],
-                    "steps": [_step(state, "ticket_tool", "error", started, notes="missing ticket id")]}
+            return {
+                "tool_context": [block],
+                "tool_calls": [call],
+                "steps": [_step(state, "ticket_tool", "error", started, notes="missing ticket id")],
+            }
 
+        assert isinstance(ticket_id, int)
         result = lookup_ticket_status(ticket_id, config)
         if result.outcome == "ok" and result.ticket is not None:
             ticket = result.ticket
@@ -137,17 +203,17 @@ def build_graph(config: AgentConfig) -> Any:
                 f"Ticket {ticket.ticket_id}: status={ticket.status}, category={ticket.category}, "
                 f"opened {ticket.created_at}, last updated {ticket.updated_at}."
             )
-            call_status, step_status, notes = "ok", "ok", f"ticket={ticket_id} status={ticket.status}"
+            call_status, step_status, notes = "ok", "ok", f"status={ticket.status}"
         elif result.outcome == "not_found":
             text = f"Ticket {ticket_id} was not found in the incident system."
-            call_status, step_status, notes = "ok", "ok", f"ticket={ticket_id} not_found"
+            call_status, step_status, notes = "ok", "ok", "not_found"
         else:  # timeout | error -> honest fallback, never a fabricated status
             text = (
                 f"The current status of ticket {ticket_id} could not be confirmed right now. "
                 "Tell the user you couldn't confirm it and to try again shortly."
             )
             call_status = "timeout" if result.outcome == "timeout" else "error"
-            step_status, notes = "error", f"ticket={ticket_id} {result.outcome}"
+            step_status, notes = "error", result.outcome
 
         block = {"source_document": f"ticket-{ticket_id}", "section": "status", "text": text}
         call = {
@@ -156,39 +222,93 @@ def build_graph(config: AgentConfig) -> Any:
             "duration_ms": result.duration_ms,
             "error_type": None if call_status == "ok" else result.outcome,
         }
-        return {"tool_context": [block], "tool_calls": [call],
-                "steps": [_step(state, "ticket_tool", step_status, started, notes=notes)]}
+        if not evidence_is_safe(text):
+            block = {"source_document": "ticket", "section": "status", "text": "Tool evidence was blocked."}
+            call["status"] = "denied"
+            return {
+                "tool_context": [block],
+                "tool_calls": [call],
+                "guardrail_events": [
+                    {
+                        "layer": "evidence",
+                        "rule_id": "tool_instruction",
+                        "category": "security",
+                        "outcome": "blocked",
+                        "duration_ms": result.duration_ms,
+                    }
+                ],
+                "steps": [_step(state, "ticket_tool", "error", started, notes="unsafe tool evidence")],
+            }
+        return {
+            "tool_context": [block],
+            "tool_calls": [call],
+            "authoritative_status": result.ticket.status if result.ticket else None,
+            "steps": [_step(state, "ticket_tool", step_status, started, notes=notes)],
+        }
 
     def generate_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         context = list(state.get("retrieved") or []) + list(state.get("tool_context") or [])
         try:
-            answer = generate_answer(state["question"], context, config.rag)
+            answer = generate_answer(state["question"], context, config.rag, jurisdiction=state.get("jurisdiction"))
         except Exception as exc:
             logger.warning("agent_generate_failed error_type=%s", type(exc).__name__)
-            return {"error": "generation_failed",
-                    "steps": [_step(state, "generate", "error", started, notes="generation failed")]}
-        return {"answer": answer,
-                "steps": [_step(state, "generate", "ok", started, notes="grounded answer")]}
+            return {
+                "error": "generation_failed",
+                "steps": [_step(state, "generate", "error", started, notes="generation failed")],
+            }
+        return {"answer": answer, "steps": [_step(state, "generate", "ok", started, notes="grounded answer")]}
 
     def no_context_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            answer = generate_answer(state["question"], [], config.rag)
+            answer = generate_answer(state["question"], [], config.rag, jurisdiction=state.get("jurisdiction"))
         except Exception as exc:
             logger.warning("agent_no_context_failed error_type=%s", type(exc).__name__)
-            return {"error": "generation_failed",
-                    "steps": [_step(state, "no_context", "error", started, notes="generation failed")]}
-        return {"answer": answer,
-                "steps": [_step(state, "no_context", "ok", started, notes="no grounded context")]}
+            return {
+                "error": "generation_failed",
+                "steps": [_step(state, "no_context", "error", started, notes="generation failed")],
+            }
+        return {"answer": answer, "steps": [_step(state, "no_context", "ok", started, notes="no grounded context")]}
+
+    def guardrail_output_node(state: AgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        answer = state.get("answer") or ""
+        rule_id = validate_output(
+            answer,
+            state.get("jurisdiction"),
+            authoritative_status=state.get("authoritative_status"),
+            has_grounded_evidence=bool(state.get("retrieved") or state.get("tool_context")),
+        )
+        if rule_id:
+            return {
+                "answer": OUTPUT_FALLBACK,
+                "route": "reject",
+                "guardrail_events": [
+                    {
+                        "layer": "output",
+                        "rule_id": rule_id,
+                        "category": "content",
+                        "outcome": "blocked",
+                        "duration_ms": max(0, int((time.perf_counter() - started) * 1000)),
+                    }
+                ],
+                "steps": [_step(state, "guardrail_output", "ok", started, notes="outcome=blocked")],
+            }
+        return {"steps": [_step(state, "guardrail_output", "ok", started, notes="outcome=allowed")]}
 
     def after_receive(state: AgentState) -> str:
+        return "reject" if state.get("route") == "reject" else "guardrail_input"
+
+    def after_input(state: AgentState) -> str:
         return "reject" if state.get("route") == "reject" else "route"
 
     def after_route(state: AgentState) -> str:
         return "ticket_tool" if state["route"] == "ticket" else "retrieve"
 
     def after_retrieve(state: AgentState) -> str:
+        if state.get("route") == "reject":
+            return "end"
         if state.get("error"):
             return "end"
         if state["route"] == "both":
@@ -197,22 +317,29 @@ def build_graph(config: AgentConfig) -> Any:
 
     graph = StateGraph(AgentState)
     graph.add_node("receive_question", receive_question)
+    graph.add_node("guardrail_input", guardrail_input_node)
     graph.add_node("route", route_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("ticket_tool", ticket_tool_node)
     graph.add_node("generate", generate_node)
     graph.add_node("no_context", no_context_node)
+    graph.add_node("guardrail_output", guardrail_output_node)
 
     graph.add_edge(START, "receive_question")
-    graph.add_conditional_edges("receive_question", after_receive, {"reject": END, "route": "route"})
+    graph.add_conditional_edges(
+        "receive_question", after_receive, {"reject": END, "guardrail_input": "guardrail_input"}
+    )
+    graph.add_conditional_edges("guardrail_input", after_input, {"reject": END, "route": "route"})
     graph.add_conditional_edges("route", after_route, {"retrieve": "retrieve", "ticket_tool": "ticket_tool"})
     graph.add_conditional_edges(
-        "retrieve", after_retrieve,
+        "retrieve",
+        after_retrieve,
         {"ticket_tool": "ticket_tool", "generate": "generate", "no_context": "no_context", "end": END},
     )
     graph.add_edge("ticket_tool", "generate")
-    graph.add_edge("generate", END)
-    graph.add_edge("no_context", END)
+    graph.add_edge("generate", "guardrail_output")
+    graph.add_edge("no_context", "guardrail_output")
+    graph.add_edge("guardrail_output", END)
 
     return graph.compile(checkpointer=MemorySaver())
 
@@ -232,7 +359,7 @@ def _route_taken(state: AgentState, reject: bool) -> str:
     return "rag"
 
 
-def run_agent(question: str, config: AgentConfig) -> AgentRunResult:
+def run_agent(question: str, config: AgentConfig, jurisdiction: str | None = None) -> AgentRunResult:
     """Invoke the compiled graph once and return a structured, persistable run result."""
     graph = build_graph(config)
     trace_id = uuid4().hex
@@ -243,12 +370,15 @@ def run_agent(question: str, config: AgentConfig) -> AgentRunResult:
         "question": question,
         "trace_id": trace_id,
         "agent_name": config.agent_name,
+        "jurisdiction": jurisdiction,
         "route": "",
         "ticket_id": None,
         "retrieved": None,
         "tool_context": [],
         "tool_calls": [],
         "answer": None,
+        "authoritative_status": None,
+        "guardrail_events": [],
         "error": None,
         "steps": [],
     }
@@ -275,4 +405,5 @@ def run_agent(question: str, config: AgentConfig) -> AgentRunResult:
         duration_ms=duration_ms,
         steps=final.get("steps", []),
         tool_calls=final.get("tool_calls", []),
+        guardrail_events=final.get("guardrail_events", []),
     )

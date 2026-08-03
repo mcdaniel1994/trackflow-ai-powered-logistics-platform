@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlmodel import Session
+from trackflow_auth import ScopedPrincipal  # type: ignore[import-untyped]
 from trackflow_incidents import Branch, IncidentCategory, IncidentOrigin, IncidentStatus
 
 from ...core.dependencies import (
@@ -63,17 +64,21 @@ def incident_summary(
 @router.get("/{incident_id}", response_model=IncidentRead)
 def get_incident(
     incident_id: int,
-    _principal: Annotated[OperationalPrincipal, Depends(incidents_read_principal)],
+    principal: Annotated[OperationalPrincipal, Depends(incidents_read_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentRead:
-    return service.get(incident_id)
+    return service.get(incident_id, principal if isinstance(principal, ScopedPrincipal) else None)
 
 
 @router.patch("/{incident_id}/status", response_model=IncidentRead)
 def update_incident_status(
     incident_id: int,
     payload: IncidentStatusUpdate,
-    _principal: Annotated[OperationalPrincipal, Depends(incidents_write_principal)],
+    principal: Annotated[OperationalPrincipal, Depends(incidents_write_principal)],
     service: Annotated[IncidentService, Depends(incident_service)],
 ) -> IncidentRead:
-    return service.update_status(incident_id, payload)
+    return service.update_status(
+        incident_id,
+        payload,
+        principal if isinstance(principal, ScopedPrincipal) else None,
+    )

@@ -9,9 +9,10 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, cast
 
+from sqlalchemy import func
 from sqlmodel import Session, select
 
-from .models import AgentNodeStep, AgentRun, AgentToolCall
+from .models import AgentGuardrailEvent, AgentNodeStep, AgentRun, AgentToolCall
 
 _run_table = AgentRun.__table__  # type: ignore[attr-defined]
 
@@ -33,16 +34,40 @@ class AgentRepository:
         return self.session.exec(select(AgentRun).where(AgentRun.trace_id == trace_id)).first()
 
     def steps_for(self, run_id: int) -> list[AgentNodeStep]:
-        statement = select(AgentNodeStep).where(AgentNodeStep.run_id == run_id).order_by(
-            AgentNodeStep.sequence  # type: ignore[arg-type]
+        statement = (
+            select(AgentNodeStep)
+            .where(AgentNodeStep.run_id == run_id)
+            .order_by(
+                AgentNodeStep.sequence  # type: ignore[arg-type]
+            )
         )
         return list(self.session.exec(statement).all())
 
     def tool_calls_for(self, run_id: int) -> list[AgentToolCall]:
-        statement = select(AgentToolCall).where(AgentToolCall.run_id == run_id).order_by(
-            AgentToolCall.id  # type: ignore[arg-type]
+        statement = (
+            select(AgentToolCall)
+            .where(AgentToolCall.run_id == run_id)
+            .order_by(
+                AgentToolCall.id  # type: ignore[arg-type]
+            )
         )
         return list(self.session.exec(statement).all())
+
+    def guardrail_summary(self) -> list[tuple[str, str, str, int]]:
+        statement = (
+            select(
+                AgentGuardrailEvent.category,
+                AgentGuardrailEvent.rule_id,
+                AgentGuardrailEvent.outcome,
+                func.count(),
+            )
+            .group_by(AgentGuardrailEvent.category, AgentGuardrailEvent.rule_id, AgentGuardrailEvent.outcome)
+            .order_by(AgentGuardrailEvent.category, AgentGuardrailEvent.rule_id)
+        )
+        return [
+            (str(category), str(rule), str(outcome), int(count))
+            for category, rule, outcome, count in self.session.exec(statement).all()
+        ]
 
     def delete_before(self, cutoff: datetime) -> int:
         """Prune runs created before ``cutoff``. Child rows cascade via ON DELETE CASCADE."""

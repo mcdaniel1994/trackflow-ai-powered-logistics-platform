@@ -38,7 +38,9 @@ def _register_public(client: TestClient) -> str:
     return str(response.json()["client_id"])
 
 
-def _authorize(client: TestClient, client_id: str, *, decision: str = "approve", verifier: str) -> object:
+def _authorize(
+    client: TestClient, client_id: str, *, decision: str = "approve", verifier: str
+) -> object:
     values = {
         "client_id": client_id,
         "redirect_uri": REDIRECT_URI,
@@ -80,7 +82,10 @@ def test_metadata_jwks_and_accessible_consent(client: TestClient) -> None:
     )
     assert response.status_code == 200
     assert '<label for="email">Email</label>' in response.text
-    assert '<button type="submit" name="decision" value="deny">Deny</button>' in response.text
+    assert (
+        '<button type="submit" name="decision" value="deny">Deny</button>'
+        in response.text
+    )
     assert "opaque-state" in response.text
 
     metadata = client.get("/.well-known/oauth-authorization-server").json()
@@ -103,11 +108,17 @@ def test_pkce_code_is_five_minute_hash_only_single_use_and_preserves_state(
     assert authorized.status_code == 303
     code = _code(authorized)
 
-    records = client.app.state.identity_store.db.table("oauth_authorization_codes").all()
+    records = client.app.state.identity_store.db.table(
+        "oauth_authorization_codes"
+    ).all()
     assert len(records) == 1
     assert code not in str(records[0])
     expiry = datetime.fromisoformat(str(records[0]["expires_at"]))
-    assert timedelta(minutes=4, seconds=50) <= expiry - datetime.now(UTC) <= timedelta(minutes=5)
+    assert (
+        timedelta(minutes=4, seconds=50)
+        <= expiry - datetime.now(UTC)
+        <= timedelta(minutes=5)
+    )
 
     token = client.post(
         "/oauth/token",
@@ -131,6 +142,7 @@ def test_pkce_code_is_five_minute_hash_only_single_use_and_preserves_state(
     )
     assert header["kid"] == oauth_key_id(client.app.state.identity_settings)
     assert claims["scope"] == "incidents:read mcp:connect"
+    assert claims["jurisdiction"] == "US"
 
     reused = client.post(
         "/oauth/token",
@@ -186,7 +198,11 @@ def test_pkce_redirect_denial_and_expired_code_fail_closed(client: TestClient) -
     denied = _authorize(client, client_id, decision="deny", verifier=verifier)
     assert denied.status_code == 303
     denied_query = parse_qs(urlparse(denied.headers["location"]).query)
-    assert denied_query == {"error": ["access_denied"], "error_description": ["The resource owner denied the request."], "state": ["opaque-state"]}
+    assert denied_query == {
+        "error": ["access_denied"],
+        "error_description": ["The resource owner denied the request."],
+        "state": ["opaque-state"],
+    }
 
     code = _code(_authorize(client, client_id, verifier=verifier))
     table = client.app.state.identity_store.db.table("oauth_authorization_codes")
@@ -216,10 +232,14 @@ def test_wrong_pkce_verifier_burns_the_authorization_code(client: TestClient) ->
         "redirect_uri": REDIRECT_URI,
     }
 
-    rejected = client.post("/oauth/token", data={**token_request, "code_verifier": "w" * 64})
+    rejected = client.post(
+        "/oauth/token", data={**token_request, "code_verifier": "w" * 64}
+    )
     assert rejected.status_code == 400 and rejected.json()["error"] == "invalid_grant"
 
-    burned = client.post("/oauth/token", data={**token_request, "code_verifier": verifier})
+    burned = client.post(
+        "/oauth/token", data={**token_request, "code_verifier": verifier}
+    )
     assert burned.status_code == 400 and burned.json()["error"] == "invalid_grant"
 
 
@@ -228,7 +248,9 @@ def test_confidential_machine_and_delegated_exchange_downscope(
     key_pair: tuple[str, str],
 ) -> None:
     admin = create_admin(client)
-    login = client.post("/auth/login", json={"email": admin["email"], "password": "admin-passphrase"})
+    login = client.post(
+        "/auth/login", json={"email": admin["email"], "password": "admin-passphrase"}
+    )
     backoffice_token = login.cookies["trackflow_access"]
     service = client.app.state.oauth_service
     central_id, central_secret = service.register_confidential_client(
@@ -283,6 +305,7 @@ def test_confidential_machine_and_delegated_exchange_downscope(
     assert claims["sub"] == admin["id"]
     assert claims["client_id"] == mcp_id
     assert claims["scope"] == "incidents:read"
+    assert claims["jurisdiction"] == "US"
 
     increased = client.post(
         "/oauth/token",
@@ -300,12 +323,18 @@ def test_confidential_machine_and_delegated_exchange_downscope(
     machine = client.post(
         "/oauth/token",
         auth=(mcp_id, mcp_secret),
-        data={"grant_type": "client_credentials", "scope": "inventory:read", "resource": CENTRAL_RESOURCE},
+        data={
+            "grant_type": "client_credentials",
+            "scope": "inventory:read",
+            "resource": CENTRAL_RESOURCE,
+        },
     )
     assert machine.status_code == 200
 
 
-def test_oauth_logs_exclude_credentials_and_payloads(client: TestClient, caplog) -> None:
+def test_oauth_logs_exclude_credentials_and_payloads(
+    client: TestClient, caplog
+) -> None:
     caplog.set_level("INFO")
     create_admin(client)
     client_id = _register_public(client)
@@ -328,7 +357,9 @@ def test_oauth_logs_exclude_credentials_and_payloads(client: TestClient, caplog)
     assert injected not in caplog.text
 
 
-def test_inactive_and_temporary_password_users_cannot_authorize(client: TestClient) -> None:
+def test_inactive_and_temporary_password_users_cannot_authorize(
+    client: TestClient,
+) -> None:
     admin = create_admin(client)
     client_id = _register_public(client)
     verifier = "z" * 64
@@ -336,7 +367,9 @@ def test_inactive_and_temporary_password_users_cannot_authorize(client: TestClie
     assert _authorize(client, client_id, verifier=verifier).status_code == 401
 
     temporary = client.app.state.user_service.create_user_with_temp_password(
-        UserCreate(name="Temporary User", email="temporary@trackflow.test")
+        UserCreate(
+            name="Temporary User", email="temporary@trackflow.test", jurisdiction="ES"
+        )
     )
     values = {
         "client_id": client_id,

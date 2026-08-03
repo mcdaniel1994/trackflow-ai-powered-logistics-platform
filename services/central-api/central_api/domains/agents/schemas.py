@@ -82,3 +82,10 @@ class RunDetail(RunSummary):
     output_summary: str | None = None
     node_steps: list[NodeStepRead] = Field(default_factory=list)
     tool_calls: list[ToolCallRead] = Field(default_factory=list)
+
+
+class GuardrailSummary(APIModel):
+    category: str
+    rule_id: str
+    outcome: str
+    count: int

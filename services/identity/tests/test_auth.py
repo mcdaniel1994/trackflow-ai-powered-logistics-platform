@@ -55,6 +55,20 @@ def test_health_login_me_and_no_register_endpoint(client: TestClient):
     assert me.json()["role"] == "admin"
 
 
+def test_legacy_user_without_jurisdiction_can_still_authenticate(client: TestClient):
+    admin = create_admin(client)
+    client.app.state.user_service.repository.update_user(admin["id"], {"jurisdiction": None})
+
+    response = client.post(
+        "/auth/login",
+        json={"email": admin["email"], "password": "admin-passphrase"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["jurisdiction"] is None
+    assert client.get("/auth/me").json()["jurisdiction"] is None
+
+
 def test_login_failures_are_generic_and_inactive_users_cannot_login(client: TestClient):
     admin = create_admin(client)
 

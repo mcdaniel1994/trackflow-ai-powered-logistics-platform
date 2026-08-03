@@ -43,14 +43,26 @@ class _StubQdrant:
         return SimpleNamespace(points=self._points)
 
 
-def _point(score: float, source: str, text: str) -> SimpleNamespace:
-    return SimpleNamespace(score=score, payload={"source_document": source, "section": source, "text": text})
+def _point(
+    score: float, source: str, text: str, jurisdiction: str = "GLOBAL"
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        score=score,
+        payload={
+            "source_document": source,
+            "section": source,
+            "text": text,
+            "jurisdiction": jurisdiction,
+        },
+    )
 
 
 # --------------------------------------------------------------------------- retrieve()
 
 
-def test_retrieve_excludes_hits_below_min_score(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retrieve_excludes_hits_below_min_score(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     points = [
         _point(0.91, "returns-policy", "30 day window"),
         _point(0.40, "storage-pricing", "irrelevant"),  # below threshold 0.5 -> dropped
@@ -64,11 +76,18 @@ def test_retrieve_excludes_hits_below_min_score(monkeypatch: pytest.MonkeyPatch)
 
     assert len(results) == 2  # the 0.40 hit was filtered out
     assert all(isinstance(row, dict) for row in results)  # payloads, not SDK objects
-    assert {row["source_document"] for row in results} == {"returns-policy", "sla-delivery"}
+    assert {row["source_document"] for row in results} == {
+        "returns-policy",
+        "sla-delivery",
+    }
 
 
-def test_retrieve_can_return_fewer_than_k_or_zero(monkeypatch: pytest.MonkeyPatch) -> None:
-    stub = _StubQdrant([_point(0.10, "storage-pricing", "weak"), _point(0.20, "sla-delivery", "weak")])
+def test_retrieve_can_return_fewer_than_k_or_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubQdrant(
+        [_point(0.10, "storage-pricing", "weak"), _point(0.20, "sla-delivery", "weak")]
+    )
     monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: stub)
     monkeypatch.setattr(rag, "embed", lambda *_a, **_k: [0.0] * 8)
 
@@ -89,6 +108,27 @@ def test_retrieve_honours_explicit_overrides(monkeypatch: pytest.MonkeyPatch) ->
     assert stub.calls[0]["limit"] == 1  # explicit k overrode config
 
 
+def test_retrieve_filters_cross_jurisdiction_payloads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubQdrant(
+        [
+            _point(0.9, "coverage", "UPS coverage", "US"),
+            _point(0.9, "coverage", "SEUR coverage", "ES"),
+            _point(0.9, "returns", "30 day return window", "GLOBAL"),
+            SimpleNamespace(score=0.9, payload={"text": "legacy unlabelled passage"}),
+        ]
+    )
+    monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: stub)
+    monkeypatch.setattr(rag, "embed", lambda *_a, **_k: [0.0] * 8)
+
+    results = rag.retrieve("coverage", jurisdiction="US", config=_config())
+
+    assert {row["jurisdiction"] for row in results} == {"US", "GLOBAL"}
+    assert all("SEUR" not in str(row) for row in results)
+    assert stub.calls[0]["query_filter"] is not None
+
+
 # --------------------------------------------------------------------------- query()
 
 
@@ -107,12 +147,20 @@ class _StubChat:
         return SimpleNamespace(choices=[SimpleNamespace(message=message)])
 
 
-def test_query_returns_generated_answer_not_raw_chunks(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_returns_generated_answer_not_raw_chunks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     chunk_text = "Standard return window: 30 days from delivery."
     monkeypatch.setattr(
         rag,
         "retrieve",
-        lambda *_a, **_k: [{"source_document": "returns-policy", "section": "Return window", "text": chunk_text}],
+        lambda *_a, **_k: [
+            {
+                "source_document": "returns-policy",
+                "section": "Return window",
+                "text": chunk_text,
+            }
+        ],
     )
     stub = _StubChat("Our standard return window is 30 days from delivery.")
     monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
@@ -127,7 +175,9 @@ def test_query_returns_generated_answer_not_raw_chunks(monkeypatch: pytest.Monke
     assert stub.received["model"] == "deepseek-chat"
 
 
-def test_query_handles_empty_retrieval_honestly(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_query_handles_empty_retrieval_honestly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(rag, "retrieve", lambda *_a, **_k: [])
     stub = _StubChat("I don't have that documented, but I can follow up for you.")
     monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
@@ -204,9 +254,15 @@ def test_chunk_document_derives_labelled_section() -> None:
 
 
 def test_chunk_point_id_is_deterministic_and_payload_complete() -> None:
-    first = Chunk(source_document="sla-delivery", section="Delivery SLA", chunk_index=0, text="a")
-    same = Chunk(source_document="sla-delivery", section="Different", chunk_index=0, text="b")
-    other = Chunk(source_document="sla-delivery", section="Delivery SLA", chunk_index=1, text="a")
+    first = Chunk(
+        source_document="sla-delivery", section="Delivery SLA", chunk_index=0, text="a"
+    )
+    same = Chunk(
+        source_document="sla-delivery", section="Different", chunk_index=0, text="b"
+    )
+    other = Chunk(
+        source_document="sla-delivery", section="Delivery SLA", chunk_index=1, text="a"
+    )
 
     # ID depends only on source_document + chunk_index, so re-indexing upserts in place.
     assert first.point_id == same.point_id
@@ -218,6 +274,7 @@ def test_chunk_point_id_is_deterministic_and_payload_complete() -> None:
         "language": "en",
         "chunk_index": 0,
         "text": "a",
+        "jurisdiction": "GLOBAL",
     }
 
 
@@ -242,12 +299,37 @@ def test_chunk_document_glues_standalone_lists_and_colon_intros() -> None:
     # A list separated by a blank line still attaches to the paragraph above it.
     assert "first item" in chunks[0].text and "Intro without a colon" in chunks[0].text
     # A colon lead-in pulls in the following paragraph AND its list.
-    assert "Following paragraph" in chunks[1].text and "glued list item" in chunks[1].text
+    assert (
+        "Following paragraph" in chunks[1].text and "glued list item" in chunks[1].text
+    )
 
 
 def test_chunk_document_without_h1_falls_back_to_slug_title() -> None:
-    chunk = chunk_document("Just a plain paragraph with no heading.", "storage-pricing")[0]
+    chunk = chunk_document(
+        "Just a plain paragraph with no heading.", "storage-pricing"
+    )[0]
     assert chunk.section == "storage-pricing"
+
+
+def test_chunk_document_splits_mixed_country_policy_into_jurisdiction_chunks() -> None:
+    markdown = (
+        "# Carrier Coverage\n\n"
+        "Coverage differs by country:\n\n"
+        "United States: UPS and FedEx.\n- UPS covers California.\n\n"
+        "Spain: MRW and SEUR.\n- SEUR covers Aragón.\n\n"
+        "Carrier selection is automatic."
+    )
+
+    chunks = chunk_document(markdown, "carrier-coverage")
+
+    assert [(chunk.jurisdiction, chunk.text) for chunk in chunks] == [
+        (
+            "US",
+            "Coverage differs by country:\n\nUnited States: UPS and FedEx.\n- UPS covers California.",
+        ),
+        ("ES", "Spain: MRW and SEUR.\n- SEUR covers Aragón."),
+        ("GLOBAL", "Carrier selection is automatic."),
+    ]
 
 
 # --------------------------------------------------------------------------- config / embed / setup
@@ -329,7 +411,9 @@ def _write_corpus(tmp_path: Any) -> Any:
     return tmp_path
 
 
-def test_setup_indexes_corpus_idempotently(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+def test_setup_indexes_corpus_idempotently(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
     stub = _StubIndexClient(exists=False)
     monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: stub)
     monkeypatch.setattr(rag, "embed", lambda *_a, **_k: [0.0] * 8)
@@ -343,7 +427,9 @@ def test_setup_indexes_corpus_idempotently(monkeypatch: pytest.MonkeyPatch, tmp_
     assert len(ids) == len(set(ids))  # deterministic, unique point IDs (README skipped)
 
 
-def test_setup_recreate_drops_existing(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+def test_setup_recreate_drops_existing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
     stub = _StubIndexClient(exists=True)
     monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: stub)
     monkeypatch.setattr(rag, "embed", lambda *_a, **_k: [0.0] * 8)
@@ -354,7 +440,11 @@ def test_setup_recreate_drops_existing(monkeypatch: pytest.MonkeyPatch, tmp_path
     assert stub.created == ["trackflow"]
 
 
-def test_setup_rejects_empty_corpus(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
-    monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: _StubIndexClient(exists=False))
+def test_setup_rejects_empty_corpus(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
+) -> None:
+    monkeypatch.setattr(
+        rag, "_qdrant", lambda *_a, **_k: _StubIndexClient(exists=False)
+    )
     with pytest.raises(rag.RagPipelineError, match="No knowledge-base documents"):
         rag.setup(_config(), corpus_dir=tmp_path)

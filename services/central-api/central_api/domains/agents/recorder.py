@@ -15,7 +15,7 @@ from sqlmodel import Session
 
 from ...db.session import get_engine
 from .graph import AgentRunResult
-from .models import AgentNodeStep, AgentRun, AgentToolCall
+from .models import AgentGuardrailEvent, AgentNodeStep, AgentRun, AgentToolCall
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,7 @@ def persist_run(
             duration_ms=result.duration_ms,
             total_tokens=None,
             total_cost_usd=None,
-            guardrail_trigger_count=0,
+            guardrail_trigger_count=len(result.guardrail_events),
             input_summary=input_summary,
             output_summary=output_summary,
         )
@@ -81,6 +81,17 @@ def persist_run(
                         error_type=call.get("error_type"),
                         input_summary=None,  # tool arguments are not persisted by default (§8)
                         output_summary=None,
+                    )
+                )
+            for event in result.guardrail_events:
+                session.add(
+                    AgentGuardrailEvent(
+                        run_id=run.id,  # type: ignore[arg-type]
+                        layer=str(event["layer"]),
+                        rule_id=str(event["rule_id"]),
+                        category=str(event["category"]),
+                        outcome=str(event["outcome"]),
+                        duration_ms=int(event["duration_ms"]),
                     )
                 )
             session.commit()

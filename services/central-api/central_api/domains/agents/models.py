@@ -79,9 +79,7 @@ class AgentNodeStep(SQLModel, table=True):
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    run_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
-    )
+    run_id: int = Field(sa_column=Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False))
     parent_step_id: int | None = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("agent_node_steps.id", ondelete="CASCADE"), nullable=True),
@@ -102,17 +100,13 @@ class AgentToolCall(SQLModel, table=True):
 
     __tablename__ = "agent_tool_calls"
     __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
-        CheckConstraint(
-            "status IN ('ok', 'timeout', 'error', 'denied')", name="ck_agent_tool_calls_status"
-        ),
+        CheckConstraint("status IN ('ok', 'timeout', 'error', 'denied')", name="ck_agent_tool_calls_status"),
         CheckConstraint("duration_ms IS NULL OR duration_ms >= 0", name="ck_agent_tool_calls_duration"),
         Index("ix_agent_tool_calls_run_id", "run_id"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
-    run_id: int = Field(
-        sa_column=Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False)
-    )
+    run_id: int = Field(sa_column=Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False))
     step_id: int | None = Field(
         default=None,
         sa_column=Column(Integer, ForeignKey("agent_node_steps.id", ondelete="SET NULL"), nullable=True),
@@ -127,3 +121,27 @@ class AgentToolCall(SQLModel, table=True):
         default_factory=utc_now,
         sa_column=Column(DateTime(timezone=True), nullable=False),
     )
+
+
+class AgentGuardrailEvent(SQLModel, table=True):
+    """Allowlisted intervention metadata; rejected content is never stored."""
+
+    __tablename__ = "agent_guardrail_events"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        CheckConstraint("category IN ('structural', 'content', 'security')", name="ck_agent_guardrail_category"),
+        CheckConstraint(
+            "outcome IN ('allowed', 'blocked', 'redirected', 'clarification')",
+            name="ck_agent_guardrail_outcome",
+        ),
+        CheckConstraint("duration_ms >= 0", name="ck_agent_guardrail_duration"),
+        Index("ix_agent_guardrail_rule_created_at", "rule_id", "created_at"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    run_id: int = Field(sa_column=Column(Integer, ForeignKey("agent_runs.id", ondelete="CASCADE"), nullable=False))
+    layer: str = Field(sa_column=Column(String(32), nullable=False))
+    rule_id: str = Field(sa_column=Column(String(64), nullable=False))
+    category: str = Field(sa_column=Column(String(16), nullable=False))
+    outcome: str = Field(sa_column=Column(String(16), nullable=False))
+    duration_ms: int = Field(default=0, sa_column=Column(Integer, nullable=False))
+    created_at: datetime = Field(default_factory=utc_now, sa_column=Column(DateTime(timezone=True), nullable=False))

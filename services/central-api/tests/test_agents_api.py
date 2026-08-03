@@ -41,7 +41,7 @@ def _configure_agent(app: FastAPI, base: Settings, *, store_content: bool = Fals
 
 def _result(
     *, status: str = "ok", answer: str | None = "30 days.", trace_id: str = "trace-abc",
-    with_tool: bool = False,
+    with_tool: bool = False, with_guardrail: bool = False,
 ) -> AgentRunResult:
     now = datetime.now(UTC)
     steps = [
@@ -57,6 +57,11 @@ def _result(
     return AgentRunResult(
         trace_id=trace_id, agent_name="trackflow-cx-agent", status=status, route_taken="rag",
         answer=answer, started_at=now, ended_at=now, duration_ms=5, steps=steps, tool_calls=tool_calls,
+        guardrail_events=(
+            [{"layer": "input", "rule_id": "instruction_override", "category": "security",
+              "outcome": "blocked", "duration_ms": 1}]
+            if with_guardrail else []
+        ),
     )
 
 
@@ -67,7 +72,7 @@ def test_query_returns_answer_and_trace_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_agent(app, settings)
-    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c: _result())
+    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j: _result())
     monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: None)
 
     response = client.post("/agent/query", json={"question": "return window?"}, headers=auth_headers)
@@ -86,7 +91,7 @@ def test_cookie_caller_token_is_ephemeral_mcp_config_only(
     _configure_agent(app, settings)
     captured: dict[str, object] = {}
 
-    def run(_question: str, config: object) -> AgentRunResult:
+    def run(_question: str, config: object, _jurisdiction: str | None) -> AgentRunResult:
         captured["config"] = config
         return _result()
 
@@ -126,7 +131,7 @@ def test_query_translates_run_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_agent(app, settings)
-    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c: _result(status="error", answer=None))
+    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j: _result(status="error", answer=None))
     monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: None)
 
     response = client.post("/agent/query", json={"question": "x"}, headers=auth_headers)
@@ -162,6 +167,29 @@ def test_get_missing_run_is_404(
 ) -> None:
     _configure_agent(app, settings)
     assert client.get("/agents/runs/does-not-exist", headers=auth_headers).status_code == 404
+
+
+def test_guardrail_summary_is_admin_only_and_contains_safe_counts(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+    admin_headers: dict[str, str],
+) -> None:
+    _configure_agent(app, settings)
+    recorder.persist_run(
+        _result(trace_id="trace-guarded", status="rejected", with_guardrail=True),
+        env="test",
+        input_summary=None,
+        output_summary=None,
+    )
+    assert client.get("/agents/guardrails/summary", headers=auth_headers).status_code == 403
+    response = client.get("/agents/guardrails/summary", headers=admin_headers)
+    assert response.status_code == 200
+    assert response.json() == [
+        {"category": "security", "rule_id": "instruction_override", "outcome": "blocked", "count": 1}
+    ]
+    assert "ignore" not in response.text.casefold()
 
 
 # --------------------------------------------------------------------------- trace store persistence

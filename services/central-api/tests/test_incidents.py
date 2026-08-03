@@ -66,6 +66,34 @@ def test_incident_routes_accept_only_matching_oauth_scopes(
     assert client.get("/api/incidents", headers=wrong_audience).status_code == 401
 
 
+def test_delegated_incident_access_enforces_creator_with_admin_override(
+    client: TestClient,
+    oauth_token_factory: Callable[..., str],
+    incident_payload: dict[str, object],
+) -> None:
+    owner = {"Authorization": f"Bearer {oauth_token_factory(scopes='incidents:write incidents:read')}"}
+    created = create_incident(client, owner, incident_payload)
+    other_token = oauth_token_factory(
+        scopes="incidents:read incidents:write",
+        user_id="22222222-2222-4222-8222-222222222222",
+    )
+    other = {"Authorization": f"Bearer {other_token}"}
+    denied_read = client.get(f"/api/incidents/{created['id']}", headers=other)
+    denied_write = client.patch(
+        f"/api/incidents/{created['id']}/status",
+        json={"status": "in_progress"},
+        headers=other,
+    )
+    assert denied_read.status_code == 403
+    assert denied_write.status_code == 403
+    assert "not found" not in denied_read.text.casefold()
+
+    admin = {
+        "Authorization": f"Bearer {oauth_token_factory(scopes='incidents:read', role='admin', user_id='admin-user')}"
+    }
+    assert client.get(f"/api/incidents/{created['id']}", headers=admin).status_code == 200
+
+
 def test_validation_returns_field_keyed_400(
     client: TestClient,
     auth_headers: dict[str, str],
@@ -139,11 +167,14 @@ def test_status_lifecycle_and_final_states(
     )
     assert resolved.status_code == 200
     assert resolved.json()["status"] == "resolved"
-    assert client.patch(
-        f"/api/incidents/{incident_id}/status",
-        json={"status": "discarded"},
-        headers=auth_headers,
-    ).status_code == 400
+    assert (
+        client.patch(
+            f"/api/incidents/{incident_id}/status",
+            json={"status": "discarded"},
+            headers=auth_headers,
+        ).status_code
+        == 400
+    )
 
 
 def test_summary_includes_zero_keys_and_current_counts(

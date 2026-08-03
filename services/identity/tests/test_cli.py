@@ -3,13 +3,24 @@ from __future__ import annotations
 import pytest
 
 from identity.cli import create_admin, main, revoke_sessions
-from identity.repository import DuplicateEmailError, TinyDBIdentityStore, TinyDBUserRepository
+from identity.repository import (
+    DuplicateEmailError,
+    TinyDBIdentityStore,
+    TinyDBUserRepository,
+)
 
 
-def test_cli_create_admin_creates_admin_without_printing_password(tmp_path, monkeypatch):
+def test_cli_create_admin_creates_admin_without_printing_password(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("IDENTITY_DB_PATH", str(tmp_path / "identity.json"))
 
-    user_id = create_admin(name="CLI Admin", email="CLI@TrackFlow.test", password="cli-passphrase")
+    user_id = create_admin(
+        name="CLI Admin",
+        email="CLI@TrackFlow.test",
+        password="cli-passphrase",
+        jurisdiction="US",
+    )
 
     store = TinyDBIdentityStore(tmp_path / "identity.json")
     try:
@@ -23,7 +34,12 @@ def test_cli_create_admin_creates_admin_without_printing_password(tmp_path, monk
     assert "cli-passphrase" not in str(record)
 
     with pytest.raises(DuplicateEmailError):
-        create_admin(name="CLI Admin", email="cli@trackflow.test", password="another-passphrase")
+        create_admin(
+            name="CLI Admin",
+            email="cli@trackflow.test",
+            password="another-passphrase",
+            jurisdiction="US",
+        )
 
 
 def test_cli_main_never_echoes_password(tmp_path, monkeypatch, capsys):
@@ -31,7 +47,17 @@ def test_cli_main_never_echoes_password(tmp_path, monkeypatch, capsys):
     passwords = iter(["secret-passphrase", "secret-passphrase"])
     monkeypatch.setattr("getpass.getpass", lambda _prompt: next(passwords))
 
-    status = main(["create-admin", "--name", "Printed Admin", "--email", "printed@example.com"])
+    status = main(
+        [
+            "create-admin",
+            "--name",
+            "Printed Admin",
+            "--email",
+            "printed@example.com",
+            "--jurisdiction",
+            "ES",
+        ]
+    )
 
     assert status == 0
     captured = capsys.readouterr()

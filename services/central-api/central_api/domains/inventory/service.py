@@ -393,7 +393,7 @@ class InventoryService:
             created_at=record.created_at,
             user_uuid=record.user_uuid,
             sku=SKUSummary(
-                id=record.sku.id,
+                id=cast(int, record.sku.id),
                 name=record.sku.name,
                 sku=record.sku.sku,
                 client_id=record.sku.client_id,

@@ -4,9 +4,10 @@
 
 ## Status
 
-🚧 In progress — Engagement 8 Phases 0–2 are committed on `engagement-8-agentic-engineering`;
-Phase 3 (OAuth-protected MCP tools) is implemented and awaiting owner review. Phase 4 guardrails
-must not begin until that review is complete.
+🚧 In progress — Engagement 8 Phases 0–3 are implemented on `engagement-8-agentic-engineering`;
+Phase 4 layered guardrails are implemented and awaiting owner review. The Phase 3 Codespaces MCP
+Playground exercise still lacks owner evidence and is not complete. Phase 5 confirmed structured
+memory remains pending.
 
 ---
 

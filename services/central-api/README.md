@@ -10,10 +10,12 @@ reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011` and 
 owner exception. Phase 6.2 adds `reporting.hourly_activity_rollups`, singleton `rollup_state`, and
 an additive cadence identity at deployed head `20260728_0012`; its set-based production-cardinality
 correction awaits redeployment and exact live reconciliation.
-The release suite covers disposable-PostgreSQL
+Engagement 8 Phase 4 adds jurisdiction-bound agent retrieval, layered input/output guardrails,
+creator-owned delegated incident access, and safe guardrail aggregates at Alembic head
+`20260803_0015`. The release suite covers disposable-PostgreSQL
 migration rollback, repeatable seeds, security and failure paths, reporting attempts and health
 separation, aggregate queries, lifecycle transitions, and concurrent inventory/incident
-protection. The current Central API baseline is 174 passing tests with 91.69% branch-aware source
+protection. The Phase 4 Central API gate is 239 passing tests with 91.46% branch-aware source
 coverage.
 
 The portfolio Supabase production project is migrated through Alembic revision

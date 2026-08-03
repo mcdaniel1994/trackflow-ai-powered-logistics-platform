@@ -1,5 +1,6 @@
 export type UserRole = "admin" | "user";
 export type UserStatus = "active" | "suspended" | "disabled";
+export type UserJurisdiction = "US" | "ES";
 
 export type AuthUser = {
   id: string;
@@ -7,6 +8,7 @@ export type AuthUser = {
   email: string;
   role: UserRole;
   status: UserStatus;
+  jurisdiction?: UserJurisdiction | null;
   must_change_password: boolean;
   created_at: string;
   last_login_at: string | null;

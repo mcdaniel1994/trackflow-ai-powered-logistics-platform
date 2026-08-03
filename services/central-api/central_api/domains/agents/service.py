@@ -12,13 +12,14 @@ from dataclasses import dataclass
 
 from fastapi import BackgroundTasks
 from sqlmodel import Session
+from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
 from ...core.config import Settings
 from .config import build_agent_config, is_agents_configured
 from .graph import run_agent
 from .recorder import persist_run
 from .repository import AgentRepository
-from .schemas import AgentQueryResponse, NodeStepRead, RunDetail, RunSummary, ToolCallRead
+from .schemas import AgentQueryResponse, GuardrailSummary, NodeStepRead, RunDetail, RunSummary, ToolCallRead
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +45,19 @@ class AgentService:
         question: str,
         background_tasks: BackgroundTasks,
         source_access_token: str,
+        principal: AuthenticatedPrincipal,
     ) -> AgentQueryResponse:
         """Run the graph, persist the trace off-path, and return the answer + trace id."""
         if not is_agents_configured(self.settings):
             raise AgentError(503, "The agent is not available right now.")
 
         config = build_agent_config(self.settings, source_access_token)
-        result = run_agent(question, config)
-        input_summary, output_summary = self._summaries(question, result.answer)
+        result = run_agent(question, config, principal.jurisdiction)
+        input_summary, output_summary = (
+            (None, None) if result.guardrail_events else self._summaries(question, result.answer)
+        )
 
-        if result.status == "ok" and result.answer:
+        if result.answer and result.status in {"ok", "rejected"}:
             # Success: persist after the response is sent (off the request path).
             background_tasks.add_task(
                 persist_run,
@@ -66,8 +70,6 @@ class AgentService:
 
         # Error/rejected: persist synchronously (still swallowing) so failed runs are not lost.
         persist_run(result, env=self.settings.app_env, input_summary=input_summary, output_summary=output_summary)
-        if result.status == "rejected":
-            raise AgentError(400, "That question can't be processed.")
         logger.warning("agent_run_failed trace_id=%s", result.trace_id)
         raise AgentError(502, "The agent is temporarily unavailable.")
 
@@ -88,6 +90,12 @@ class AgentService:
         detail.node_steps = [NodeStepRead.model_validate(step) for step in repo.steps_for(run.id)]
         detail.tool_calls = [ToolCallRead.model_validate(call) for call in repo.tool_calls_for(run.id)]
         return detail
+
+    def guardrail_summary(self) -> list[GuardrailSummary]:
+        return [
+            GuardrailSummary(category=category, rule_id=rule_id, outcome=outcome, count=count)
+            for category, rule_id, outcome, count in AgentRepository(self._require_session()).guardrail_summary()
+        ]
 
     # ------------------------------------------------------------------ helpers
     def _require_session(self) -> Session:

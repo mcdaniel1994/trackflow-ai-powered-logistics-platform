@@ -6,6 +6,7 @@ import argparse
 import getpass
 
 from .config import get_db_path, get_settings
+from .models import Jurisdiction
 from .oauth import OAuthError, OAuthService
 from .repository import (
     DuplicateEmailError,
@@ -18,11 +19,15 @@ from .service import UserService
 
 
 # Creates the first admin through local/server-side trust.
-def create_admin(*, name: str, email: str, password: str) -> str:
+def create_admin(
+    *, name: str, email: str, password: str, jurisdiction: Jurisdiction
+) -> str:
     store = TinyDBIdentityStore(get_db_path())
     try:
         users = UserService(TinyDBUserRepository(store))
-        user = users.create_admin(name=name, email=email, password=password)
+        user = users.create_admin(
+            name=name, email=email, password=password, jurisdiction=jurisdiction
+        )
         return user.id
     finally:
         store.close()
@@ -78,6 +83,7 @@ def main(argv: list[str] | None = None) -> int:
     create_parser = subparsers.add_parser("create-admin")
     create_parser.add_argument("--name")
     create_parser.add_argument("--email")
+    create_parser.add_argument("--jurisdiction", required=True, choices=("US", "ES"))
     subparsers.add_parser("revoke-sessions")
     oauth_parser = subparsers.add_parser("create-oauth-client")
     oauth_parser.add_argument("--name", required=True)
@@ -89,7 +95,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "revoke-sessions":
         sessions, resets = revoke_sessions()
-        print(f"Revoked {sessions} refresh sessions and {resets} password reset records.")
+        print(
+            f"Revoked {sessions} refresh sessions and {resets} password reset records."
+        )
         return 0
     if args.command == "create-oauth-client":
         try:
@@ -98,7 +106,9 @@ def main(argv: list[str] | None = None) -> int:
                 grants=frozenset(value for value in args.grants.split(",") if value),
                 scopes=frozenset(value for value in args.scopes.split(",") if value),
                 resources=[value for value in args.resources.split(",") if value],
-                source_audiences=[value for value in args.source_audiences.split(",") if value],
+                source_audiences=[
+                    value for value in args.source_audiences.split(",") if value
+                ],
             )
         except OAuthError as exc:
             print(f"OAuth client was not created: {exc.description}")
@@ -116,7 +126,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        user_id = create_admin(name=name, email=email, password=password)
+        user_id = create_admin(
+            name=name, email=email, password=password, jurisdiction=args.jurisdiction
+        )
     except DuplicateEmailError:
         print("An admin or user with that email already exists.")
         return 1
