@@ -134,9 +134,10 @@ Then read the active engagement brief and the README for every folder being modi
   live in the Central API `agents` domain; the reusable OAuth-protected tool boundary lives under
   `mcps/`; Identity owns OAuth issuance and user jurisdiction. Phase 4 guardrails, Phase 5
   human-confirmed structured memory, and Phase 6 self-hosted Agent OS observability extend the same
-  graph and await owner review. Agent OS lives in `uis/backoffice/`. A disposable local tunneled
-  MCP/Inspector exercise is recorded in `docs/agents/mcp-owner-review-evidence-2026-08-03.md`, but it
-  was not a Codespaces run, so the Phase 3 Codespaces MCP Playground evidence gap remains open.
+  graph. The owner accepted Phases 0–6 and closed Engagement 8 on August 3, 2026. Agent OS lives in
+  `uis/backoffice/`. The accepted local MCP/Inspector evidence is recorded in
+  `docs/agents/mcp-owner-review-evidence-2026-08-03.md`; the Codespaces-specific exercise was waived
+  at closeout and was not executed or passed.
 
 - **Engagement 9+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the

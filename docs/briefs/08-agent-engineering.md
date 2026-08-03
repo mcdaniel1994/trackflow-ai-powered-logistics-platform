@@ -4,13 +4,14 @@
 
 ## Status
 
-🚧 In progress — Engagement 8 Phases 0–6 are implemented on `engagement-8-agentic-engineering`;
-Phases 4–6 layered guardrails, confirmed structured memory, and Agent OS observability await owner
-review. A disposable local public-tunnel exercise verified the approved MCP tools and security
-failures with the official Inspector; see
+✅ Complete — Engagement 8 Phases 0–6 were implemented on `engagement-8-agentic-engineering` and
+accepted by the owner on August 3, 2026. The owner accepted the disposable local public-tunnel MCP
+evidence and closed the engagement; see
 [`mcp-owner-review-evidence-2026-08-03.md`](../agents/mcp-owner-review-evidence-2026-08-03.md).
-Because that exercise was not run in Codespaces, the Phase 3 Codespaces MCP Playground gate still
-lacks Codespaces-specific owner evidence and is not complete.
+The Phase 3 Codespaces MCP Playground exercise was not executed. It was explicitly waived at
+closeout and must not be represented as passed. Cloudflare model-driven invocation was also not
+executed because the hosted model rate-limited before a tool call. Production exposure and
+deployment remain separate owner-gated decisions rather than unfinished Engagement 8 scope.
 
 ---
 

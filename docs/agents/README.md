@@ -12,8 +12,9 @@ runbooks for TrackFlow's LangGraph customer-experience agent.
 - [`mcp-owner-review-evidence-2026-08-03.md`](mcp-owner-review-evidence-2026-08-03.md) records the
   safe outcomes and cleanup from the disposable local public-tunnel/Inspector exercise.
 
-Phases 0–6 are implemented. Phase 4 layered guardrails, Phase 5 confirmed structured memory, and
-Phase 6 self-hosted Agent OS observability await owner review. The local exercise does not replace
-the runbook's Codespaces-specific gate, which remains unverified.
+Phases 0–6 were accepted and Engagement 8 was closed by the owner on August 3, 2026. The owner
+accepted the local MCP/Inspector evidence and waived the unexecuted Codespaces-specific exercise;
+the waiver is recorded as a waiver, not a pass. Production exposure and deployment remain separate
+owner-gated decisions.
 
 Implementation status is tracked in [`docs/briefs/08-agent-engineering.md`](../briefs/08-agent-engineering.md).

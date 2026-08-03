@@ -24,4 +24,5 @@ Runtime configuration and the end-to-end Codespaces authorization walkthrough ar
 Safe outcomes from the August 3 disposable local public-tunnel/Inspector exercise, including its
 temporary dynamic-registration compatibility limitation and cleanup, are recorded in
 [`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](../docs/agents/mcp-owner-review-evidence-2026-08-03.md).
-That local exercise does not complete the Codespaces-specific Phase 3 gate.
+The owner accepted that local evidence and closed Engagement 8 on August 3, 2026. The unexecuted
+Codespaces-specific Phase 3 exercise was explicitly waived, not passed.

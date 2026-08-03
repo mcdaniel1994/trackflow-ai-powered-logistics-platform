@@ -198,7 +198,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚧 Engagement 8 — Agent Engineering *(Phases 0–6 implemented; Phase 6 awaiting owner review)*
+### ✅ Engagement 8 — Agent Engineering *(Complete; owner accepted August 3, 2026)*
 
 - Explicit LangGraph routing across RAG, live ticket status, or both, with safe Postgres trace metadata.
 - Standalone Streamable HTTP MCP service at `/mcp`, protected by TrackFlow Identity OAuth and `mcpauth`.
@@ -216,8 +216,10 @@ TrackFlow reflects real-world logistics challenges:
   Inspector ticket/inventory calls, read-only inventory enforcement, and reduced-scope denial; its
   safe evidence and temporary DCR compatibility limitation are recorded in
   [`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](docs/agents/mcp-owner-review-evidence-2026-08-03.md).
-- Phases 4–6 await owner review. Because the exercise was local rather than Codespaces, the Phase 3
-  Codespaces MCP Playground gate remains unverified and must not be treated as complete.
+- On August 3 the owner accepted Phases 4–6 and closed Engagement 8 with the documented local
+  Inspector evidence. The Codespaces-specific Phase 3 exercise was waived at closeout; it was not
+  executed or passed. Cloudflare model-driven invocation was likewise not executed because the
+  hosted model returned rate-limit `3021` before a tool call.
 - Production domains, exposure, credentials, and deployment remain owner-gated.
 
 📁 Locations: `mcps/`, `services/identity/`, `services/central-api/`, and `docs/agents/`
@@ -266,7 +268,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
-| 8 | Agent Engineering (LangGraph) | 🚧 Phases 0–6 implemented; local tunneled MCP/Inspector evidence recorded, Phases 4–6 awaiting owner review, Phase 3 Codespaces exercise unverified |
+| 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 

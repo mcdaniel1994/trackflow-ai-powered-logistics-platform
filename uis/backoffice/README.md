@@ -41,7 +41,8 @@ status messages.
 
 During the August 3 disposable local exercise, a fresh authenticated session returned successful
 allowlisted reads for incidents, telemetry aggregates, reporting health, and Agent OS runs. This was
-a local API smoke check rather than production evidence or Phase 6 owner approval.
+a local API smoke check rather than production evidence. The owner accepted Phase 6 and closed
+Engagement 8 on August 3, 2026; production exposure and deployment remain separately gated.
 
 ## Local Development
 

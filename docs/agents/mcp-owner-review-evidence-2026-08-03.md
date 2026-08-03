@@ -53,7 +53,10 @@ and resource remains the authoritative Phase 3 procedure.
 - The pre-existing `tf-qdrant` container was disconnected from the temporary Compose network but
   remained running; it was not re-indexed or otherwise mutated.
 
-## Remaining Gate
+## Owner Closeout
 
-The Phase 3 Codespaces MCP Playground exercise still lacks Codespaces-specific owner evidence and
-remains unverified. Phases 4–6 continue to await owner review.
+On August 3, 2026, the owner accepted Phases 0–6, accepted this local MCP/Inspector evidence with
+its documented limitations, and closed Engagement 8. The owner waived the unexecuted Phase 3
+Codespaces MCP Playground exercise; the waiver must not be represented as a pass. Cloudflare
+model-driven invocation also remained unexecuted because rate-limit `3021` occurred before a tool
+call. Production exposure and deployment remain separate owner-gated decisions.

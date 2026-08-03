@@ -12,7 +12,7 @@ exists to prevent.
 
 | Kind | Examples | Authority |
 |---|---|---|
-| **Approved specification** | `spec.md`, `spec-6.5-sales-forecasting.md` | **Binding.** Owner-approved. Implement what it says. |
+| **Approved specification** | `spec.md`, `spec-6.5-sales-forecasting.md`, `docs/agents/agent-design.md` | **Binding.** Owner-approved. Implement what it says. |
 | **Planning input** | `07_rag_knowledge_base/`, `08_agent_engineering/`, `09_agentic_workflows/`, `10_realtime/`, `sales_forcasting/`, `important_considerations/` | **Requirements and constraints, not architecture.** |
 
 **Planning inputs are bootcamp assignment material.** They describe what must be delivered and what
@@ -22,7 +22,7 @@ as constraints and their **suggested architecture** as one option among several.
 
 Resolution order when documents disagree:
 
-1. An approved specification in this folder wins over any planning input.
+1. An approved specification listed in this index wins over any planning input.
 2. `AGENTS.md`, `docs/standards/`, and the production reality of the deployed system win over a
    planning input's assumed architecture.
 3. If a planning input's *graded requirement* conflicts with repository architecture, **surface the
@@ -41,7 +41,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 | **Engagement 6.1–6.4** — reporting reliability | [`spec.md`](spec.md) | ✅ approved | Ready to implement |
 | **Engagement 6.5** — sales forecasting | [`spec-6.5-sales-forecasting.md`](spec-6.5-sales-forecasting.md), [`sales_forcasting/`](sales_forcasting/) | ✅ approved | Ready to implement, **parallel to 6.1–6.4** |
 | **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ❌ none | Needs analysis + spec |
-| **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/) | ❌ none | Needs analysis + spec |
+| **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |
 | **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ❌ none | Needs analysis + spec |
 | **Engagement 10** — real-time dashboards and alerts | [`10_realtime/`](10_realtime/) | ❌ none | ⛔ **Blocked — no requirements exist** |
 | **Cross-cutting backlog** | [`important_considerations/others.md`](important_considerations/others.md) | ❌ none | Unscheduled; fold into the engagement that needs it |
@@ -53,7 +53,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 1. **Engagement 6.1–6.4** — reporting reliability *(availability-critical; do this first)*
 2. **Engagement 6.5** — sales forecasting *(independent; runs in parallel, not after)*
 3. **Engagement 7** — RAG and knowledge base
-4. **Engagement 8** — agent engineering
+4. **Engagement 8** — agent engineering *(complete; retained here for dependency history)*
 5. **Engagement 9** — agentic workflows
 6. **Engagement 10** — real-time dashboards and alerts
 
@@ -87,6 +87,12 @@ endpoint is a Central API domain or a new service, and whether the Back Office i
 architecture is restructured here.
 
 ### Engagement 8 — agent engineering
+The owner-approved specification is [`docs/agents/agent-design.md`](../../agents/agent-design.md),
+which takes precedence over the planning inputs below. Phases 0–6 were accepted and the engagement
+was closed by the owner on August 3, 2026. The Codespaces-specific MCP exercise was waived at
+closeout and was not executed or passed; safe local evidence is recorded in
+[`docs/agents/mcp-owner-review-evidence-2026-08-03.md`](../../agents/mcp-owner-review-evidence-2026-08-03.md).
+
 Five sequential parts: LangGraph migration (01), tools (02), MCP server with OAuth (03), guardrails
 (04), memory (05). Each has a `_context.md` and/or `_instructions.md`. **The guardrails part must
 precede the memory part** — the assignment states why, and the reason is sound: persistent memory

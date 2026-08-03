@@ -5,8 +5,10 @@ authorization server. This runbook uses placeholders deliberately: never paste c
 authorization codes, access tokens, prompts, ticket descriptions, addresses, warehouse details, or
 carrier rates into documentation, logs, screenshots, or traces.
 
-The public Codespaces Playground exercise is the Phase 3 owner-review gate. It has not been executed
-from the desktop workspace and must remain recorded as pending until the owner performs it.
+The public Codespaces Playground exercise was not executed. On August 3, 2026, the owner closed
+Engagement 8 by accepting the separate disposable local MCP/Inspector evidence and explicitly
+waiving this Codespaces-specific exercise. The waiver is not a passing result. This runbook remains
+the authoritative procedure if the Codespaces validation is performed later.
 
 ## 1. Forward and configure the services
 
