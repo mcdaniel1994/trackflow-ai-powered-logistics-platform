@@ -70,9 +70,13 @@ def test_backup_credentials_are_scoped_to_the_backup_service() -> None:
     assert "boto3==" in dockerfile
 
 
-def test_central_api_image_includes_the_data_project() -> None:
+def test_central_api_image_includes_rag_runtime_inputs() -> None:
     dockerfile = (REPO_ROOT / "docker/central-api.Dockerfile").read_text()
+    dockerignore = (REPO_ROOT / ".dockerignore").read_text()
     assert "COPY data data" in dockerfile
+    assert "COPY docs/company-knowledge-base docs/company-knowledge-base" in dockerfile
+    assert "!docs/company-knowledge-base/" in dockerignore
+    assert "!docs/company-knowledge-base/*.md" in dockerignore
 
 
 def test_dedicated_prefect_services_are_private_pinned_and_postgres_backed() -> None:
