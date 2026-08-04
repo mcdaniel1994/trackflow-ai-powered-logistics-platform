@@ -13,4 +13,6 @@
 **/coverage
 **/tests
 **/test-results
-docs
+docs/*
+!docs/company-knowledge-base/
+!docs/company-knowledge-base/*.md
