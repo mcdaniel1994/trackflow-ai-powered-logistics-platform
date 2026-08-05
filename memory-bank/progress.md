@@ -32,8 +32,13 @@
   (scaffolding) implemented:** the `rfp` domain (owner-scoped `GET /rfp/tickets[/{id}]`, `503` until
   `RFP_ENABLED`), migration `20260805_0017` (`rfp_tickets`, `rfp_department_sections`,
   `rfp_final_documents`), vetted deps `pdfminer.six` + `langgraph-checkpoint-postgres`, three seed RFP
-  documents in `data/raw/`, and this brief. Currency (USD/EUR) derives from the RFP's client country;
-  raw PDF bytes are never persisted. Phases 1–3 pending.
+  documents in `data/raw/`, and this brief. **Phase 1 (intake & routing) implemented:** multipart
+  `POST /rfp/tickets` upload → `pdfminer.six` PDF→Markdown (Markdown persisted, raw bytes dropped) →
+  deterministic readability → a LangGraph classifier → metadata extractor → orchestrator-worker-
+  synthesizer graph (OpenAI structured output, mocked in CI) that discards non-RFPs and routes valid
+  ones to their departments with a safe node trace reusing the Engagement 8 trace store; plus the
+  Back Office RFP Desk (`/agent-os/rfp`, upload + live list/detail). Currency (USD/EUR) derives from
+  the RFP's client country. Phases 2–3 pending.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or

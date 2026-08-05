@@ -8,14 +8,25 @@ authorization and the disabled-service fallback live in one place.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import uuid4
 
+from fastapi import BackgroundTasks
 from sqlmodel import Session
 
 from ...core.config import Settings
-from .config import is_rfp_configured
+from .config import build_rfp_config, is_rfp_configured, is_rfp_intake_configured
+from .document import DocumentError, pdf_to_markdown
+from .intake import run_intake_for_ticket
 from .models import RfpTicket
+from .readability import readability_dict
 from .repository import RfpRepository
 from .schemas import RfpDepartmentSectionRead, RfpTicketDetail, RfpTicketSummary
+
+_PDF_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
+
+
+def _new_rfp_id() -> str:
+    return f"RFP-{uuid4().hex[:10].upper()}"
 
 
 @dataclass
@@ -34,6 +45,43 @@ class RfpService:
     def _require_enabled(self) -> None:
         if not is_rfp_configured(self.settings):
             raise RfpError(503, "The RFP workflow is not available right now.")
+
+    def create_from_upload(
+        self,
+        *,
+        owner_user_uuid: str,
+        operator_jurisdiction: str | None,
+        filename: str | None,
+        content_type: str | None,
+        data: bytes,
+        background_tasks: BackgroundTasks,
+    ) -> RfpTicketSummary:
+        """Convert an uploaded PDF, create an analyzing ticket, and schedule background intake."""
+        if not is_rfp_intake_configured(self.settings):
+            raise RfpError(503, "The RFP workflow is not available right now.")
+        is_pdf = (content_type in _PDF_CONTENT_TYPES) or bool(filename and filename.lower().endswith(".pdf"))
+        if not is_pdf:
+            raise RfpError(415, "Only PDF documents are accepted.")
+        try:
+            markdown = pdf_to_markdown(data)
+        except DocumentError as exc:
+            raise RfpError(400, exc.detail) from None
+
+        metrics = readability_dict(markdown)
+        ticket = self.repository.add_ticket(
+            RfpTicket(
+                rfp_id=_new_rfp_id(),
+                status="analyzing",
+                owner_user_uuid=owner_user_uuid,
+                operator_jurisdiction=operator_jurisdiction,
+                markdown_text=markdown,
+                readability_grade=float(metrics["flesch_kincaid_grade"]),
+                readability_metrics=dict(metrics),
+            )
+        )
+        config = build_rfp_config(self.settings)
+        background_tasks.add_task(run_intake_for_ticket, ticket.id, config, env=self.settings.app_env)
+        return RfpTicketSummary.model_validate(ticket)
 
     def list_tickets(
         self,

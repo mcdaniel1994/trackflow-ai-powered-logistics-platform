@@ -47,8 +47,23 @@ class RfpRepository:
         statement = select(RfpFinalDocument).where(RfpFinalDocument.ticket_id == ticket_id)
         return self.session.exec(statement).one_or_none()
 
+    def get(self, ticket_id: str) -> RfpTicket | None:
+        """Unscoped fetch for the background intake runner, which owns the id it just created."""
+        return self.session.get(RfpTicket, ticket_id)
+
     def add_ticket(self, ticket: RfpTicket) -> RfpTicket:
         self.session.add(ticket)
         self.session.commit()
         self.session.refresh(ticket)
         return ticket
+
+    def save(self, ticket: RfpTicket) -> RfpTicket:
+        self.session.add(ticket)
+        self.session.commit()
+        self.session.refresh(ticket)
+        return ticket
+
+    def add_sections(self, sections: list[RfpDepartmentSection]) -> None:
+        for section in sections:
+            self.session.add(section)
+        self.session.commit()

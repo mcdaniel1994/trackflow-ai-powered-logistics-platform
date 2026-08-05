@@ -149,7 +149,12 @@ Then read the active engagement brief and the README for every folder being modi
   guardrails and trace store. **Phase 0 (scaffolding)** adds the `rfp` domain (owner-scoped ticket
   reads, `503` until `RFP_ENABLED`), the durable `rfp_tickets` / `rfp_department_sections` /
   `rfp_final_documents` schema (migration `20260805_0017`), vetted deps `pdfminer.six` and
-  `langgraph-checkpoint-postgres`, and three seed RFP documents in `data/raw/`. Phase 3 uses a durable
+  `langgraph-checkpoint-postgres`, and three seed RFP documents in `data/raw/`. **Phase 1 (intake &
+  routing)** adds multipart `POST /rfp/tickets` upload, `pdfminer.six` PDF→Markdown (Markdown kept,
+  bytes dropped), a deterministic readability module, and a LangGraph classifier →
+  orchestrator-worker-synthesizer intake graph (`domains/rfp/{document,readability,agents,graph,
+  intake}.py`) that discards non-RFPs and routes valid ones to departments with a safe trace reusing
+  the Eng 8 trace store, plus the Back Office RFP Desk at `/agent-os/rfp`. Phase 3 uses a durable
   Postgres LangGraph checkpointer with native `interrupt()` for branch-scoped human approval. Currency
   (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
   LangGraph work, not n8n.

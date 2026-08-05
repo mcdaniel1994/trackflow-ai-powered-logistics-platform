@@ -77,9 +77,12 @@ class Settings(BaseSettings):
     # trace store — only safe metadata (telemetry standard §8). When True, redacted previews are stored.
     agents_store_content: bool = False
     agents_trace_retention_days: int = 7
-    # RFP agentic workflow (Engagement 9). Disabled unless enabled; later phases also require the
-    # provider keys the graph reuses. See docs/briefs/09-agentic-workflows.md.
+    # RFP agentic workflow (Engagement 9). Reads need only the flag; upload/intake also needs the
+    # OpenAI key the classifier/extractor/workers use. See docs/briefs/09-agentic-workflows.md.
     rfp_enabled: bool = False
+    rfp_model: str = "gpt-4o-mini"
+    rfp_llm_timeout_seconds: float = 12.0
+    rfp_max_iterations: int = 2
 
     @field_validator("database_url")
     @classmethod

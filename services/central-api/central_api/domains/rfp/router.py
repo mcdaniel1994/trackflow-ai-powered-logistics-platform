@@ -7,12 +7,12 @@ each ticket is scoped to its owner.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
 from sqlmodel import Session
 from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
 from ...core.config import Settings, get_settings
-from ...core.dependencies import current_principal
+from ...core.dependencies import current_principal, write_principal
 from ...db.session import get_session
 from .schemas import RfpTicketDetail, RfpTicketSummary
 from .service import RfpService
@@ -25,6 +25,24 @@ def _service(
     session: Annotated[Session, Depends(get_session)],
 ) -> RfpService:
     return RfpService(settings, session)
+
+
+@router.post("/tickets", response_model=RfpTicketSummary, status_code=202)
+def upload_ticket(
+    background_tasks: BackgroundTasks,
+    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+    file: Annotated[UploadFile, File()],
+) -> RfpTicketSummary:
+    data = file.file.read()
+    return service.create_from_upload(
+        owner_user_uuid=principal.user_id,
+        operator_jurisdiction=principal.jurisdiction,
+        filename=file.filename,
+        content_type=file.content_type,
+        data=data,
+        background_tasks=background_tasks,
+    )
 
 
 @router.get("/tickets", response_model=list[RfpTicketSummary])
