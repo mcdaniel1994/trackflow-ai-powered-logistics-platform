@@ -22,6 +22,19 @@
 
 ## Active
 
+- Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):
+  in progress on branch `engagement-9-agentic-workflows`, owner-approved spec, delivered in phases
+  with an owner pause after each. A multi-agent LangGraph workflow (intake & routing → per-department
+  generation & self-evaluation → human approval → final document) in the new Central API `rfp` domain,
+  with a "ticket mode" RFP Desk in `uis/backoffice/`. Reuses Engagement 7 `retrieve()`/
+  `generate_answer()` and the Engagement 8 guardrails and trace store; Phase 3 adds a durable Postgres
+  LangGraph checkpointer with native `interrupt()` for branch-scoped human approval. **Phase 0
+  (scaffolding) implemented:** the `rfp` domain (owner-scoped `GET /rfp/tickets[/{id}]`, `503` until
+  `RFP_ENABLED`), migration `20260805_0017` (`rfp_tickets`, `rfp_department_sections`,
+  `rfp_final_documents`), vetted deps `pdfminer.six` + `langgraph-checkpoint-postgres`, three seed RFP
+  documents in `data/raw/`, and this brief. Currency (USD/EUR) derives from the RFP's client country;
+  raw PDF bytes are never persisted. Phases 1–3 pending.
+
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
   deployed. A salesperson-voiced assistant over the four policy documents in
@@ -153,9 +166,10 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
-  specification yet. This is LangGraph work, not n8n; the earlier "workflow
-  automation with n8n" framing does not match the assignment documents.
+- Engagement 9 - Agentic workflows for the RFP desk. Owner-approved spec; now Active (see above).
+  In progress on branch `engagement-9-agentic-workflows`, Phase 0 scaffolding implemented. This is
+  LangGraph work, not n8n; the earlier "workflow automation with n8n" framing does not match the
+  assignment documents.
 - Engagement 10 - Real-time dashboards and alerts. Blocked: the requirements
   document `10_realtime/realtime.md` is empty.
 - Cross-cutting backlog (`important_considerations/others.md`): website

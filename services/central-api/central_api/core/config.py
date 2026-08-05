@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     # trace store — only safe metadata (telemetry standard §8). When True, redacted previews are stored.
     agents_store_content: bool = False
     agents_trace_retention_days: int = 7
+    # RFP agentic workflow (Engagement 9). Disabled unless enabled; later phases also require the
+    # provider keys the graph reuses. See docs/briefs/09-agentic-workflows.md.
+    rfp_enabled: bool = False
 
     @field_validator("database_url")
     @classmethod

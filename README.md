@@ -226,6 +226,23 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### 🚧 Engagement 9 — Agentic Workflows: Automated RFP Desk *(in progress)*
+
+- A multi-agent LangGraph workflow that turns an uploaded RFP PDF into a per-department pricing
+  proposal: intake & routing → per-department generation & self-evaluation → human approval → final
+  document. Reuses the Engagement 7 RAG functions and the Engagement 8 guardrails and trace store.
+- Phase 0 (scaffolding) adds the `rfp` Central API domain (owner-scoped ticket reads, `503` until
+  `RFP_ENABLED`), the durable `rfp_tickets` / `rfp_department_sections` / `rfp_final_documents` schema,
+  vetted dependencies (`pdfminer.six`, `langgraph-checkpoint-postgres`), and three seed RFP documents.
+- Phase 3 will use a durable Postgres LangGraph checkpointer and native `interrupt()` so per-department
+  human approval pauses only its branch, persists, and resumes without restarting the flow.
+- Currency (USD/EUR) is derived from the RFP's client country; operator jurisdiction stays
+  server-derived. Raw PDF bytes are never persisted; only converted Markdown and safe metadata are.
+
+📁 Locations: `services/central-api/`, `uis/backoffice/`, and `data/raw/`
+
+---
+
 ### ✅ Centralized Incident Manager *(delivered subproject)*
 
 - Browser-based incident registration across Central, Los Angeles, and Zaragoza
@@ -269,7 +286,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
-| 9 | Agentic workflows — automated RFP desk (LangGraph) | ⏳ Planning inputs only — no spec yet |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; Phase 0 scaffolding on branch `engagement-9-agentic-workflows` (new `rfp` domain, schema, deps); Phases 1–3 to follow |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 
 All remaining work is planned from

@@ -139,13 +139,27 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/agents/mcp-owner-review-evidence-2026-08-03.md`; the Codespaces-specific exercise was waived
   at closeout and was not executed or passed.
 
-- **Engagement 9+** - planned from `docs/planning/remaining_planning/`.
+- **Engagement 9** - Agentic Workflows: Automated RFP Desk (LangGraph)
+  Stakeholder brief: `docs/briefs/09-agentic-workflows.md`. Owner-approved spec; in progress on branch
+  `engagement-9-agentic-workflows`, delivered in phases with an owner pause after each. A multi-agent
+  LangGraph workflow (intake & routing → per-department generation & self-evaluation → human approval
+  → final document) in the new Central API `rfp` domain
+  (`services/central-api/central_api/domains/rfp/`), with a "ticket mode" RFP Desk in
+  `uis/backoffice/`. Reuses Engagement 7 `retrieve()`/`generate_answer()` and the Engagement 8
+  guardrails and trace store. **Phase 0 (scaffolding)** adds the `rfp` domain (owner-scoped ticket
+  reads, `503` until `RFP_ENABLED`), the durable `rfp_tickets` / `rfp_department_sections` /
+  `rfp_final_documents` schema (migration `20260805_0017`), vetted deps `pdfminer.six` and
+  `langgraph-checkpoint-postgres`, and three seed RFP documents in `data/raw/`. Phase 3 uses a durable
+  Postgres LangGraph checkpointer with native `interrupt()` for branch-scoped human approval. Currency
+  (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
+  LangGraph work, not n8n.
+
+- **Engagement 10+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are
   requirements, not architecture). A project there with no approved specification is not ready to
-  implement — produce analysis and a proposed spec, then stop for owner approval. Engagement 9 is
-  LangGraph agentic-workflow work, not n8n. Engagement 10 is blocked: its requirements document is
-  empty. Confirm with Cory before placing new code.
+  implement — produce analysis and a proposed spec, then stop for owner approval. Engagement 10 is
+  blocked: its requirements document is empty. Confirm with Cory before placing new code.
 
 ## Coding-Agent Infrastructure Vs. Product Agents
 

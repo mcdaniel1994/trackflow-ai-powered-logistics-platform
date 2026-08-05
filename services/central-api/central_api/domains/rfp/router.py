@@ -1,0 +1,46 @@
+"""Authenticated HTTP boundary for the RFP workflow.
+
+Phase 0 exposes owner-scoped reads for the Back Office RFP Desk. Upload (``POST /rfp/tickets``) and
+per-department approval decisions arrive with later phases. Reads require an authenticated principal;
+each ticket is scoped to its owner.
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query
+from sqlmodel import Session
+from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
+
+from ...core.config import Settings, get_settings
+from ...core.dependencies import current_principal
+from ...db.session import get_session
+from .schemas import RfpTicketDetail, RfpTicketSummary
+from .service import RfpService
+
+router = APIRouter(prefix="/rfp", tags=["rfp"])
+
+
+def _service(
+    settings: Annotated[Settings, Depends(get_settings)],
+    session: Annotated[Session, Depends(get_session)],
+) -> RfpService:
+    return RfpService(settings, session)
+
+
+@router.get("/tickets", response_model=list[RfpTicketSummary])
+def list_tickets(
+    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    status: str | None = None,
+) -> list[RfpTicketSummary]:
+    return service.list_tickets(principal.user_id, status=status, limit=limit)
+
+
+@router.get("/tickets/{ticket_id}", response_model=RfpTicketDetail)
+def get_ticket(
+    ticket_id: str,
+    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+) -> RfpTicketDetail:
+    return service.get_ticket(ticket_id, principal.user_id)
