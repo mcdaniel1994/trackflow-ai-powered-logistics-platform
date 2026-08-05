@@ -15,6 +15,7 @@ from sqlmodel import Session
 
 from ...core.config import Settings
 from ..rag.config import build_rag_config
+from .approval import AlreadyResolved, submit_decision
 from .config import (
     build_rfp_config,
     is_rfp_configured,
@@ -26,7 +27,7 @@ from .intake import run_intake_for_ticket
 from .models import RfpTicket
 from .readability import readability_dict
 from .repository import RfpRepository
-from .schemas import RfpDepartmentSectionRead, RfpTicketDetail, RfpTicketSummary
+from .schemas import RfpDepartmentSectionRead, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
 
 _PDF_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
 
@@ -46,6 +47,7 @@ class RfpError(Exception):
 class RfpService:
     def __init__(self, settings: Settings, session: Session) -> None:
         self.settings = settings
+        self.session = session
         self.repository = RfpRepository(session)
 
     def _require_enabled(self) -> None:
@@ -86,12 +88,65 @@ class RfpService:
             )
         )
         config = build_rfp_config(self.settings)
-        # When generation is configured, chain Phase 2 so a routed ticket drafts automatically.
-        rag_config = build_rag_config(self.settings) if is_rfp_generation_configured(self.settings) else None
+        # When generation is configured, chain Phase 2 drafting and the Phase 3 approval pause.
+        generate = is_rfp_generation_configured(self.settings)
+        rag_config = build_rag_config(self.settings) if generate else None
         background_tasks.add_task(
-            run_intake_for_ticket, ticket.id, config, env=self.settings.app_env, rag_config=rag_config
+            run_intake_for_ticket,
+            ticket.id,
+            config,
+            env=self.settings.app_env,
+            rag_config=rag_config,
+            settings=self.settings if generate else None,
         )
         return RfpTicketSummary.model_validate(ticket)
+
+    def decide(
+        self,
+        ticket_id: str,
+        department_id: str,
+        *,
+        action: str,
+        note: str | None,
+        actor: str,
+    ) -> RfpTicketDetail:
+        """Record a human approve/reject/request-changes decision for one department."""
+        if not is_rfp_generation_configured(self.settings):
+            raise RfpError(503, "The RFP workflow is not available right now.")
+        ticket = self.repository.get_for_owner(ticket_id, actor)
+        if ticket is None:
+            raise RfpError(404, "RFP ticket not found.")
+        section = self.repository.section_for_department(ticket_id, department_id)
+        if section is None:
+            raise RfpError(404, "Department section not found.")
+        rag_config = build_rag_config(self.settings)
+        try:
+            submit_decision(
+                ticket,
+                section,
+                action=action,
+                note=note,
+                actor=actor,
+                settings=self.settings,
+                rag_config=rag_config,
+                session=self.session,
+                env=self.settings.app_env,
+            )
+        except AlreadyResolved:
+            raise RfpError(409, "This department decision has already been recorded.") from None
+        except ValueError:
+            raise RfpError(400, "Unknown decision action.") from None
+        return self.get_ticket(ticket_id, actor)
+
+    def get_document(self, ticket_id: str, owner_user_uuid: str) -> RfpFinalDocumentRead:
+        self._require_enabled()
+        ticket = self.repository.get_for_owner(ticket_id, owner_user_uuid)
+        if ticket is None:
+            raise RfpError(404, "RFP ticket not found.")
+        document = self.repository.final_document(ticket_id)
+        if document is None:
+            raise RfpError(404, "The final document is not ready yet.")
+        return RfpFinalDocumentRead.model_validate(document)
 
     def list_tickets(
         self,

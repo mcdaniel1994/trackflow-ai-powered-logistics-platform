@@ -242,6 +242,11 @@ TrackFlow reflects real-world logistics challenges:
   Engagement 7 generator) and three deterministic evaluators — readability, relevance, and §5
   compliance (currency, SLA %, no sub-48h returns, discount-tier table, no disclosed carrier rates) —
   in a generator-evaluator loop with a hard iteration cap; routed tickets flow to `under_evaluation`.
+- Phase 3 (approval & completion) gives each active department its own interruptible approval graph on
+  a durable Postgres LangGraph checkpointer, keyed by a per-department `thread_id` so a native
+  `interrupt()` pauses only that branch. A validated approve/reject/request-changes decision resumes
+  from the interruption (request-changes redrafts, capped); once every section is approved, an explicit
+  arbitration step consolidates the final document and the ticket reaches `done`.
 - Phase 3 will use a durable Postgres LangGraph checkpointer and native `interrupt()` so per-department
   human approval pauses only its branch, persists, and resumes without restarting the flow.
 - Currency (USD/EUR) is derived from the RFP's client country; operator jurisdiction stays
@@ -294,7 +299,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
-| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; Phases 0–2 implemented on branch `engagement-9-agentic-workflows` (rfp domain + schema; PDF intake & routing; per-department generation + deterministic evaluators + loop; RFP Desk UI); Phase 3 to follow |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; all phases (0–3) implemented on branch `engagement-9-agentic-workflows` (intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI). Pending owner review |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 
 All remaining work is planned from

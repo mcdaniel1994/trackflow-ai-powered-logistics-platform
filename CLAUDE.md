@@ -158,8 +158,14 @@ Then read the active engagement brief and the README for every folder being modi
   generation)** adds a per-department DeepSeek generator (reusing Eng 7 `generate_answer`) and three
   deterministic evaluators (`domains/rfp/{evaluators,generation}.py`) — readability, relevance, §5
   compliance — in a generator-evaluator loop with a hard iteration cap, chained after routing so the
-  ticket advances to `under_evaluation`. Phase 3 uses a durable Postgres LangGraph checkpointer with
-  native `interrupt()` for branch-scoped human approval. Currency
+  ticket advances to `under_evaluation`. **Phase 3 (human approval & completion)** gives each active
+  department its own interruptible approval graph (`domains/rfp/{approval,checkpointer}.py`) on a
+  durable Postgres LangGraph checkpointer, keyed by a per-department `thread_id` so a native
+  `interrupt()` pauses only that branch; a validated approve/reject/request_changes decision
+  (`POST /rfp/tickets/{id}/departments/{dept}/decision`) resumes from the interruption, request_changes
+  redrafts (capped), and once all sections approve an arbitration step consolidates the final document
+  (`GET /rfp/tickets/{id}/document`) and the ticket reaches `done`. The checkpointer's tables are
+  managed by its own `setup()` and excluded from `alembic check` in `migrations/env.py`. Currency
   (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
   LangGraph work, not n8n.
 

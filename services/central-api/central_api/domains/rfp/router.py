@@ -14,7 +14,7 @@ from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped
 from ...core.config import Settings, get_settings
 from ...core.dependencies import current_principal, write_principal
 from ...db.session import get_session
-from .schemas import RfpTicketDetail, RfpTicketSummary
+from .schemas import DepartmentDecisionRequest, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
 from .service import RfpService
 
 router = APIRouter(prefix="/rfp", tags=["rfp"])
@@ -62,3 +62,29 @@ def get_ticket(
     service: Annotated[RfpService, Depends(_service)],
 ) -> RfpTicketDetail:
     return service.get_ticket(ticket_id, principal.user_id)
+
+
+@router.post("/tickets/{ticket_id}/departments/{department_id}/decision", response_model=RfpTicketDetail)
+def decide_department(
+    ticket_id: str,
+    department_id: str,
+    payload: DepartmentDecisionRequest,
+    principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+) -> RfpTicketDetail:
+    return service.decide(
+        ticket_id,
+        department_id,
+        action=payload.action,
+        note=payload.note,
+        actor=principal.user_id,
+    )
+
+
+@router.get("/tickets/{ticket_id}/document", response_model=RfpFinalDocumentRead)
+def get_document(
+    ticket_id: str,
+    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+) -> RfpFinalDocumentRead:
+    return service.get_document(ticket_id, principal.user_id)

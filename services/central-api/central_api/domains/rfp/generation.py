@@ -41,17 +41,20 @@ def _aspects(section: RfpDepartmentSection) -> list[str]:
     return [str(item) for item in raw] if isinstance(raw, list) else []
 
 
-def generate_section(
+def draft_section(
     department_id: str,
-    ticket: RfpTicket,
+    *,
+    country: str | None,
+    currency: str | None,
+    volume: int | None,
     key_aspects: list[str],
     feedback: list[str],
     rag_config: RagConfig,
 ) -> str:
-    """Draft one department's proposal section with the DeepSeek generator (grounded prompt)."""
+    """Draft one department's section from explicit fields (usable by intake and the approval loop)."""
     context = (
-        f"Client country: {ticket.client_country or 'unknown'}. Currency: {ticket.currency or 'unknown'}. "
-        f"Monthly volume: {ticket.monthly_volume or 'unknown'}. Key aspects: {', '.join(key_aspects) or 'none'}."
+        f"Client country: {country or 'unknown'}. Currency: {currency or 'unknown'}. "
+        f"Monthly volume: {volume or 'unknown'}. Key aspects: {', '.join(key_aspects) or 'none'}."
     )
     fix = f" Revise to fix: {', '.join(feedback)}." if feedback else ""
     prompt = (
@@ -59,6 +62,25 @@ def generate_section(
         f"Follow these rules exactly: {_GUIDELINES}{fix}"
     )
     return str(generate_answer(prompt, [], rag_config))
+
+
+def generate_section(
+    department_id: str,
+    ticket: RfpTicket,
+    key_aspects: list[str],
+    feedback: list[str],
+    rag_config: RagConfig,
+) -> str:
+    """Draft one department's proposal section for a ticket with the DeepSeek generator."""
+    return draft_section(
+        department_id,
+        country=ticket.client_country,
+        currency=ticket.currency,
+        volume=ticket.monthly_volume,
+        key_aspects=key_aspects,
+        feedback=feedback,
+        rag_config=rag_config,
+    )
 
 
 def run_generation_for_ticket(ticket_id: str, rag_config: RagConfig, max_iterations: int, *, env: str) -> None:

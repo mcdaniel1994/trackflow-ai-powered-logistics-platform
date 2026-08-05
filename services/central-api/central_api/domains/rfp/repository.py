@@ -67,3 +67,22 @@ class RfpRepository:
         for section in sections:
             self.session.add(section)
         self.session.commit()
+
+    def save_section(self, section: RfpDepartmentSection) -> RfpDepartmentSection:
+        self.session.add(section)
+        self.session.commit()
+        self.session.refresh(section)
+        return section
+
+    def section_for_department(self, ticket_id: str, department_id: str) -> RfpDepartmentSection | None:
+        statement = select(RfpDepartmentSection).where(
+            RfpDepartmentSection.ticket_id == ticket_id,
+            RfpDepartmentSection.department_id == department_id,
+        )
+        return self.session.exec(statement).one_or_none()
+
+    def add_final_document(self, document: RfpFinalDocument) -> RfpFinalDocument:
+        self.session.add(document)
+        self.session.commit()
+        self.session.refresh(document)
+        return document

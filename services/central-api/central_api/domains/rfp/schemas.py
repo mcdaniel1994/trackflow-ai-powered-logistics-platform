@@ -8,9 +8,18 @@ expose only safe, extracted metadata — never the raw uploaded bytes or provide
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class DepartmentDecisionRequest(BaseModel):
+    """A human's decision on one department's section (Phase 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["approve", "reject", "request_changes"]
+    note: str | None = Field(default=None, max_length=500)
 
 
 class RfpDepartmentSectionRead(BaseModel):
@@ -19,6 +28,7 @@ class RfpDepartmentSectionRead(BaseModel):
     department_id: str
     approval_status: str
     iteration_count: int
+    draft_content: str | None = None
     key_aspects: dict[str, Any] | None = None
     evaluation_results: dict[str, Any] | None = None
     approver: str | None = None

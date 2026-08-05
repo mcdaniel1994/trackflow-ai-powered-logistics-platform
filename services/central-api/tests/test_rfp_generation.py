@@ -205,7 +205,8 @@ def test_upload_chains_into_generation(
     assert created.status_code == 202
     ticket_id = created.json()["id"]
 
+    # With generation configured, the chain continues through Phase 3's approval pause.
     detail = client.get(f"/rfp/tickets/{ticket_id}", headers=auth_headers).json()
-    assert detail["status"] == "under_evaluation"
+    assert detail["status"] == "waiting_for_approval"
     section = detail["sections"][0]
     assert section["evaluation_results"]["passed"] is True

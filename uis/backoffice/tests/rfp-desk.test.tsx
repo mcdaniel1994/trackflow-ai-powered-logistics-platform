@@ -3,7 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
 
-const mocks = vi.hoisted(() => ({ getRfpTickets: vi.fn(), getRfpTicket: vi.fn(), uploadRfp: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  getRfpTickets: vi.fn(),
+  getRfpTicket: vi.fn(),
+  uploadRfp: vi.fn(),
+  decideDepartment: vi.fn(),
+}));
 vi.mock("@/lib/rfp/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/rfp/api")>("@/lib/rfp/api");
   return {
@@ -11,6 +16,7 @@ vi.mock("@/lib/rfp/api", async () => {
     getRfpTickets: mocks.getRfpTickets,
     getRfpTicket: mocks.getRfpTicket,
     uploadRfp: mocks.uploadRfp,
+    decideDepartment: mocks.decideDepartment,
   };
 });
 
@@ -42,6 +48,7 @@ function detail(updates: Partial<RfpTicketDetail> = {}): RfpTicketDetail {
         department_id: "warehouse",
         approval_status: "pending",
         iteration_count: 0,
+        draft_content: "Warehouse draft in USD.",
         key_aspects: { aspects: ["storage capacity"] },
         evaluation_results: null,
         approver: null,
@@ -104,5 +111,25 @@ describe("RFP Desk", () => {
     mocks.getRfpTickets.mockResolvedValue([]);
     render(<RfpDesk />);
     expect(await screen.findByText("No RFPs yet")).toBeInTheDocument();
+  });
+
+  it("shows per-department approval controls and submits a decision when awaiting approval", async () => {
+    const waiting = { ...summary, status: "waiting_for_approval" as const };
+    mocks.getRfpTickets.mockResolvedValue([waiting]);
+    mocks.getRfpTicket.mockResolvedValue(detail({ status: "waiting_for_approval" }));
+    mocks.decideDepartment.mockResolvedValue(detail({ status: "done" }));
+    render(<RfpDesk />);
+
+    const approve = await screen.findByRole("button", { name: "Approve" });
+    await userEvent.click(approve);
+
+    await waitFor(() => expect(mocks.decideDepartment).toHaveBeenCalledWith("t1", "warehouse", "approve"));
+  });
+
+  it("shows the completion banner when the proposal is done", async () => {
+    mocks.getRfpTickets.mockResolvedValue([{ ...summary, status: "done" }]);
+    mocks.getRfpTicket.mockResolvedValue(detail({ status: "done" }));
+    render(<RfpDesk />);
+    expect(await screen.findByText(/Proposal complete/)).toBeInTheDocument();
   });
 });

@@ -15,9 +15,11 @@ from uuid import uuid4
 from pipelines.rag import RagConfig  # type: ignore[import-untyped]
 from sqlmodel import Session
 
+from ...core.config import Settings
 from ...db.session import get_engine
 from ..agents.graph import AgentRunResult
 from ..agents.recorder import persist_run
+from .approval import start_ticket_approval
 from .config import RfpConfig
 from .generation import run_generation_for_ticket
 from .graph import IntakeOutcome, run_intake
@@ -35,11 +37,14 @@ def run_intake_for_ticket(
     *,
     env: str,
     rag_config: RagConfig | None = None,
+    settings: Settings | None = None,
 ) -> None:
     """Convert intake results into ticket state and a safe trace. Never raises.
 
-    When ``rag_config`` is provided (generation is configured), a routed ticket flows straight into
-    Phase 2 section generation, so upload → routing → drafting feels like one continuous process.
+    When ``rag_config`` and ``settings`` are provided (generation is configured), a routed ticket
+    flows straight through Phase 2 section generation and into a paused Phase 3 approval thread per
+    department, so upload → routing → drafting → under_evaluation → waiting_for_approval feels like one
+    continuous process.
     """
     try:
         engine = get_engine()
@@ -56,6 +61,8 @@ def run_intake_for_ticket(
     _record_trace(outcome, env=env)
     if rag_config is not None and outcome.status == "routed":
         run_generation_for_ticket(ticket_id, rag_config, config.max_iterations, env=env)
+        if settings is not None:
+            start_ticket_approval(ticket_id, settings, rag_config, config.max_iterations, env=env)
 
 
 def _apply_outcome(repo: RfpRepository, ticket: RfpTicket, outcome: IntakeOutcome) -> None:

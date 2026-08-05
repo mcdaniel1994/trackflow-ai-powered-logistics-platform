@@ -10,6 +10,7 @@ export interface RfpDepartmentSection {
   department_id: string;
   approval_status: string;
   iteration_count: number;
+  draft_content: string | null;
   key_aspects: Record<string, unknown> | null;
   evaluation_results: Record<string, unknown> | null;
   approver: string | null;
@@ -37,6 +38,15 @@ export interface RfpTicketDetail extends RfpTicketSummary {
   readability_grade: number | null;
   discard_reason: string | null;
   sections: RfpDepartmentSection[];
+}
+
+export type RfpDecisionAction = "approve" | "reject" | "request_changes";
+
+export interface RfpFinalDocument {
+  ticket_id: string;
+  currency: string;
+  sections: Record<string, unknown>;
+  generated_at: string;
 }
 
 export interface RfpAPIError {

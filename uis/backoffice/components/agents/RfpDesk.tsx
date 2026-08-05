@@ -11,9 +11,15 @@ import {
   XCircle,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
-import { getRfpTicket, getRfpTickets, rfpError, uploadRfp } from "@/lib/rfp/api";
-import type { RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
+import { decideDepartment, getRfpTicket, getRfpTickets, rfpError, uploadRfp } from "@/lib/rfp/api";
+import type { RfpDecisionAction, RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
 import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
+
+const DECISIONS: { action: RfpDecisionAction; label: string }[] = [
+  { action: "approve", label: "Approve" },
+  { action: "request_changes", label: "Request changes" },
+  { action: "reject", label: "Reject" },
+];
 
 function label(value: string | null) {
   return (value || "—").replaceAll("_", " ");
@@ -51,7 +57,16 @@ function aspectsOf(section: RfpTicketDetail["sections"][number]): string[] {
   return Array.isArray(raw) ? raw.map((item) => String(item)) : [];
 }
 
-function TicketDetail({ ticket }: { ticket: RfpTicketDetail }) {
+function TicketDetail({
+  ticket,
+  onDecide,
+  deciding,
+}: {
+  ticket: RfpTicketDetail;
+  onDecide: (department: string, action: RfpDecisionAction) => void;
+  deciding: string | null;
+}) {
+  const awaitingApproval = ticket.status === "waiting_for_approval";
   return (
     <section aria-labelledby="rfp-detail-heading" className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -68,6 +83,12 @@ function TicketDetail({ ticket }: { ticket: RfpTicketDetail }) {
       {ticket.status === "discarded" && ticket.discard_reason && (
         <p role="note" className="rounded-xl bg-coral/10 p-3 text-sm font-bold text-coral">
           Discarded: {ticket.discard_reason}
+        </p>
+      )}
+
+      {ticket.status === "done" && (
+        <p role="note" className="rounded-xl bg-teal/10 p-3 text-sm font-bold text-teal-700 dark:text-teal">
+          Proposal complete — every department approved. The final document is ready.
         </p>
       )}
 
@@ -104,6 +125,32 @@ function TicketDetail({ ticket }: { ticket: RfpTicketDetail }) {
                     ))}
                   </ul>
                 )}
+                {section.draft_content && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-neutral-600 dark:bg-ink-800 dark:text-neutral-200">
+                    {section.draft_content}
+                  </p>
+                )}
+                {awaitingApproval && section.approval_status === "pending" && (
+                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={`Approve ${section.department_id}`}>
+                    {DECISIONS.map(({ action, label: text }) => (
+                      <button
+                        key={action}
+                        type="button"
+                        disabled={deciding === section.department_id}
+                        onClick={() => onDecide(section.department_id, action)}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-black transition disabled:opacity-50 ${
+                          action === "approve"
+                            ? "bg-teal text-white hover:bg-teal-700"
+                            : action === "reject"
+                              ? "bg-coral/15 text-coral hover:bg-coral/25"
+                              : "border border-mist text-navy hover:bg-white dark:border-ink-600 dark:text-neutral-100"
+                        }`}
+                      >
+                        {text}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -128,6 +175,8 @@ export function RfpDesk() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const [decisionError, setDecisionError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const listState = useAutoRefresh(
@@ -145,6 +194,20 @@ export function RfpDesk() {
     { intervalMs: 5000, mapError: (error) => rfpError(error).message },
   );
   const detail = detailState.data?.id === effectiveId ? detailState.data : null;
+
+  async function onDecide(department: string, action: RfpDecisionAction) {
+    if (!effectiveId) return;
+    setDeciding(department);
+    setDecisionError(null);
+    try {
+      await decideDepartment(effectiveId, department, action);
+      setRefreshNonce((value) => value + 1);
+    } catch (error) {
+      setDecisionError(rfpError(error).message);
+    } finally {
+      setDeciding(null);
+    }
+  }
 
   async function onUpload(file: File) {
     setUploading(true);
@@ -299,7 +362,14 @@ export function RfpDesk() {
               <span className="sr-only">Loading selected RFP</span>
             </div>
           ) : (
-            <TicketDetail ticket={detail} />
+            <div className="space-y-3">
+              {decisionError && (
+                <div role="alert" className="rounded-xl bg-red-50 p-3 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  {decisionError}
+                </div>
+              )}
+              <TicketDetail ticket={detail} onDecide={onDecide} deciding={deciding} />
+            </div>
           )}
         </main>
       </div>

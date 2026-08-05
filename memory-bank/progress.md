@@ -43,8 +43,17 @@
   evaluators (readability, relevance, §5 compliance — currency/SLA/no-<48h-returns/discount-tier/
   no-carrier-rates) score it; a generator-evaluator loop with a hard iteration cap redrafts failures
   and leaves an unpassable section for a human rather than looping forever. Generation chains straight
-  after routing, moving the ticket to `under_evaluation`. Phase 3 (human approval & completion)
-  pending.
+  after routing, moving the ticket to `under_evaluation`. **Phase 3 (human approval & completion)
+  implemented:** each active department has its own interruptible approval graph on a durable Postgres
+  LangGraph checkpointer (`langgraph-checkpoint-postgres`), keyed by a per-department `thread_id` so a
+  native `interrupt()` pauses only that branch while others proceed; resuming with a validated
+  approve/reject/request_changes decision continues from the interruption, `request_changes` redrafts
+  (capped) and re-interrupts, and once every section is approved an explicit arbitration step
+  consolidates the final document and the ticket reaches `done`. New endpoints
+  `POST /rfp/tickets/{id}/departments/{dept}/decision` and `GET /rfp/tickets/{id}/document`, plus RFP
+  Desk approval controls and a completion banner. The checkpointer's tables are managed by its own
+  `setup()` and excluded from `alembic check`. Engagement 9 implementation is complete across all four
+  phases (0–3); pending owner review.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or

@@ -64,6 +64,46 @@ describe("RFP BFF", () => {
     expect((fetchMock.mock.calls[0][1].headers as Headers).get(CSRF_HEADER_NAME)).toBe("csrf");
   });
 
+  it("routes a department decision POST with CSRF", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const id = "0a1b2c3d";
+    const path = ["tickets", id, "departments", "warehouse", "decision"];
+
+    await POST(
+      new NextRequest(`http://backoffice.test/api/rfp/${path.join("/")}`, {
+        method: "POST",
+        body: '{"action":"approve"}',
+        headers: {
+          Cookie: "trackflow_access=access; trackflow_csrf=csrf",
+          "Content-Type": "application/json",
+          [CSRF_HEADER_NAME]: "csrf",
+        },
+      }),
+      context(path),
+    );
+
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(
+      `http://central.test/rfp/tickets/${id}/departments/warehouse/decision`,
+    );
+    expect((fetchMock.mock.calls[0][1].headers as Headers).get(CSRF_HEADER_NAME)).toBe("csrf");
+  });
+
+  it("routes a final-document read", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const id = "0a1b2c3d";
+
+    await GET(
+      new NextRequest(`http://backoffice.test/api/rfp/tickets/${id}/document`),
+      context(["tickets", id, "document"]),
+    );
+
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(`http://central.test/rfp/tickets/${id}/document`);
+  });
+
   it("does not expose mutating verbs beyond POST", async () => {
     const route = await import("@/app/api/rfp/[[...path]]/route");
     expect("PATCH" in route).toBe(false);
@@ -76,6 +116,8 @@ describe("RFP BFF", () => {
     ["GET", ["tickets", "zzz"]],
     ["GET", ["tickets", "0a1b", "extra"]],
     ["POST", ["tickets", "0a1b"]],
+    ["POST", ["tickets", "0a1b", "departments", "Warehouse", "decision"]],
+    ["GET", ["tickets", "0a1b", "departments", "warehouse", "decision"]],
   ])("blocks non-allowlisted %s routes", async (method, path) => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
