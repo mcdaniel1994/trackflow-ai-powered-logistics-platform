@@ -6,9 +6,9 @@
 
 In progress — Engagement 9. Owner-approved specification exists (analysis + proposed spec accepted
 before implementation). Delivered in phases with an owner review pause after each, on branch
-`engagement-9-agentic-workflows`: **Phase 0 (scaffolding) and Phase 1 (intake & routing) are
-implemented.** Phases 2–3 (response generation, approval & completion) follow in order. This is
-LangGraph work, not n8n. Nothing is deployed; production exposure remains owner-gated.
+`engagement-9-agentic-workflows`: **Phases 0–2 are implemented** (scaffolding; intake & routing;
+response generation & evaluation). Phase 3 (approval & completion) follows. This is LangGraph work,
+not n8n. Nothing is deployed; production exposure remains owner-gated.
 
 ## Background
 

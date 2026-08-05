@@ -238,6 +238,10 @@ TrackFlow reflects real-world logistics challenges:
   dropped) → deterministic readability → a LangGraph classifier + metadata extractor +
   orchestrator-worker-synthesizer that discards non-RFPs and routes valid ones to their departments,
   with a safe node trace; plus the Back Office RFP Desk at `/agent-os/rfp` (upload + live list/detail).
+- Phase 2 (response generation) adds a per-department DeepSeek section generator (reusing the
+  Engagement 7 generator) and three deterministic evaluators — readability, relevance, and §5
+  compliance (currency, SLA %, no sub-48h returns, discount-tier table, no disclosed carrier rates) —
+  in a generator-evaluator loop with a hard iteration cap; routed tickets flow to `under_evaluation`.
 - Phase 3 will use a durable Postgres LangGraph checkpointer and native `interrupt()` so per-department
   human approval pauses only its branch, persists, and resumes without restarting the flow.
 - Currency (USD/EUR) is derived from the RFP's client country; operator jurisdiction stays
@@ -290,7 +294,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
-| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; Phases 0–1 implemented on branch `engagement-9-agentic-workflows` (rfp domain + schema; PDF intake, classifier, orchestrator-worker-synthesizer routing, RFP Desk UI); Phases 2–3 to follow |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; Phases 0–2 implemented on branch `engagement-9-agentic-workflows` (rfp domain + schema; PDF intake & routing; per-department generation + deterministic evaluators + loop; RFP Desk UI); Phase 3 to follow |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 
 All remaining work is planned from

@@ -14,7 +14,13 @@ from fastapi import BackgroundTasks
 from sqlmodel import Session
 
 from ...core.config import Settings
-from .config import build_rfp_config, is_rfp_configured, is_rfp_intake_configured
+from ..rag.config import build_rag_config
+from .config import (
+    build_rfp_config,
+    is_rfp_configured,
+    is_rfp_generation_configured,
+    is_rfp_intake_configured,
+)
 from .document import DocumentError, pdf_to_markdown
 from .intake import run_intake_for_ticket
 from .models import RfpTicket
@@ -80,7 +86,11 @@ class RfpService:
             )
         )
         config = build_rfp_config(self.settings)
-        background_tasks.add_task(run_intake_for_ticket, ticket.id, config, env=self.settings.app_env)
+        # When generation is configured, chain Phase 2 so a routed ticket drafts automatically.
+        rag_config = build_rag_config(self.settings) if is_rfp_generation_configured(self.settings) else None
+        background_tasks.add_task(
+            run_intake_for_ticket, ticket.id, config, env=self.settings.app_env, rag_config=rag_config
+        )
         return RfpTicketSummary.model_validate(ticket)
 
     def list_tickets(

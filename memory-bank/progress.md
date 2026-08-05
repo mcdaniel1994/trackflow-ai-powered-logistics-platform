@@ -38,7 +38,13 @@
   synthesizer graph (OpenAI structured output, mocked in CI) that discards non-RFPs and routes valid
   ones to their departments with a safe node trace reusing the Engagement 8 trace store; plus the
   Back Office RFP Desk (`/agent-os/rfp`, upload + live list/detail). Currency (USD/EUR) derives from
-  the RFP's client country. Phases 2–3 pending.
+  the RFP's client country. **Phase 2 (response generation) implemented:** a per-department DeepSeek
+  generator (reusing Engagement 7 `generate_answer`) drafts each section; three deterministic
+  evaluators (readability, relevance, §5 compliance — currency/SLA/no-<48h-returns/discount-tier/
+  no-carrier-rates) score it; a generator-evaluator loop with a hard iteration cap redrafts failures
+  and leaves an unpassable section for a human rather than looping forever. Generation chains straight
+  after routing, moving the ticket to `under_evaluation`. Phase 3 (human approval & completion)
+  pending.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or

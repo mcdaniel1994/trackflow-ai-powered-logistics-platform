@@ -20,6 +20,7 @@ class RfpConfig:
 
     model: str
     timeout_seconds: float
+    max_iterations: int = 2
     openai_api_key: str = field(repr=False, default="")
 
 
@@ -33,10 +34,16 @@ def is_rfp_intake_configured(settings: Settings) -> bool:
     return bool(is_rfp_configured(settings) and settings.openai_api_key)
 
 
+def is_rfp_generation_configured(settings: Settings) -> bool:
+    """True only when section generation can run: intake configured AND the DeepSeek key is present."""
+    return bool(is_rfp_intake_configured(settings) and settings.deepseek_api_key)
+
+
 def build_rfp_config(settings: Settings) -> RfpConfig:
     """Translate validated settings into an RfpConfig for the graph."""
     return RfpConfig(
         model=settings.rfp_model,
         timeout_seconds=settings.rfp_llm_timeout_seconds,
+        max_iterations=settings.rfp_max_iterations,
         openai_api_key=settings.openai_api_key,
     )

@@ -154,8 +154,12 @@ Then read the active engagement brief and the README for every folder being modi
   bytes dropped), a deterministic readability module, and a LangGraph classifier →
   orchestrator-worker-synthesizer intake graph (`domains/rfp/{document,readability,agents,graph,
   intake}.py`) that discards non-RFPs and routes valid ones to departments with a safe trace reusing
-  the Eng 8 trace store, plus the Back Office RFP Desk at `/agent-os/rfp`. Phase 3 uses a durable
-  Postgres LangGraph checkpointer with native `interrupt()` for branch-scoped human approval. Currency
+  the Eng 8 trace store, plus the Back Office RFP Desk at `/agent-os/rfp`. **Phase 2 (response
+  generation)** adds a per-department DeepSeek generator (reusing Eng 7 `generate_answer`) and three
+  deterministic evaluators (`domains/rfp/{evaluators,generation}.py`) — readability, relevance, §5
+  compliance — in a generator-evaluator loop with a hard iteration cap, chained after routing so the
+  ticket advances to `under_evaluation`. Phase 3 uses a durable Postgres LangGraph checkpointer with
+  native `interrupt()` for branch-scoped human approval. Currency
   (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
   LangGraph work, not n8n.
 
