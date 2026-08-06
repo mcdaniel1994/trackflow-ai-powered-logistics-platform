@@ -12,10 +12,10 @@ from __future__ import annotations
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 from uuid import uuid4
 
-from pipelines.rag import RagConfig, RagPipelineError, generate_answer  # type: ignore[import-untyped]
+from pipelines.rag import RagConfig, RagPipelineError, complete, retrieve  # type: ignore[import-untyped]
 from sqlmodel import Session
 
 from ...db.session import get_engine
@@ -35,10 +35,53 @@ _GUIDELINES = (
     "disclose negotiated carrier rates — only the final price to the client."
 )
 
+# A drafting-oriented system prompt: unlike the knowledge assistant, the RFP writer composes proposal
+# terms (SLA %, discount tiers, client prices) that a human approves next. Service facts are grounded
+# in the retrieved TrackFlow policy context; the business rules below are hard constraints.
+_DRAFTING_SYSTEM_PROMPT = (
+    "You are a TrackFlow proposal writer drafting ONE department section of a B2B logistics pricing "
+    "proposal. A human account manager reviews and approves your draft next, so you should compose "
+    "concrete commercial terms rather than refuse. Write in a confident, professional proposal voice "
+    "with short, readable sentences.\n\n"
+    "Ground service facts — delivery windows, storage rates, returns handling, carrier coverage — in "
+    "the TrackFlow policy context provided. Where the context gives a figure, use it; otherwise propose "
+    "reasonable, clearly-labelled draft terms consistent with that policy for the human to confirm.\n\n"
+    "Every section MUST:\n"
+    "- Quote all prices only in {currency} using the {symbol} symbol; never use any other currency.\n"
+    "- State an on-time delivery SLA as a percentage (for example '98% on-time delivery').\n"
+    "- Include a volume-based discount tier table and use the words 'volume' and 'discount tier'.\n\n"
+    "Every section MUST NOT:\n"
+    "- Promise returns processing in under 48 hours; note international returns are handled manually "
+    "by Sofía Ramos's team.\n"
+    "- Disclose negotiated or internal carrier rates — quote only the final price to the client.\n"
+    "- Grant a storage discount on your own authority — note it requires Miguel Torres's approval.\n\n"
+    "Return only the section text."
+)
+
+_CURRENCY_SYMBOL = {"USD": "$", "EUR": "€"}
+
 
 def _aspects(section: RfpDepartmentSection) -> list[str]:
     raw = (section.key_aspects or {}).get("aspects", [])
     return [str(item) for item in raw] if isinstance(raw, list) else []
+
+
+def _grounding(
+    department_id: str, country: str | None, key_aspects: list[str], rag_config: RagConfig
+) -> list[dict[str, object]]:
+    """Retrieve policy-corpus chunks so the section is grounded in real TrackFlow facts.
+
+    Without grounding the reused Engagement 7 generator (anti-invention system prompt) refuses with
+    "I don't have that information documented"; retrieval gives it the real SLA, returns, storage and
+    carrier-coverage policy to draft from. Best-effort: an empty result still yields an honest draft.
+    """
+    jurisdiction = country if country in {"US", "ES"} else None
+    query = (
+        f"TrackFlow {department_id} logistics services for a B2B client: delivery SLA percentage, "
+        f"returns policy, storage pricing, carrier coverage. "
+        f"Client priorities: {', '.join(key_aspects) or 'standard fulfilment'}."
+    )
+    return cast("list[dict[str, object]]", retrieve(query, config=rag_config, jurisdiction=jurisdiction))
 
 
 def draft_section(
@@ -56,12 +99,32 @@ def draft_section(
         f"Client country: {country or 'unknown'}. Currency: {currency or 'unknown'}. "
         f"Monthly volume: {volume or 'unknown'}. Key aspects: {', '.join(key_aspects) or 'none'}."
     )
-    fix = f" Revise to fix: {', '.join(feedback)}." if feedback else ""
-    prompt = (
-        f"Draft the {department_id} section of a TrackFlow logistics pricing proposal. {context} "
-        f"Follow these rules exactly: {_GUIDELINES}{fix}"
+    fix = f" Revise the draft to fix these issues: {', '.join(feedback)}." if feedback else ""
+    chunks = _grounding(department_id, country, key_aspects, rag_config)
+    grounding = _format_grounding(chunks)
+    currency_code = currency or "USD"
+    system_prompt = _DRAFTING_SYSTEM_PROMPT.format(
+        currency=currency_code, symbol=_CURRENCY_SYMBOL.get(currency_code, "$")
     )
-    return str(generate_answer(prompt, [], rag_config))
+    user_content = (
+        f"Draft the {department_id} section of a TrackFlow logistics pricing proposal.\n"
+        f"{context}\n\n"
+        f"Follow these rules exactly: {_GUIDELINES}{fix}\n\n"
+        f"<trackflow_policy_context>\n{grounding}\n</trackflow_policy_context>"
+    )
+    return str(complete(system_prompt, user_content, rag_config))
+
+
+def _format_grounding(chunks: list[dict[str, object]]) -> str:
+    if not chunks:
+        return "No specific policy excerpts were retrieved; draft from standard TrackFlow logistics practice."
+    blocks = []
+    for index, chunk in enumerate(chunks, start=1):
+        source = chunk.get("source_document", "policy")
+        section = chunk.get("section", "")
+        text = chunk.get("text", "")
+        blocks.append(f"[{index}] ({source} — {section})\n{text}")
+    return "\n\n".join(blocks)
 
 
 def generate_section(

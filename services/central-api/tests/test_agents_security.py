@@ -14,6 +14,7 @@ from central_api.domains.agents.routing import RouteDecision
 class _RagCfg:
     min_score = 0.5
     openai_api_key = ""
+    generation_model = "deepseek-chat"
 
 
 def _config() -> AgentConfig:

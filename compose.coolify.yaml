@@ -205,6 +205,9 @@ services:
       AGENT_MCP_RESOURCE_URL: ${MCP_RESOURCE_URL:?owner approval required}
       AGENT_MCP_OAUTH_CLIENT_ID: ${CENTRAL_API_MCP_OAUTH_CLIENT_ID:?required}
       AGENT_MCP_OAUTH_CLIENT_SECRET: ${CENTRAL_API_MCP_OAUTH_CLIENT_SECRET:?required}
+      # Engagement 8: the LangGraph agent (and the home Ask-AI box that routes to it) stay off
+      # until the owner enables it. Requires RAG + the MCP OAuth credentials above.
+      AGENTS_ENABLED: ${AGENTS_ENABLED:-false}
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       DATABASE_STATEMENT_TIMEOUT_MS: "15000"
       DATABASE_LOCK_TIMEOUT_MS: "5000"
@@ -229,6 +232,9 @@ services:
       RAG_GENERATION_MODEL: ${RAG_GENERATION_MODEL:-deepseek-chat}
       RAG_TOP_K: ${RAG_TOP_K:-5}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
+      # Engagement 9: Automated RFP Desk. Disabled unless RFP_ENABLED=true; reuses the RAG providers
+      # above for grounded drafting and the LangGraph Postgres checkpointer (setup() runs at startup).
+      RFP_ENABLED: ${RFP_ENABLED:-false}
     read_only: true
     tmpfs: ["/tmp"]
     deploy:

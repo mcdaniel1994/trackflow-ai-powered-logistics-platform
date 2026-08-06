@@ -21,6 +21,7 @@ from central_api.domains.agents.routing import RouteDecision
 class _RagCfg:
     min_score = 0.5
     openai_api_key = ""  # empty -> routing uses the deterministic heuristic (no live call)
+    generation_model = "deepseek-chat"  # unpriced alias -> generation tokens recorded, cost stays None
 
 
 def _config() -> AgentConfig:

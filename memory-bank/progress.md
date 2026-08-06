@@ -54,6 +54,22 @@
   Desk approval controls and a completion banner. The checkpointer's tables are managed by its own
   `setup()` and excluded from `alembic check`. Engagement 9 implementation is complete across all four
   phases (0–3); pending owner review.
+  **Post-implementation hardening pass (verified locally end-to-end, gates green, not pushed or
+  deployed):** (1) RFP section drafts are now grounded — a drafting-oriented DeepSeek prompt over
+  `retrieve()` policy context replaced the reused knowledge-assistant generator, which had refused
+  ("I don't have that information documented"); live Luna (US/USD) and Zaragoza (ES/EUR) runs now pass
+  all deterministic evaluators on the first iteration. A new low-level `pipelines.rag.complete()`
+  primitive keeps the DeepSeek plumbing shared while letting the RFP writer supply its own system
+  prompt. (2) Cross-cutting fixes on the same branch: the RAG Ask-AI `POST /knowledge/query` no longer
+  500s on a vector-store/provider fault (wrapped as a typed 502); the home Ask-AI box now orchestrates
+  through the Engagement 8 agent (`POST /agent/query`, RAG vs live ticket-status; RFP stays on its own
+  desk) after fixing an OBO bug where the router passed the whole `extract_access_token()` tuple as the
+  delegated token, breaking every MCP tool call; Agent OS now records real DeepSeek generation
+  token counts (routing tokens already worked) and real MCP tool-call rows; and user-facing
+  "coming soon"/"Engagement N" placeholder copy was removed from the Back Office. (3) Deploy wiring:
+  `AGENTS_ENABLED` and `RFP_ENABLED` are declared (defaulted off) in `compose.coolify.yaml`; both
+  Compose files validate and migration `20260805_0017` is in the `central-api-migrate` path. Enabling
+  the agent/MCP path in production remains the separately owner-gated Engagement 8 decision.
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or

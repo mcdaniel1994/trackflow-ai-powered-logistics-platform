@@ -42,3 +42,9 @@ export interface AgentAPIError {
   message: string;
   status: number;
 }
+
+export interface AgentAnswer {
+  answer: string;
+  trace_id: string;
+  conversation_id: string;
+}

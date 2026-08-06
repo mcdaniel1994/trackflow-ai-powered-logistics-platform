@@ -167,7 +167,15 @@ Then read the active engagement brief and the README for every folder being modi
   (`GET /rfp/tickets/{id}/document`) and the ticket reaches `done`. The checkpointer's tables are
   managed by its own `setup()` and excluded from `alembic check` in `migrations/env.py`. Currency
   (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
-  LangGraph work, not n8n.
+  LangGraph work, not n8n. **Post-implementation hardening (local-verified, gates green, not pushed):**
+  RFP drafts are grounded via a drafting-oriented DeepSeek prompt over `retrieve()` (new
+  `pipelines.rag.complete()` primitive) instead of the refusing knowledge-assistant generator; the
+  RAG Ask-AI endpoint no longer 500s on provider/vector faults (typed 502); the home Ask-AI box routes
+  through the Engagement 8 agent (`POST /agent/query`) after fixing an OBO token-exchange bug (the
+  router passed the whole `extract_access_token()` tuple, not the token); Agent OS records real
+  DeepSeek generation tokens and MCP tool-call rows; placeholder "coming soon"/"Engagement N" UI copy
+  was removed; and `AGENTS_ENABLED`/`RFP_ENABLED` are wired (off by default) into
+  `compose.coolify.yaml`. Agent/MCP production exposure stays the owner-gated Engagement 8 decision.
 
 - **Engagement 10+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the

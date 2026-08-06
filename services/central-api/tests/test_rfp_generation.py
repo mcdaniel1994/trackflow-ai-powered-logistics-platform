@@ -29,6 +29,12 @@ DRAFT_OK = (
 DRAFT_BAD = "Our warehouse handles storage in USD. Returns finish in 24 hours."
 
 
+@pytest.fixture(autouse=True)
+def _no_live_retrieval(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Grounding calls retrieve(); stub it so unit tests never reach a live Qdrant."""
+    monkeypatch.setattr(rfp_generation, "retrieve", lambda *_a, **_k: [])
+
+
 def _seed_drafting(engine: Engine) -> str:
     with Session(engine) as session:
         ticket = RfpTicket(
@@ -63,7 +69,7 @@ def _rag(settings: Settings) -> object:
 
 
 def test_generate_section_uses_generator(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
-    monkeypatch.setattr(rfp_generation, "generate_answer", lambda _q, _c, _cfg: "a draft")
+    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: "a draft")
     ticket = RfpTicket(rfp_id="x", status="drafting", owner_user_uuid=OWNER, currency="USD")
     assert generate_section("warehouse", ticket, ["storage"], [], _rag(settings)) == "a draft"  # type: ignore[arg-type]
 
@@ -75,7 +81,7 @@ def test_generation_passes_and_advances_ticket(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ticket_id = _seed_drafting(engine)
-    monkeypatch.setattr(rfp_generation, "generate_answer", lambda _q, _c, _cfg: DRAFT_OK)
+    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_OK)
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -97,7 +103,7 @@ def test_generation_retries_then_passes(
 ) -> None:
     ticket_id = _seed_drafting(engine)
     drafts = iter([DRAFT_BAD, DRAFT_OK])
-    monkeypatch.setattr(rfp_generation, "generate_answer", lambda _q, _c, _cfg: next(drafts))
+    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: next(drafts))
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -113,7 +119,7 @@ def test_generation_stops_at_iteration_cap(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ticket_id = _seed_drafting(engine)
-    monkeypatch.setattr(rfp_generation, "generate_answer", lambda _q, _c, _cfg: DRAFT_BAD)
+    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_BAD)
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -132,10 +138,10 @@ def test_generation_handles_provider_error(
 ) -> None:
     ticket_id = _seed_drafting(engine)
 
-    def boom(_q: str, _c: list[object], _cfg: object) -> str:
+    def boom(_sys: str, _user: str, _cfg: object) -> str:
         raise RagPipelineError("provider down")
 
-    monkeypatch.setattr(rfp_generation, "generate_answer", boom)
+    monkeypatch.setattr(rfp_generation, "complete", boom)
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
     with Session(engine) as session:
@@ -157,12 +163,12 @@ def test_generation_skips_non_drafting_ticket(
         ticket_id = ticket.id
     called = False
 
-    def spy(_q: str, _c: list[object], _cfg: object) -> str:
+    def spy(_sys: str, _user: str, _cfg: object) -> str:
         nonlocal called
         called = True
         return DRAFT_OK
 
-    monkeypatch.setattr(rfp_generation, "generate_answer", spy)
+    monkeypatch.setattr(rfp_generation, "complete", spy)
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
     assert called is False  # idempotency guard: only drafting tickets are generated
 
@@ -197,7 +203,7 @@ def test_upload_chains_into_generation(
         rfp_graph, "extract_metadata", lambda _md, _c: MetadataResult("Luna", "US", ["warehousing"], 5000, 20, None)
     )
     monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: [f"{dept}-aspect"])
-    monkeypatch.setattr(rfp_generation, "generate_answer", lambda _q, _c, _cfg: DRAFT_OK)
+    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_OK)
 
     created = client.post(
         "/rfp/tickets", files={"file": ("rfp.pdf", b"%PDF-1.4", "application/pdf")}, headers=auth_headers

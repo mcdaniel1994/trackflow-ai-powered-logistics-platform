@@ -48,14 +48,14 @@ def _mapping(value: object) -> Mapping[str, Any]:
     return value if isinstance(value, Mapping) else {}
 
 
-def usage_from_message(message: object, model: str) -> ModelUsage | None:
-    """Extract standardized LangChain/OpenAI token counters, or return ``None`` safely."""
-    standardized = _mapping(getattr(message, "usage_metadata", None))
-    provider = _mapping(_mapping(getattr(message, "response_metadata", None)).get("token_usage"))
-    usage = standardized or provider
-    if not usage:
-        return None
+def _build_usage(usage: Mapping[str, Any], model: str) -> ModelUsage | None:
+    """Validate raw numeric counters and price them, or return ``None`` safely.
 
+    Cost is only computed for models in ``MODEL_PRICES``. A model absent from that table (for
+    example the DeepSeek ``deepseek-chat`` alias, whose target model — and therefore price — is not
+    model-specific and cannot be verified from a name) yields exact token counts with ``cost=None``
+    rather than a fabricated cost.
+    """
     input_tokens = _counter(usage.get("input_tokens", usage.get("prompt_tokens")))
     output_tokens = _counter(usage.get("output_tokens", usage.get("completion_tokens")))
     total_tokens = _counter(usage.get("total_tokens"))
@@ -85,3 +85,25 @@ def usage_from_message(message: object, model: str) -> ModelUsage | None:
         cost = float(computed)
 
     return ModelUsage(input_tokens, output_tokens, total_tokens, cached, cost)
+
+
+def usage_from_message(message: object, model: str) -> ModelUsage | None:
+    """Extract standardized LangChain/OpenAI token counters, or return ``None`` safely."""
+    standardized = _mapping(getattr(message, "usage_metadata", None))
+    provider = _mapping(_mapping(getattr(message, "response_metadata", None)).get("token_usage"))
+    usage = standardized or provider
+    if not usage:
+        return None
+    return _build_usage(usage, model)
+
+
+def usage_from_counters(usage: Mapping[str, Any] | None, model: str) -> ModelUsage | None:
+    """Price already-extracted numeric token counters (e.g. from a raw OpenAI-SDK completion).
+
+    Used for the DeepSeek generation call, which returns OpenAI-style ``prompt_tokens`` /
+    ``completion_tokens`` / ``total_tokens`` numbers that the pipeline surfaces as a plain mapping.
+    Only numeric counters are accepted; no provider content ever reaches this function.
+    """
+    if not usage:
+        return None
+    return _build_usage(usage, model)

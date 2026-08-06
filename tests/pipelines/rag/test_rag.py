@@ -130,14 +130,31 @@ def test_retrieve_filters_cross_jurisdiction_payloads(
     assert stub.calls[0]["query_filter"] is not None
 
 
+def test_retrieve_wraps_vector_store_failure_as_domain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw Qdrant/httpx failure (e.g. connection refused) becomes a RagPipelineError."""
+
+    class _BrokenQdrant:
+        def query_points(self, **_kwargs: Any) -> SimpleNamespace:
+            raise ConnectionError("[Errno 61] Connection refused")
+
+    monkeypatch.setattr(rag, "_qdrant", lambda *_a, **_k: _BrokenQdrant())
+    monkeypatch.setattr(rag, "embed", lambda *_a, **_k: [0.0] * 8)
+
+    with pytest.raises(rag.RagPipelineError):
+        rag.retrieve("anything", config=_config())
+
+
 # --------------------------------------------------------------------------- query()
 
 
 class _StubChat:
     """Fake OpenAI-compatible chat client capturing the messages it is sent."""
 
-    def __init__(self, answer: str) -> None:
+    def __init__(self, answer: str, usage: object = None) -> None:
         self.answer = answer
+        self.usage = usage
         self.received: dict[str, Any] = {}
         create = self._create
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=create))
@@ -145,7 +162,7 @@ class _StubChat:
     def _create(self, **kwargs: Any) -> SimpleNamespace:
         self.received = kwargs
         message = SimpleNamespace(content=self.answer)
-        return SimpleNamespace(choices=[SimpleNamespace(message=message)])
+        return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=self.usage)
 
 
 def test_query_returns_generated_answer_not_raw_chunks(
@@ -252,6 +269,65 @@ def test_structured_generation_returns_answer_and_candidate_in_one_call(
         "memory_candidate must normally be null"
         in stub.received["messages"][-1]["content"]
     )
+
+
+def test_structured_generation_surfaces_only_numeric_usage_counters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GenerationResult.usage carries the generation model's token counts, never content."""
+    usage = SimpleNamespace(prompt_tokens=500, completion_tokens=63, total_tokens=563)
+    stub = _StubChat(json.dumps({"answer": "Grounded answer.", "memory_candidate": None}), usage=usage)
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+
+    result = rag.generate_answer(
+        "What is documented?", [{"text": "Some documented fact."}], _config(), "US", include_memory_candidate=True
+    )
+
+    assert isinstance(result, rag.GenerationResult)
+    assert result.usage == {"prompt_tokens": 500, "completion_tokens": 63, "total_tokens": 563}
+
+
+def test_structured_generation_usage_is_none_when_provider_omits_counters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubChat(json.dumps({"answer": "Grounded answer.", "memory_candidate": None}))
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+
+    result = rag.generate_answer(
+        "What is documented?", [{"text": "fact"}], _config(), "US", include_memory_candidate=True
+    )
+    assert isinstance(result, rag.GenerationResult)
+    assert result.usage is None
+
+
+def test_complete_uses_caller_system_prompt_and_returns_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """complete() is the drafting primitive: it sends the caller's own system prompt, not SYSTEM_PROMPT."""
+    stub = _StubChat("A drafted proposal section.")
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+
+    result = rag.complete("You are a proposal writer.", "Draft the warehouse section.", _config())
+
+    assert result == "A drafted proposal section."
+    assert stub.received["messages"][0] == {"role": "system", "content": "You are a proposal writer."}
+    assert stub.received["messages"][0]["content"] != rag.SYSTEM_PROMPT
+    assert stub.received["messages"][1]["content"] == "Draft the warehouse section."
+
+
+def test_complete_wraps_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    class _Boom:
+        def __init__(self) -> None:
+            self.chat = SimpleNamespace(
+                completions=SimpleNamespace(create=self._create)
+            )
+
+        def _create(self, **_kwargs: Any) -> Any:
+            raise RuntimeError("deepseek down")
+
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: _Boom())
+    with pytest.raises(rag.RagPipelineError):
+        rag.complete("sys", "user", _config())
 
 
 def test_structured_generation_rejects_malformed_provider_output(

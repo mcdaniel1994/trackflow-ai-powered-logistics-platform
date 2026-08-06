@@ -2,13 +2,13 @@
 
 import { useState } from "react";
 import { AlertCircle, ArrowUp, Loader2, Sparkles } from "lucide-react";
-import { askKnowledge, knowledgeError } from "@/lib/knowledge/api";
+import { askAgent, agentError } from "@/lib/agents/api";
 
 const SUGGESTIONS = [
   "What's the standard return window?",
   "Which carrier best covers rural Aragón?",
   "Can we promise our delivery SLA on Black Friday?",
-  "How is storage priced in Zaragoza?",
+  "What is the status of ticket 1?",
 ];
 
 type Status = "idle" | "loading" | "answered" | "error";
@@ -30,11 +30,11 @@ export function AskKnowledgeBox() {
     setErrorMessage("");
 
     try {
-      const result = await askKnowledge(trimmed);
+      const result = await askAgent(trimmed);
       setAnswer(result.answer);
       setStatus("answered");
     } catch (error) {
-      setErrorMessage(knowledgeError(error).message);
+      setErrorMessage(agentError(error).message);
       setStatus("error");
     }
   }
@@ -51,7 +51,7 @@ export function AskKnowledgeBox() {
         <div>
           <h2 className="text-base font-black text-navy-deep dark:text-neutral-100">Ask your knowledge base</h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-300">
-            Answers come from TrackFlow&rsquo;s policy documents — never invented.
+            Grounded in TrackFlow&rsquo;s policy documents and live ticket status — never invented.
           </p>
         </div>
       </div>

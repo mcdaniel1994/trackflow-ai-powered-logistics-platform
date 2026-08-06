@@ -50,7 +50,9 @@ def query_agent(
     principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
     service: Annotated[AgentService, Depends(_query_service)],
 ) -> AgentQueryResponse:
-    return service.answer(payload, background_tasks, extract_access_token(request), principal)
+    # extract_access_token returns (token, source); the OBO token exchange needs the raw token only.
+    access_token, _token_source = extract_access_token(request)
+    return service.answer(payload, background_tasks, access_token, principal)
 
 
 @router.get("/agents/runs", response_model=list[RunSummary])

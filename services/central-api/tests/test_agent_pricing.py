@@ -6,7 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from central_api.domains.agents.pricing import usage_from_message
+from central_api.domains.agents.pricing import usage_from_counters, usage_from_message
 
 
 def _message(usage: object = None, response_metadata: object = None) -> object:
@@ -73,3 +73,38 @@ def test_unknown_model_keeps_tokens_and_omits_cost() -> None:
         "unpriced-model",
     )
     assert result is not None and result.total_tokens == 14 and result.cost_usd is None
+
+
+def test_usage_from_counters_prices_known_model() -> None:
+    """The DeepSeek-style flat counters path prices a known model exactly like a message."""
+    result = usage_from_counters(
+        {"prompt_tokens": 1_000, "completion_tokens": 200, "total_tokens": 1_200},
+        "gpt-4o-mini",
+    )
+    assert result is not None
+    assert result.total_tokens == 1_200
+    # 1000 input @0.15/M + 200 output @0.60/M per million = 0.00027
+    assert result.cost_usd == pytest.approx(0.00027)
+
+
+def test_usage_from_counters_keeps_generation_tokens_without_a_verified_price() -> None:
+    """deepseek-chat is an unpriced alias: exact tokens, no fabricated cost."""
+    result = usage_from_counters(
+        {"prompt_tokens": 500, "completion_tokens": 63, "total_tokens": 563},
+        "deepseek-chat",
+    )
+    assert result is not None
+    assert result.total_tokens == 563
+    assert result.cost_usd is None
+
+
+def test_usage_from_counters_rejects_none_and_inconsistent_totals() -> None:
+    assert usage_from_counters(None, "deepseek-chat") is None
+    assert usage_from_counters({}, "deepseek-chat") is None
+    # total that disagrees with input+output is rejected rather than trusted
+    assert (
+        usage_from_counters(
+            {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 999}, "deepseek-chat"
+        )
+        is None
+    )
