@@ -22,6 +22,55 @@
 
 ## Active
 
+- Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):
+  in progress on branch `engagement-9-agentic-workflows`, owner-approved spec, delivered in phases
+  with an owner pause after each. A multi-agent LangGraph workflow (intake & routing → per-department
+  generation & self-evaluation → human approval → final document) in the new Central API `rfp` domain,
+  with a "ticket mode" RFP Desk in `uis/backoffice/`. Reuses Engagement 7 `retrieve()`/
+  `generate_answer()` and the Engagement 8 guardrails and trace store; Phase 3 adds a durable Postgres
+  LangGraph checkpointer with native `interrupt()` for branch-scoped human approval. **Phase 0
+  (scaffolding) implemented:** the `rfp` domain (owner-scoped `GET /rfp/tickets[/{id}]`, `503` until
+  `RFP_ENABLED`), migration `20260805_0017` (`rfp_tickets`, `rfp_department_sections`,
+  `rfp_final_documents`), vetted deps `pdfminer.six` + `langgraph-checkpoint-postgres`, three seed RFP
+  documents in `data/raw/`, and this brief. **Phase 1 (intake & routing) implemented:** multipart
+  `POST /rfp/tickets` upload → `pdfminer.six` PDF→Markdown (Markdown persisted, raw bytes dropped) →
+  deterministic readability → a LangGraph classifier → metadata extractor → orchestrator-worker-
+  synthesizer graph (OpenAI structured output, mocked in CI) that discards non-RFPs and routes valid
+  ones to their departments with a safe node trace reusing the Engagement 8 trace store; plus the
+  Back Office RFP Desk (`/agent-os/rfp`, upload + live list/detail). Currency (USD/EUR) derives from
+  the RFP's client country. **Phase 2 (response generation) implemented:** a per-department DeepSeek
+  generator (reusing Engagement 7 `generate_answer`) drafts each section; three deterministic
+  evaluators (readability, relevance, §5 compliance — currency/SLA/no-<48h-returns/discount-tier/
+  no-carrier-rates) score it; a generator-evaluator loop with a hard iteration cap redrafts failures
+  and leaves an unpassable section for a human rather than looping forever. Generation chains straight
+  after routing, moving the ticket to `under_evaluation`. **Phase 3 (human approval & completion)
+  implemented:** each active department has its own interruptible approval graph on a durable Postgres
+  LangGraph checkpointer (`langgraph-checkpoint-postgres`), keyed by a per-department `thread_id` so a
+  native `interrupt()` pauses only that branch while others proceed; resuming with a validated
+  approve/reject/request_changes decision continues from the interruption, `request_changes` redrafts
+  (capped) and re-interrupts, and once every section is approved an explicit arbitration step
+  consolidates the final document and the ticket reaches `done`. New endpoints
+  `POST /rfp/tickets/{id}/departments/{dept}/decision` and `GET /rfp/tickets/{id}/document`, plus RFP
+  Desk approval controls and a completion banner. The checkpointer's tables are managed by its own
+  `setup()` and excluded from `alembic check`. Engagement 9 implementation is complete across all four
+  phases (0–3); pending owner review.
+  **Post-implementation hardening pass (verified locally end-to-end, gates green, not pushed or
+  deployed):** (1) RFP section drafts are now grounded — a drafting-oriented DeepSeek prompt over
+  `retrieve()` policy context replaced the reused knowledge-assistant generator, which had refused
+  ("I don't have that information documented"); live Luna (US/USD) and Zaragoza (ES/EUR) runs now pass
+  all deterministic evaluators on the first iteration. A new low-level `pipelines.rag.complete()`
+  primitive keeps the DeepSeek plumbing shared while letting the RFP writer supply its own system
+  prompt. (2) Cross-cutting fixes on the same branch: the RAG Ask-AI `POST /knowledge/query` no longer
+  500s on a vector-store/provider fault (wrapped as a typed 502); the home Ask-AI box now orchestrates
+  through the Engagement 8 agent (`POST /agent/query`, RAG vs live ticket-status; RFP stays on its own
+  desk) after fixing an OBO bug where the router passed the whole `extract_access_token()` tuple as the
+  delegated token, breaking every MCP tool call; Agent OS now records real DeepSeek generation
+  token counts (routing tokens already worked) and real MCP tool-call rows; and user-facing
+  "coming soon"/"Engagement N" placeholder copy was removed from the Back Office. (3) Deploy wiring:
+  `AGENTS_ENABLED` and `RFP_ENABLED` are declared (defaulted off) in `compose.coolify.yaml`; both
+  Compose files validate and migration `20260805_0017` is in the `central-api-migrate` path. Enabling
+  the agent/MCP path in production remains the separately owner-gated Engagement 8 decision.
+
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
   deployed. A salesperson-voiced assistant over the four policy documents in
@@ -153,9 +202,10 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 9 - Agentic workflows for the RFP desk. Planning inputs only; no
-  specification yet. This is LangGraph work, not n8n; the earlier "workflow
-  automation with n8n" framing does not match the assignment documents.
+- Engagement 9 - Agentic workflows for the RFP desk. Owner-approved spec; now Active (see above).
+  In progress on branch `engagement-9-agentic-workflows`, Phase 0 scaffolding implemented. This is
+  LangGraph work, not n8n; the earlier "workflow automation with n8n" framing does not match the
+  assignment documents.
 - Engagement 10 - Real-time dashboards and alerts. Blocked: the requirements
   document `10_realtime/realtime.md` is empty.
 - Cross-cutting backlog (`important_considerations/others.md`): website

@@ -40,6 +40,7 @@ from .guardrails import (
     validate_ticket_argument,
 )
 from .mcp_client import lookup_ticket_status
+from .pricing import usage_from_counters
 from .routing import route_question
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,16 @@ def _step(state: AgentState, node_name: str, status: str, started: float, *, not
         "cost_usd": None,
         "notes": notes,
     }
+
+
+def _record_generation_usage(step: dict[str, Any], generated: object, model: str) -> dict[str, Any]:
+    """Attach the DeepSeek generation call's safe token/cost counters to a node step, if reported."""
+    counters = generated.usage if isinstance(generated, GenerationResult) else None
+    usage = usage_from_counters(counters, model)
+    if usage is not None:
+        step["tokens"] = usage.total_tokens
+        step["cost_usd"] = usage.cost_usd
+    return step
 
 
 def build_graph(config: AgentConfig) -> Any:
@@ -303,11 +314,14 @@ def build_graph(config: AgentConfig) -> Any:
             }
         answer = generated.answer if isinstance(generated, GenerationResult) else generated
         candidate = generated.memory_candidate if isinstance(generated, GenerationResult) else None
+        step = _record_generation_usage(
+            _step(state, "generate", "ok", started, notes="grounded answer"), generated, config.rag.generation_model
+        )
         return {
             "answer": answer,
             "memory_candidate": candidate,
             "guardrail_events": events,
-            "steps": [_step(state, "generate", "ok", started, notes="grounded answer")],
+            "steps": [step],
         }
 
     def no_context_node(state: AgentState) -> dict[str, Any]:
@@ -329,11 +343,16 @@ def build_graph(config: AgentConfig) -> Any:
             }
         answer = generated.answer if isinstance(generated, GenerationResult) else generated
         candidate = generated.memory_candidate if isinstance(generated, GenerationResult) else None
+        step = _record_generation_usage(
+            _step(state, "no_context", "ok", started, notes="no current context"),
+            generated,
+            config.rag.generation_model,
+        )
         return {
             "answer": answer,
             "memory_candidate": candidate,
             "guardrail_events": events,
-            "steps": [_step(state, "no_context", "ok", started, notes="no current context")],
+            "steps": [step],
         }
 
     def guardrail_output_node(state: AgentState) -> dict[str, Any]:

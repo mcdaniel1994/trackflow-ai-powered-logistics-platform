@@ -8,6 +8,11 @@ const TRACE_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const RUN_LIST_QUERY = new Set(["agent_name", "status", "limit"]);
 
 function allowlistedPath(method: string, path: string[]) {
+  if (method === "POST") {
+    // The single write path: orchestrate one question through the LangGraph agent.
+    if (path.length === 1 && path[0] === "query") return "/agent/query";
+    return null;
+  }
   if (method !== "GET") return null;
   if (path.length === 1 && path[0] === "runs") return "/agents/runs";
   if (path.length === 2 && path[0] === "runs" && TRACE_ID.test(path[1])) {
@@ -46,3 +51,4 @@ async function handler(request: NextRequest, context: RouteContext) {
 }
 
 export const GET = handler;
+export const POST = handler;

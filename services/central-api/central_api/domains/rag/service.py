@@ -41,3 +41,7 @@ class RagService:
             # Keep provider and vector-store internals out of the client response and logs.
             logger.warning("rag_query_failed")
             raise RagError(502, "The knowledge assistant is temporarily unavailable.") from None
+        except Exception:
+            # Backstop: no provider/vector-store fault should ever surface to the client as a 500.
+            logger.warning("rag_query_unexpected_error")
+            raise RagError(502, "The knowledge assistant is temporarily unavailable.") from None

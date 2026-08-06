@@ -62,10 +62,16 @@ class RagPipelineError(RuntimeError):
 
 @dataclass(frozen=True)
 class GenerationResult:
-    """One provider call's guarded answer and optional unpersisted memory candidate."""
+    """One provider call's guarded answer and optional unpersisted memory candidate.
+
+    ``usage`` carries only the generation model's numeric token counters (input/output/total and,
+    when reported, cached input) so an orchestrator can account cost/tokens for the DeepSeek call.
+    It never contains prompts, completions, or raw provider payloads.
+    """
 
     answer: str
     memory_candidate: dict[str, object] | None = None
+    usage: dict[str, int] | None = None
 
 
 @dataclass(frozen=True)
@@ -214,25 +220,33 @@ def retrieve(
         raise ValueError("jurisdiction must be US or ES")
 
     client = _qdrant(cfg.qdrant_url, cfg.qdrant_api_key)
-    vector = embed(query_text, cfg)
-    response = client.query_points(
-        collection_name=cfg.collection,
-        query=vector,
-        limit=limit,
-        with_payload=True,
-        query_filter=(
-            Filter(
-                must=[
-                    FieldCondition(
-                        key="jurisdiction",
-                        match=MatchAny(any=[jurisdiction, "GLOBAL"]),
-                    )
-                ]
-            )
-            if jurisdiction
-            else None
-        ),
-    )
+    try:
+        vector = embed(query_text, cfg)
+        response = client.query_points(
+            collection_name=cfg.collection,
+            query=vector,
+            limit=limit,
+            with_payload=True,
+            query_filter=(
+                Filter(
+                    must=[
+                        FieldCondition(
+                            key="jurisdiction",
+                            match=MatchAny(any=[jurisdiction, "GLOBAL"]),
+                        )
+                    ]
+                )
+                if jurisdiction
+                else None
+            ),
+        )
+    except RagPipelineError:
+        # embed() already raises the domain error for a missing key; keep it as-is.
+        raise
+    except Exception as exc:
+        # The embeddings provider or Qdrant can raise many concrete error types (connection
+        # refused, timeouts, HTTP errors). Collapse them all so the boundary never leaks a 500.
+        raise RagPipelineError("vector-store retrieval failed") from exc
     hits = [point for point in response.points if point.score is not None and point.score >= threshold]
     logger.info("rag_retrieve query_len=%d k=%d survived=%d", len(query_text), limit, len(hits))
     payloads = [dict(point.payload or {}) for point in hits]
@@ -331,7 +345,56 @@ def generate_answer(
     candidate = payload.get("memory_candidate") if isinstance(payload, dict) else None
     if not isinstance(answer, str) or not answer.strip() or (candidate is not None and not isinstance(candidate, dict)):
         raise RagPipelineError("generation model returned an invalid structured answer")
-    return GenerationResult(answer.strip(), candidate)
+    return GenerationResult(answer.strip(), candidate, _usage_counters(completion))
+
+
+def _usage_counters(completion: object) -> dict[str, int] | None:
+    """Extract only the generation model's numeric token counters (no content) as a plain dict."""
+    usage = getattr(completion, "usage", None)
+    if usage is None:
+        return None
+
+    def _as_int(value: object) -> int | None:
+        return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+    prompt = _as_int(getattr(usage, "prompt_tokens", None))
+    completion_tokens = _as_int(getattr(usage, "completion_tokens", None))
+    total = _as_int(getattr(usage, "total_tokens", None))
+    if prompt is None or completion_tokens is None:
+        return None
+    return {
+        "prompt_tokens": prompt,
+        "completion_tokens": completion_tokens,
+        "total_tokens": total if total is not None else prompt + completion_tokens,
+    }
+
+
+def complete(system_prompt: str, user_content: str, config: RagConfig | None = None) -> str:
+    """Low-level single-turn completion against the generation model with a caller-supplied prompt.
+
+    ``query``/``generate_answer`` are the knowledge-assistant path: they enforce the anti-invention
+    ``SYSTEM_PROMPT`` because they answer factual questions from documented context. A drafting caller
+    (the Engagement 9 RFP desk) instead composes proposal content for later human approval and must
+    supply its own system prompt. This helper only reuses the DeepSeek client plumbing and error
+    translation; it applies no knowledge-base guardrails and must not be used for RAG answers.
+    """
+    cfg = _resolve(config)
+    client = _chat_client(cfg.deepseek_api_key, cfg.deepseek_base_url)
+    try:
+        completion = client.chat.completions.create(
+            model=cfg.generation_model,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+        )
+    except Exception as exc:
+        raise RagPipelineError("generation model call failed") from exc
+    content = completion.choices[0].message.content
+    if not content or not content.strip():
+        raise RagPipelineError("generation model returned an empty answer")
+    return str(content).strip()
 
 
 def query(question: str, config: RagConfig | None = None) -> str:

@@ -73,12 +73,27 @@ direct dependencies are permissive; `mcp<2` is an explicit compatibility constra
 | [langchain-mcp-adapters](https://pypi.org/project/langchain-mcp-adapters/) | 0.3.1 | MIT | Direct (`services/central-api`) | Typed LangChain client adapter for MCP tool discovery/invocation |
 | [mcp](https://pypi.org/project/mcp/) | 1.29.0 | MIT | Direct compatibility constraint (`services/central-api`), transitive (`mcps`) | `<2` prevents adapter 0.3.1 from resolving an incompatible SDK major |
 
+## Engagement 9 RFP agentic workflow
+
+Added for the Engagement 9 RFP workflow: durable LangGraph checkpointing for human-in-the-loop
+approval, and PDF→Markdown conversion for RFP intake. Both direct additions are permissive.
+`markitdown[pdf]` was evaluated and rejected in favour of `pdfminer.six` (its own PDF engine) to
+avoid pulling `onnxruntime`/`magika` (~179 MB native ML runtime) that only served unneeded file-type
+sniffing; `pymupdf4llm` was rejected as AGPL-3.0. The checkpointer's LGPL `psycopg`/`psycopg-pool`
+Postgres drivers are listed in the copyleft table below and used unmodified.
+
+| Package | Version | License | Direct / Transitive | Notes |
+|---|---|---|---|---|
+| [pdfminer.six](https://pypi.org/project/pdfminer.six/) | 20260107 | MIT | Direct (`services/central-api`) | Extracts text from uploaded RFP PDFs before Markdown conversion |
+| [langgraph-checkpoint-postgres](https://pypi.org/project/langgraph-checkpoint-postgres/) | 3.1.1 | MIT | Direct (`services/central-api`) | Durable Postgres checkpointer for `interrupt()`-based human approval |
+
 ## Copyleft / weak-copyleft dependencies
 
 | Package | Version | License | Ecosystem | Direct / Transitive | Notes |
 |---|---|---|---|---|---|
 | [psycopg2-binary](https://pypi.org/project/psycopg2-binary/) | 2.9.12 | LGPL | Python | Direct (`services/central-api`) | PostgreSQL driver; used unmodified as a dynamically-linked dependency |
 | [psycopg](https://pypi.org/project/psycopg/) / psycopg-binary | 3.3.4 | LGPL-3.0-only | Python | Direct (`data`), transitive into `services/central-api` via the `trackflow-data-pipelines` path dependency | PostgreSQL driver; used unmodified |
+| [psycopg-pool](https://pypi.org/project/psycopg-pool/) | 3.3.1 | LGPL-3.0-only | Python | Transitive (`services/central-api` → `langgraph-checkpoint-postgres`) | Connection pool for the durable checkpointer; used unmodified |
 | [text-unidecode](https://pypi.org/project/text-unidecode/) | 1.3 | Artistic License / GPL / GPLv2+ (multi-license) | Python | Transitive (`prefect` → `python-slugify` → `text-unidecode`) | Used unmodified as installed |
 | [certifi](https://pypi.org/project/certifi/) | varies (2026.x) | MPL-2.0 | Python | Transitive (present in every Python service/package venv) | CA bundle; weak/file-level copyleft |
 | [orjson](https://pypi.org/project/orjson/) | 3.11.9 | MPL-2.0 AND (Apache-2.0 OR MIT) | Python | Transitive | Weak/file-level copyleft on the MPL-licensed portion |

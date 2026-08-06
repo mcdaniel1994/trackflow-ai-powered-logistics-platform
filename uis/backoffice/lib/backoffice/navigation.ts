@@ -4,6 +4,7 @@ import {
   Bot,
   Boxes,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   Package,
   ShieldCheck,
@@ -66,7 +67,10 @@ export const navigationGroups: NavigationGroup[] = [
   },
   {
     label: "Agent OS",
-    items: [{ label: "Agent OS", href: "/agent-os", icon: Bot, badge: "Soon" }],
+    items: [
+      { label: "Agent OS", href: "/agent-os", icon: Bot },
+      { label: "RFP Desk", href: "/agent-os/rfp", icon: FileText, activePrefix: "/agent-os/rfp" },
+    ],
   },
   {
     label: "Administration",

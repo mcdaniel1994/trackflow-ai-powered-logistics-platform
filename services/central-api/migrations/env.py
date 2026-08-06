@@ -12,6 +12,7 @@ from central_api.domains.incidents import models as incident_models  # noqa: F40
 from central_api.domains.inventory import models as inventory_models  # noqa: F401
 from central_api.domains.operations import models as operations_models  # noqa: F401
 from central_api.domains.reporting import models as reporting_models  # noqa: F401
+from central_api.domains.rfp import models as rfp_models  # noqa: F401
 from central_api.domains.suppliers import models as supplier_models  # noqa: F401
 from central_api.domains.telemetry import models as telemetry_models  # noqa: F401
 
@@ -23,6 +24,9 @@ if config.config_file_name is not None:
 target_metadata = SQLModel.metadata
 
 
+from central_api.domains.rfp.checkpointer import CHECKPOINTER_TABLES  # noqa: E402
+
+
 def include_object(
     _object: object,
     _name: str | None,
@@ -32,6 +36,9 @@ def include_object(
 ) -> bool:
     """Keep future autogeneration away from provider-managed schemas."""
     if _type == "table" and _name == "alembic_version":
+        return False
+    # The LangGraph Postgres checkpointer owns its own tables via setup(), not Alembic.
+    if _type == "table" and _name in CHECKPOINTER_TABLES:
         return False
     schema = getattr(_object, "schema", None)
     return schema in {None, "public", "reporting"}

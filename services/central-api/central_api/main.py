@@ -30,6 +30,8 @@ from .domains.rag.router import router as rag_router
 from .domains.rag.service import RagError
 from .domains.reporting.router import router as reporting_router
 from .domains.reporting.service import ReportingError
+from .domains.rfp.router import router as rfp_router
+from .domains.rfp.service import RfpError
 from .domains.suppliers.router import router as suppliers_router
 from .domains.suppliers.service import SupplierError
 from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
@@ -165,6 +167,12 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @app.exception_handler(RfpError)
+    async def rfp_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, RfpError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
     @app.exception_handler(SQLAlchemyError)
     async def database_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         """Catch unexpected driver failures while keeping URLs and SQL out of logs."""
@@ -237,6 +245,7 @@ def create_app() -> FastAPI:
     app.include_router(reporting_router)
     app.include_router(rag_router)
     app.include_router(agents_router)
+    app.include_router(rfp_router)
     return app
 
 

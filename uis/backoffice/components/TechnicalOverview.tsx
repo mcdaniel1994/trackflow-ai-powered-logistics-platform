@@ -34,8 +34,7 @@ const CARDS: TechnicalCard[] = [
     description: "The Qdrant collection powering Ask AI — chunked policy documents and embeddings.",
     href: "/agent-os",
     icon: Database,
-    cta: "Coming soon",
-    badge: "Engagement 7+",
+    cta: "Powering Ask AI",
     disabled: true,
   },
   {
@@ -43,8 +42,7 @@ const CARDS: TechnicalCard[] = [
     description: "Token usage, tools & connections, and per-agent context editors.",
     href: "/agent-os",
     icon: Bot,
-    cta: "Preview Agent OS",
-    badge: "Engagements 8–9",
+    cta: "Open Agent OS",
   },
 ];
 

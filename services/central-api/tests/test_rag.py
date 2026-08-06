@@ -93,3 +93,26 @@ def test_query_translates_pipeline_failure(
     assert response.status_code == 502
     # No provider or vector-store internals leak to the client.
     assert "provider down" not in response.text
+
+
+def test_query_translates_unexpected_provider_error(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raw provider/vector-store exception (e.g. Qdrant connection refused) must not 500."""
+    _configure_rag(app, settings)
+
+    def boom(_question: str, _config: object) -> str:
+        # Simulate an un-wrapped qdrant_client / httpx failure escaping the pipeline.
+        raise ConnectionError("[Errno 61] Connection refused")
+
+    monkeypatch.setattr(rag_service, "query", boom)
+
+    response = client.post("/knowledge/query", json={"question": "anything"}, headers=auth_headers)
+
+    assert response.status_code == 502
+    # Neither the exception message nor a 500 leaks to the client.
+    assert "Connection refused" not in response.text
