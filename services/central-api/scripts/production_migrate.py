@@ -14,6 +14,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy import Connection, Engine, create_engine, text
 
 from central_api.core.config import get_settings
+from central_api.domains.rfp.checkpointer import provision_checkpointer_tables
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION_LOCK_KEY = 4_306_160_006_001
@@ -206,6 +207,11 @@ def migrate() -> MigrationResult:
         get_settings.cache_clear()
         config = _alembic_config()
         command.upgrade(config, "head")
+
+        # Provision the LangGraph approval-checkpointer tables with the DDL-capable migration role,
+        # before the runtime grants so `GRANT ... ON ALL TABLES` covers them. The runtime role has no
+        # CREATE privilege and so cannot create them at request time (Engagement 9, Phase 3).
+        provision_checkpointer_tables(migration_url)
 
         with engine.begin() as connection:
             _apply_runtime_grants(connection, runtime_role)
