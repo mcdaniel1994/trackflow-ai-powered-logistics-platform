@@ -201,14 +201,13 @@ def test_idempotent_get_retries_transient_timeouts(
     assert sleeps == [2, 4]
 
 
-def test_mutating_get_webhook_is_never_retried(
+def test_deployment_webhook_posts_and_is_never_retried(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls = 0
+    requests: list[Any] = []
 
-    def urlopen(*_args: object, **_kwargs: object) -> object:
-        nonlocal calls
-        calls += 1
+    def urlopen(request: Any, *_args: object, **_kwargs: object) -> object:
+        requests.append(request)
         raise TimeoutError
 
     monkeypatch.setattr(MODULE.urllib.request, "urlopen", urlopen)
@@ -226,7 +225,28 @@ def test_mutating_get_webhook_is_never_retried(
     with pytest.raises(ReleaseError) as failure:
         client.trigger()
     assert failure.value.reason == "coolify_request_failed"
-    assert calls == 1
+    assert len(requests) == 1
+    assert requests[0].get_method() == "POST"
+
+
+def test_deployment_webhook_posts_and_parses_deployment_uuid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Any] = []
+
+    def urlopen(request: Any, *_args: object, **_kwargs: object) -> object:
+        requests.append(request)
+        return JsonResponse(b'{"deployments":[{"deployment_uuid":"deployment-uuid"}]}')
+
+    monkeypatch.setattr(MODULE.urllib.request, "urlopen", urlopen)
+    client = CoolifyClient(
+        api_base="https://coolify.example.test/api/v1",
+        token="test-token",
+        webhook="https://coolify.example.test/webhook",
+    )
+
+    assert client.trigger() == "deployment-uuid"
+    assert requests[0].get_method() == "POST"
 
 
 def test_idempotent_get_does_not_retry_client_errors(

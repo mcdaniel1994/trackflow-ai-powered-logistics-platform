@@ -105,7 +105,9 @@ class CoolifyClient:
         )
 
     def trigger(self) -> str:
-        value = self.request_json(self.webhook)
+        # Coolify's deploy endpoint is POST-only (a GET returns 405 Method Not
+        # Allowed). It stays single-shot: request_json only retries GETs.
+        value = self.request_json(self.webhook, method="POST")
         candidates: list[Any]
         if isinstance(value, list):
             candidates = value
