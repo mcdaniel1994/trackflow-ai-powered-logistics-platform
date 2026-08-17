@@ -23,8 +23,9 @@
 ## Active
 
 - Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):
-  in progress on branch `engagement-9-agentic-workflows`, owner-approved spec, delivered in phases
-  with an owner pause after each. A multi-agent LangGraph workflow (intake & routing → per-department
+  complete — merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live
+  and verified); owner-approved spec, delivered in phases with an owner pause after each. A multi-agent
+  LangGraph workflow (intake & routing → per-department
   generation & self-evaluation → human approval → final document) in the new Central API `rfp` domain,
   with a "ticket mode" RFP Desk in `uis/backoffice/`. Reuses Engagement 7 `retrieve()`/
   `generate_answer()` and the Engagement 8 guardrails and trace store; Phase 3 adds a durable Postgres
@@ -69,7 +70,7 @@
   "coming soon"/"Engagement N" placeholder copy was removed from the Back Office. (3) Deploy wiring:
   `AGENTS_ENABLED` and `RFP_ENABLED` are declared (defaulted off) in `compose.coolify.yaml`; both
   Compose files validate and migration `20260805_0017` is in the `central-api-migrate` path. Enabling
-  the agent/MCP path in production remains the separately owner-gated Engagement 8 decision.
+  the agent/MCP path was owner-approved and deployed to production on 2026-08-17 (Engagement 8 decision).
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
   implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
@@ -202,8 +203,8 @@ implementing any of the items below.
   as an offline evaluation; the overfitting model remains prohibited from operational use.
 - Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
   specification yet.
-- Engagement 9 - Agentic workflows for the RFP desk. Owner-approved spec; now Active (see above).
-  In progress on branch `engagement-9-agentic-workflows`, Phase 0 scaffolding implemented. This is
+- Engagement 9 - Agentic workflows for the RFP desk. Owner-approved spec; complete (see above).
+  Merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live). This is
   LangGraph work, not n8n; the earlier "workflow automation with n8n" framing does not match the
   assignment documents.
 - Engagement 10 - Real-time dashboards and alerts. Blocked: the requirements

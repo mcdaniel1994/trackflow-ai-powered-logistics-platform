@@ -4,12 +4,12 @@
 
 ## Status
 
-In progress — Engagement 9. Owner-approved specification exists (analysis + proposed spec accepted
+Complete — Engagement 9. Owner-approved specification exists (analysis + proposed spec accepted
 before implementation). Delivered in phases with an owner review pause after each, on branch
 `engagement-9-agentic-workflows`: **all four phases (0–3) are implemented** — scaffolding; intake &
 routing; response generation & evaluation; and human approval & completion (durable Postgres
-checkpointer + native `interrupt()`). Pending owner review; not merged or deployed. This is LangGraph
-work, not n8n. Production exposure remains owner-gated.
+checkpointer + native `interrupt()`). **Merged to `main` and deployed to production on 2026-08-17;
+the RFP Desk and the agent Ask-AI path are live and verified.** This is LangGraph work, not n8n.
 
 ## Background
 

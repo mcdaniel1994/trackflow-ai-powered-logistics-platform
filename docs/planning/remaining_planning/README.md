@@ -42,7 +42,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 | **Engagement 6.5** — sales forecasting | [`spec-6.5-sales-forecasting.md`](spec-6.5-sales-forecasting.md), [`sales_forcasting/`](sales_forcasting/) | ✅ approved | Ready to implement, **parallel to 6.1–6.4** |
 | **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ❌ none | Needs analysis + spec |
 | **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |
-| **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ❌ none | Needs analysis + spec |
+| **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 10** — real-time dashboards and alerts | [`10_realtime/`](10_realtime/) | ❌ none | ⛔ **Blocked — no requirements exist** |
 | **Cross-cutting backlog** | [`important_considerations/others.md`](important_considerations/others.md) | ❌ none | Unscheduled; fold into the engagement that needs it |
 
@@ -100,6 +100,8 @@ without guardrails turns a single injection into permanent poisoning. Depends on
 `retrieve()` and `generate_answer()` being separately callable.
 
 ### Engagement 9 — agentic workflows
+**Status: ✅ Delivered — merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live and verified). Retained here for planning history.**
+
 Read `agentic_workflows_context.md` first — it governs all three parts. Three sequential parts:
 intake and routing (01), response generation (02), approval and document completion (03).
 **This is LangGraph work, not n8n**, despite what older roadmap entries say.

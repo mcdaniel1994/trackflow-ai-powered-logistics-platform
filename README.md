@@ -226,7 +226,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚧 Engagement 9 — Agentic Workflows: Automated RFP Desk *(in progress)*
+### ✅ Engagement 9 — Agentic Workflows: Automated RFP Desk *(complete)*
 
 - A multi-agent LangGraph workflow that turns an uploaded RFP PDF into a per-department pricing
   proposal: intake & routing → per-department generation & self-evaluation → human approval → final
@@ -299,7 +299,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
-| 9 | Agentic workflows — automated RFP desk (LangGraph) | 🚧 Spec approved; all phases (0–3) implemented on branch `engagement-9-agentic-workflows` (intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI). Pending owner review |
+| 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
 
 All remaining work is planned from
