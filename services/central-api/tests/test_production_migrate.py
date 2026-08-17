@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ProgrammingError
 
 from central_api.core.config import Settings, get_settings
 from scripts import production_migrate
@@ -79,6 +80,35 @@ def test_production_migration_upgrades_grants_and_reruns_idempotently(role_datab
         assert connection.scalar(text("SELECT count(*) FROM reporting.rollup_state")) == 1
     runtime_engine.dispose()
     migration_engine.dispose()
+
+
+def test_production_migration_provisions_checkpointer_for_runtime_role(role_database) -> None:  # type: ignore[no-untyped-def]
+    from central_api.domains.rfp import checkpointer as rfp_checkpointer
+
+    _migration_url, runtime_url = role_database
+    production_migrate.migrate()
+
+    # The migration role provisions the LangGraph checkpointer tables and the runtime-grant step
+    # covers them. The runtime role has no CREATE, so opening the checkpointer must not issue DDL:
+    # it finds the tables already present and skips setup(). Before the fix this raised permission
+    # denied for schema public and stranded the ticket at under_evaluation.
+    runtime_settings = Settings(database_url=runtime_url.render_as_string(hide_password=False))
+    rfp_checkpointer._setup_done = False
+    try:
+        with rfp_checkpointer.approval_checkpointer(runtime_settings) as saver:
+            assert rfp_checkpointer._tables_present(saver)
+    finally:
+        rfp_checkpointer._setup_done = False
+
+    runtime_engine = create_engine(runtime_url)
+    with runtime_engine.connect() as connection:
+        for table in ("checkpoints", "checkpoint_writes", "checkpoint_migrations"):
+            assert connection.scalar(text(f"SELECT to_regclass('public.{table}') IS NOT NULL"))
+        assert connection.scalar(text("SELECT count(*) FROM public.checkpoints")) == 0
+    # Least privilege is intact: the runtime role still cannot create tables itself.
+    with runtime_engine.connect() as connection, pytest.raises(ProgrammingError):
+        connection.execute(text("CREATE TABLE public.checkpoint_ddl_probe (id integer)"))
+    runtime_engine.dispose()
 
 
 def test_production_migration_rejects_wrong_role_and_held_lock(
