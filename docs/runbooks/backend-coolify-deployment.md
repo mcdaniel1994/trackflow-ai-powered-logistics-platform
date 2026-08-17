@@ -14,6 +14,11 @@ reviewer approval. The hardened release workflow now
 migrates, verifies grants, deploys declarative workers, polls dependency-aware readiness,
 smoke-tests unauthenticated protection, and restores the previous image tag on failure.
 
+On 2026-08-17 the production Coolify instance was upgraded `4.1.2` → `4.3.6`, whose POST-only deploy
+endpoint broke the release (`GET` → `405` → `reason=coolify_http_error`). The fix POSTs the deploy
+webhook; Engagement 9 then deployed successfully with `RFP_ENABLED`/`AGENTS_ENABLED` defaulting off.
+See the deploy-endpoint note and the `coolify_http_error` troubleshooting entry below.
+
 ## July 15, 2026 Prefect startup incident
 
 The first dedicated-Prefect release reached Supabase migration `20260716_0010`, but the application
@@ -227,13 +232,22 @@ GitHub masks every production coordinate before the runner starts. The Coolify
 token needs only the permissions required to list application environment
 metadata, update one environment variable, and inspect and trigger deployments:
 current Coolify v4 names those token permissions `read`, `write`, and `deploy`.
-Do not grant `root`; `read:sensitive` is not needed by this workflow.
+Do not grant `root`. Coolify 4.3.x classifies environment variables under the
+`read:sensitive` scope; the release flow reads the `TRACKFLOW_IMAGE_TAG` value, so
+if a least-privilege `read`/`write`/`deploy` token cannot read it, add `read:sensitive`.
 
-Coolify `4.1.2` returns production and preview environment records together
+Coolify returns production and preview environment records together
 from the application env endpoint, even when preview deployments are disabled.
 The workflow distinguishes them with `is_preview` and updates only the
 production record. It also accepts the `deployments[0].deployment_uuid`
-response envelope returned by that version's authenticated deploy webhook.
+response envelope returned by the authenticated deploy webhook.
+
+The production instance was upgraded from `4.1.2` to `4.3.6` on 2026-08-17. In
+4.3.x the deploy endpoint is **POST-only** — a `GET /api/v1/deploy?uuid=…` now
+returns `405` and fails the release with `reason=coolify_http_error`. The release
+helper POSTs the deploy webhook accordingly (`scripts/release/coolify_release.py`
+`trigger()`). Environment reads/updates (`GET`/`PATCH …/applications/{uuid}/envs`,
+returning `200`/`201`) are unchanged.
 
 Rotate either credential by replacing its GitHub Environment secret:
 
@@ -297,6 +311,14 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
   4-second backoff. It is safe to retry only when the workflow also reports that no image mutation
   occurred. Confirm the Coolify dashboard/API is responsive first. Environment PATCH requests and
   the deployment webhook are deliberately single-shot and are never automatically retried.
+- `coolify_release_failed ... reason=coolify_http_error`: Coolify returned a non-transient **4xx**
+  (not a 5xx or timeout). Reads succeeded but a write or the deploy trigger was rejected — an
+  environment/contract issue, not an image regression. Probe with the deploy token:
+  `GET …/applications/{uuid}/envs` (expect `200`) and `PATCH …/envs` (expect `201`); to learn the
+  deploy endpoint's allowed method **without triggering a deployment**, read the `Allow` header from
+  `curl -D - -X GET …/api/v1/deploy?uuid=…`. The 4.1.2→4.3.6 upgrade made the deploy endpoint
+  **POST-only** (`405` on `GET`), fixed by POSTing the webhook in `coolify_release.py`. A `401`/`403`
+  means a missing token scope, `404` a wrong path/UUID, `422` a payload mismatch.
 - `prefect-postgres` is running and `pg_isready` succeeds, but `pg_trgm` or `prefect_backup` is
   absent: inspect `prefect-postgres-bootstrap`. It must complete with the fixed token
   `prefect_postgres_bootstrap=complete`. Do not wait for PostgreSQL's init directory to rerun and do
