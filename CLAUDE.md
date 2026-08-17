@@ -110,7 +110,7 @@ Then read the active engagement brief and the README for every folder being modi
   (6.5, runs in parallel).
 
 - **Engagement 7** - RAG Knowledge Base
-  Merged to `main` and **deployed to production on 2026-08-17**: `RAG_ENABLED` with provider keys and
+  Complete — merged to `main` and **deployed to production on 2026-08-17**: `RAG_ENABLED` with provider keys and
   a provisioned Qdrant indexed via `rag-index`; it grounds the Engagement 9 RFP Desk and powers the
   agent Ask-AI. A salesperson-voiced knowledge assistant over four policy documents in
   `docs/company-knowledge-base/`. Pure chunking in `data/process/rag.py`; the four functions

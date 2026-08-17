@@ -40,7 +40,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 |---|---|---|---|
 | **Engagement 6.1–6.4** — reporting reliability | [`spec.md`](spec.md) | ✅ approved | Ready to implement |
 | **Engagement 6.5** — sales forecasting | [`spec-6.5-sales-forecasting.md`](spec-6.5-sales-forecasting.md), [`sales_forcasting/`](sales_forcasting/) | ✅ approved | Ready to implement, **parallel to 6.1–6.4** |
-| **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ❌ none | Needs analysis + spec |
+| **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |
 | **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 10** — real-time dashboards and alerts | [`10_realtime/`](10_realtime/) | ❌ none | ⛔ **Blocked — no requirements exist** |
@@ -79,6 +79,8 @@ supply it; the spec's §1.1 records that deviation. Both files relocate to `data
 at implementation time.
 
 ### Engagement 7 — RAG knowledge base
+**Status: ✅ Delivered — merged to `main` and deployed to production on 2026-08-17 (grounds the RFP Desk and powers the agent Ask-AI). Retained here for planning history.**
+
 Reading order: `context.md`, then `instructions.md`, then the four source documents (`delivery.md`,
 `returns_policy.md`, `coverage.md`, `storage_pricing.md`). Note that `context.md` refers to those
 sources by different filenames than the ones on disk. Open questions that must be settled in its

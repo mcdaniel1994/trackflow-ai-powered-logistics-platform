@@ -73,8 +73,9 @@
   the agent/MCP path was owner-approved and deployed to production on 2026-08-17 (Engagement 8 decision).
 
 - Engagement 7 - RAG Knowledge Base (`docs/briefs/07-rag-knowledge-base.md`):
-  implemented on branch `engagement-7-rag-knowledge-base`, pending owner review — not merged or
-  deployed. A salesperson-voiced assistant over the four policy documents in
+  complete — merged to `main` and deployed to production on 2026-08-17 (`RAG_ENABLED` with provider
+  keys and a provisioned Qdrant indexed via `rag-index`; grounds the RFP Desk and powers the agent).
+  A salesperson-voiced assistant over the four policy documents in
   `docs/company-knowledge-base/`: pure semantic-section chunking (`data/process/rag.py`) and the four
   modular functions `setup`/`embed`/`retrieve`/`query` (`data/pipelines/rag.py`) written directly
   against the Qdrant and OpenAI SDKs (no orchestration framework). Vector store is self-hosted Qdrant
@@ -201,8 +202,8 @@ implementing any of the items below.
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
   as an offline evaluation; the overfitting model remains prohibited from operational use.
-- Engagement 7 - RAG knowledge base and semantic search. Planning inputs only; no
-  specification yet.
+- Engagement 7 - RAG knowledge base and semantic search. Complete — merged to `main` and
+  deployed to production on 2026-08-17 (see above).
 - Engagement 9 - Agentic workflows for the RFP desk. Owner-approved spec; complete (see above).
   Merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live). This is
   LangGraph work, not n8n; the earlier "workflow automation with n8n" framing does not match the

@@ -41,8 +41,9 @@ answers **like a TrackFlow salesperson would** — with exact figures and never 
 
 ## Status
 
-🚧 **Implemented on branch `engagement-7-rag-knowledge-base`; pending owner review.** Delivered on the
-branch: the corpus (`docs/company-knowledge-base/`), the chunking + `setup`/`embed`/`retrieve`/`query`
+✅ **Complete — merged to `main` and deployed to production on 2026-08-17.** `RAG_ENABLED` with provider
+keys and a provisioned Qdrant (indexed via `rag-index`); it grounds the Engagement 9 RFP Desk and powers
+the agent Ask-AI. Delivered: the corpus (`docs/company-knowledge-base/`), the chunking + `setup`/`embed`/`retrieve`/`query`
 pipeline (`data/process/rag.py`, `data/pipelines/rag.py`), the `POST /knowledge/query` endpoint
 (`services/central-api/central_api/domains/rag/`), the eval set (`data/eval/rag/test-queries.json`), unit
 and endpoint tests, the Back Office refactor + Ask-AI UI (`uis/backoffice/`), and design docs

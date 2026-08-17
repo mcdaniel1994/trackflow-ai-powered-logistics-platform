@@ -198,6 +198,21 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### ✅ Engagement 7 — RAG Knowledge Base *(complete)*
+
+- A salesperson-voiced knowledge assistant over four company policy documents
+  (`docs/company-knowledge-base/`), answering questions grounded in retrieved policy context.
+  Self-hosted **Qdrant** vector store, OpenAI embeddings, DeepSeek generation.
+- `POST /knowledge/query` in the Central API `rag` domain plus the Back Office home **Ask-AI** box.
+  Pure chunking in `data/process/rag.py`; the `setup`/`embed`/`retrieve`/`query` pipeline in
+  `data/pipelines/rag.py`.
+- Merged to `main` and **deployed to production on 2026-08-17**: `RAG_ENABLED` with provider keys and a
+  provisioned Qdrant indexed via `rag-index`. It also grounds the Engagement 9 RFP Desk and powers the agent Ask-AI.
+
+📁 Locations: `docs/company-knowledge-base/`, `data/`, `services/central-api/`, `uis/backoffice/`, `docs/rag/`
+
+---
+
 ### ✅ Engagement 8 — Agent Engineering *(Complete; owner accepted August 3, 2026)*
 
 - Explicit LangGraph routing across RAG, live ticket status, or both, with safe Postgres trace metadata.
@@ -297,7 +312,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
 | 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
-| 7 | RAG knowledge base & semantic search | 🚧 Implemented on branch `engagement-7-rag-knowledge-base` (Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI refactor); pending owner review, provider keys, and Qdrant provisioning |
+| 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
 | 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
