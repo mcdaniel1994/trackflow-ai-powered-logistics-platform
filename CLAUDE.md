@@ -110,8 +110,9 @@ Then read the active engagement brief and the README for every folder being modi
   (6.5, runs in parallel).
 
 - **Engagement 7** - RAG Knowledge Base
-  Implemented on branch `engagement-7-rag-knowledge-base` (pending owner review; not yet merged or
-  deployed). A salesperson-voiced knowledge assistant over four policy documents in
+  Complete — merged to `main` and **deployed to production on 2026-08-17**: `RAG_ENABLED` with provider keys and
+  a provisioned Qdrant indexed via `rag-index`; it grounds the Engagement 9 RFP Desk and powers the
+  agent Ask-AI. A salesperson-voiced knowledge assistant over four policy documents in
   `docs/company-knowledge-base/`. Pure chunking in `data/process/rag.py`; the four functions
   `setup`/`embed`/`retrieve`/`query` in `data/pipelines/rag.py` (no orchestration framework). Vector
   store is self-hosted **Qdrant** (collection `trackflow`, 1536-dim cosine, added to `compose.yaml`
@@ -140,8 +141,9 @@ Then read the active engagement brief and the README for every folder being modi
   at closeout and was not executed or passed.
 
 - **Engagement 9** - Agentic Workflows: Automated RFP Desk (LangGraph)
-  Stakeholder brief: `docs/briefs/09-agentic-workflows.md`. Owner-approved spec; in progress on branch
-  `engagement-9-agentic-workflows`, delivered in phases with an owner pause after each. A multi-agent
+  Stakeholder brief: `docs/briefs/09-agentic-workflows.md`. Owner-approved spec; **complete** —
+  merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live and
+  verified). Delivered in phases on branch `engagement-9-agentic-workflows` with an owner pause after each. A multi-agent
   LangGraph workflow (intake & routing → per-department generation & self-evaluation → human approval
   → final document) in the new Central API `rfp` domain
   (`services/central-api/central_api/domains/rfp/`), with a "ticket mode" RFP Desk in
@@ -167,7 +169,7 @@ Then read the active engagement brief and the README for every folder being modi
   (`GET /rfp/tickets/{id}/document`) and the ticket reaches `done`. The checkpointer's tables are
   managed by its own `setup()` and excluded from `alembic check` in `migrations/env.py`. Currency
   (USD/EUR) derives from the RFP's client country; raw PDF bytes are never persisted. This is
-  LangGraph work, not n8n. **Post-implementation hardening (local-verified, gates green, not pushed):**
+  LangGraph work, not n8n. **Post-implementation hardening (merged to `main` and deployed to production 2026-08-17):**
   RFP drafts are grounded via a drafting-oriented DeepSeek prompt over `retrieve()` (new
   `pipelines.rag.complete()` primitive) instead of the refusing knowledge-assistant generator; the
   RAG Ask-AI endpoint no longer 500s on provider/vector faults (typed 502); the home Ask-AI box routes
@@ -175,7 +177,7 @@ Then read the active engagement brief and the README for every folder being modi
   router passed the whole `extract_access_token()` tuple, not the token); Agent OS records real
   DeepSeek generation tokens and MCP tool-call rows; placeholder "coming soon"/"Engagement N" UI copy
   was removed; and `AGENTS_ENABLED`/`RFP_ENABLED` are wired (off by default) into
-  `compose.coolify.yaml`. Agent/MCP production exposure stays the owner-gated Engagement 8 decision.
+  `compose.coolify.yaml`. Agent/MCP production exposure was owner-approved and deployed to production on 2026-08-17 (Engagement 8 decision).
 
 - **Engagement 10+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
