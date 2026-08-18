@@ -193,6 +193,15 @@ services:
     image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
     pull_policy: always
     expose: ["8000"]
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.trackflow-realtime.rule: "Host(`backoffice.forgehub.cloud`) && PathPrefix(`/realtime`)"
+      traefik.http.routers.trackflow-realtime.entrypoints: "https"
+      traefik.http.routers.trackflow-realtime.priority: "1000"
+      traefik.http.routers.trackflow-realtime.service: "trackflow-realtime"
+      traefik.http.routers.trackflow-realtime.tls: "true"
+      traefik.http.routers.trackflow-realtime.tls.certresolver: "letsencrypt"
+      traefik.http.services.trackflow-realtime.loadbalancer.server.port: "8000"
     environment:
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?required}

@@ -10,10 +10,10 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { decideDepartment, getRfpTicket, getRfpTickets, rfpError, uploadRfp } from "@/lib/rfp/api";
+import { useEffect, useRef, useState } from "react";
+import { decideDepartment, getRfpTicket, rfpError, uploadRfp } from "@/lib/rfp/api";
 import type { RfpDecisionAction, RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
-import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
+import { useRfpTicketStream } from "@/lib/realtime/rfp-stream";
 
 const DECISIONS: { action: RfpDecisionAction; label: string }[] = [
   { action: "approve", label: "Approve" },
@@ -179,21 +179,36 @@ export function RfpDesk() {
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const listState = useAutoRefresh(
-    () => getRfpTickets(),
-    [refreshNonce],
-    { intervalMs: 5000, mapError: (error) => rfpError(error).message },
-  );
-  const tickets = useMemo(() => listState.data ?? [], [listState.data]);
+  const listState = useRfpTicketStream(refreshNonce);
+  const tickets = listState.tickets;
   const effectiveId =
     selectedId && tickets.some((ticket) => ticket.id === selectedId) ? selectedId : tickets[0]?.id ?? null;
+  const [detailState, setDetailState] = useState<{
+    ticketId: string | null;
+    data: RfpTicketDetail | null;
+    error: string | null;
+  }>({ ticketId: null, data: null, error: null });
+  const detail = detailState.ticketId === effectiveId ? detailState.data : null;
+  const detailError = detailState.ticketId === effectiveId ? detailState.error : null;
 
-  const detailState = useAutoRefresh(
-    () => (effectiveId ? getRfpTicket(effectiveId) : Promise.resolve(null)),
-    [effectiveId, refreshNonce],
-    { intervalMs: 5000, mapError: (error) => rfpError(error).message },
-  );
-  const detail = detailState.data?.id === effectiveId ? detailState.data : null;
+  useEffect(() => {
+    let active = true;
+    if (!effectiveId) {
+      return () => {
+        active = false;
+      };
+    }
+    void getRfpTicket(effectiveId)
+      .then((data) => {
+        if (active) setDetailState({ ticketId: effectiveId, data, error: null });
+      })
+      .catch((error: unknown) => {
+        if (active) setDetailState({ ticketId: effectiveId, data: null, error: rfpError(error).message });
+      });
+    return () => {
+      active = false;
+    };
+  }, [effectiveId, refreshNonce]);
 
   async function onDecide(department: string, action: RfpDecisionAction) {
     if (!effectiveId) return;
@@ -250,6 +265,17 @@ export function RfpDesk() {
           Refresh
         </button>
       </header>
+
+      {listState.connection === "reconnecting" && (
+        <p role="status" className="rounded-xl bg-amber-100 px-3 py-2 text-sm font-bold text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+          Live updates are reconnecting. Your current ticket list is still available.
+        </p>
+      )}
+      {listState.newTicketId && (
+        <p role="status" className="rounded-xl border border-teal/40 bg-teal/10 px-3 py-2 text-sm font-black text-teal-700 dark:text-teal">
+          A new RFP ticket arrived live.
+        </p>
+      )}
 
       <div className="rounded-2xl border border-mist bg-white p-4 dark:border-ink-600 dark:bg-ink-800">
         <label htmlFor="rfp-file" className="text-sm font-black text-navy-deep dark:text-neutral-100">
@@ -316,9 +342,14 @@ export function RfpDesk() {
                   type="button"
                   role="option"
                   aria-selected={ticket.id === effectiveId}
-                  onClick={() => setSelectedId(ticket.id)}
+                  onClick={() => {
+                    setSelectedId(ticket.id);
+                    if (ticket.id === listState.newTicketId) listState.acknowledgeTicket();
+                  }}
                   className={`w-full min-w-0 rounded-xl border p-3 text-left transition ${
-                    ticket.id === effectiveId
+                    ticket.id === listState.newTicketId
+                      ? "border-teal bg-teal/10 ring-2 ring-teal/20 dark:border-teal dark:bg-teal/10"
+                      : ticket.id === effectiveId
                       ? "border-sky bg-mist/70 dark:border-sky dark:bg-ink-700"
                       : "border-mist hover:border-sky/60 hover:bg-ivory dark:border-ink-600 dark:hover:bg-ink-700"
                   }`}
@@ -352,9 +383,9 @@ export function RfpDesk() {
                 </p>
               </div>
             </div>
-          ) : detailState.error ? (
+          ) : detailError ? (
             <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-300">
-              {detailState.error}
+              {detailError}
             </div>
           ) : !detail ? (
             <div role="status" className="flex min-h-72 items-center justify-center">

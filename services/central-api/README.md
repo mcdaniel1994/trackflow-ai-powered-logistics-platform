@@ -47,6 +47,13 @@ inventory and supplier seeds, and authenticated Back Office access are verified;
 business report has never successfully published. Future production changes and restore drills remain
 approval-gated through `docs/runbooks/`.
 
+Engagement 10 Part 1 adds an application-scoped, bounded in-process real-time bus and
+`GET /realtime/rfp/stream`. The async SSE handler authenticates only from the existing host-only
+access cookie, scopes subscriptions to `rfp.tickets.<owner_user_uuid>`, sends keep-alive comments,
+and closes at JWT expiry. RFP creation publishes `rfp_ticket_created` after the initial ticket commit
+and before background intake; this notification path imports or calls no model, RAG, or agent code.
+`RFP_ENABLED` gates the endpoint and remains off by default.
+
 ## Ownership and boundaries
 
 - Central API owns inventory SKUs and stock movements in PostgreSQL.

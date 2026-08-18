@@ -14,6 +14,8 @@ from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped
 from ...core.config import Settings, get_settings
 from ...core.dependencies import current_principal, write_principal
 from ...db.session import get_session
+from ..realtime.bus import RealtimeBus
+from ..realtime.router import get_realtime_bus
 from .schemas import DepartmentDecisionRequest, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
 from .service import RfpService
 
@@ -23,8 +25,9 @@ router = APIRouter(prefix="/rfp", tags=["rfp"])
 def _service(
     settings: Annotated[Settings, Depends(get_settings)],
     session: Annotated[Session, Depends(get_session)],
+    realtime_bus: Annotated[RealtimeBus, Depends(get_realtime_bus)],
 ) -> RfpService:
-    return RfpService(settings, session)
+    return RfpService(settings, session, realtime_bus=realtime_bus)
 
 
 @router.post("/tickets", response_model=RfpTicketSummary, status_code=202)

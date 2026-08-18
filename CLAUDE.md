@@ -179,12 +179,20 @@ Then read the active engagement brief and the README for every folder being modi
   was removed; and `AGENTS_ENABLED`/`RFP_ENABLED` are wired (off by default) into
   `compose.coolify.yaml`. Agent/MCP production exposure was owner-approved and deployed to production on 2026-08-17 (Engagement 8 decision).
 
-- **Engagement 10+** - planned from `docs/planning/remaining_planning/`.
+- **Engagement 10** - Real-Time Systems: SSE Notifications and WebSocket Chat.
+  Stakeholder brief: `docs/briefs/10-realtime-systems.md`; binding owner-approved specification:
+  `docs/planning/remaining_planning/spec-10-realtime.md`. Phase 0 verified Coolify 4.3.6 custom-label
+  merge and the same-origin priority `/realtime` route without changing production. Phases 1–2 are
+  implemented on `feature/sse-notifications` and await owner review: a bounded in-process bus,
+  cookie-authenticated owner-only RFP SSE, immediate post-commit/pre-intake notification, and an RFP
+  Desk stream client with buffered authoritative recovery and no polling. The feature remains off by
+  default; WebSocket chat (Phases 3–5) begins only after Part 1 merges.
+
+- **Engagement 11+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are
   requirements, not architecture). A project there with no approved specification is not ready to
-  implement — produce analysis and a proposed spec, then stop for owner approval. Engagement 10 is
-  blocked: its requirements document is empty. Confirm with Cory before placing new code.
+  implement — produce analysis and a proposed spec, then stop for owner approval.
 
 ## Coding-Agent Infrastructure Vs. Product Agents
 

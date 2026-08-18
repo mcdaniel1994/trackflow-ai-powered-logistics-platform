@@ -271,6 +271,21 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
+### 🚧 Engagement 10 — Real-Time Systems *(Part 1 awaiting owner review)*
+
+- A bounded in-process topic bus and same-origin `/realtime` Traefik route provide the single-worker
+  transport runtime without exposing the rest of Central API.
+- `GET /realtime/rfp/stream` uses the existing host-only JWT cookie, owner-scoped topics, named SSE
+  events, keep-alive comments, and token-expiry disconnects. Ticket creation publishes immediately
+  after its initial commit and before background RFP intake.
+- The RFP Desk uses `fetch` + `ReadableStream`, progressive jittered reconnect, and a
+  subscribe-buffer-snapshot merge that deduplicates by `ticket_id`; its former list/detail polling
+  is removed. `RFP_ENABLED` remains off by default.
+
+📁 Locations: `services/central-api/`, `uis/backoffice/`, and `compose.coolify.yaml`
+
+---
+
 ### ✅ Centralized Incident Manager *(delivered subproject)*
 
 - Browser-based incident registration across Central, Los Angeles, and Zaragoza
@@ -315,7 +330,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
-| 10 | Real-time dashboards & alerts | ⛔ Blocked — no requirements document exists |
+| 10 | Real-time systems — SSE notifications + WebSocket chat | 🚧 Owner-approved; Phases 0–2 implemented on `feature/sse-notifications`, Part 1 awaiting owner review; production remains unchanged |
 
 All remaining work is planned from
 **[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its

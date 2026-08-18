@@ -208,8 +208,15 @@ implementing any of the items below.
   Merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live). This is
   LangGraph work, not n8n; the earlier "workflow automation with n8n" framing does not match the
   assignment documents.
-- Engagement 10 - Real-time dashboards and alerts. Blocked: the requirements
-  document `10_realtime/realtime.md` is empty.
+- Engagement 10 - Real-time systems. Owner-approved specification:
+  `docs/planning/remaining_planning/spec-10-realtime.md`. Phase 0 read-only verification confirmed
+  Coolify 4.3.6 preserves custom Traefik labels and that a priority-1000
+  `Host(backoffice.forgehub.cloud) && PathPrefix(/realtime)` router can target private
+  `central-api:8000`. Phases 1–2 are implemented on `feature/sse-notifications` and await owner
+  review: bounded owner-scoped in-process fan-out, cookie-authenticated SSE with keep-alive and
+  token-expiry close, post-commit/pre-intake `rfp_ticket_created` publication, and an RFP Desk
+  `fetch`/`ReadableStream` client with buffered snapshot recovery, deduplication, jittered reconnect,
+  and no list/detail polling. `RFP_ENABLED` stays off by default; no production mutation occurred.
 - Cross-cutting backlog (`important_considerations/others.md`): website
   contact-form lead persistence, a job-applicant form plus migration off the
   third-party talent API, and a Back Office information-architecture
