@@ -170,6 +170,13 @@ This appendix applies the portable core to this repository. It is not part of th
   the store disposable. No security events are fabricated. The Back Office `/backoffice/telemetry`
   route and the live Operations Overview expose bounded, aggregates-only reporting that auto-refreshes.
   The living per-signal reference is [`../runbooks/telemetry-inventory.md`](../runbooks/telemetry-inventory.md).
+- Engagement 10 chat history is an approved, narrowly scoped exception to §8's default exclusion of
+  raw prompts and completions. `chat_messages.content` is user-facing product data required to restore
+  a conversation, not telemetry or trace content. It is stored only in `chat_messages`, owner-scoped
+  through `chat_sessions`, retained for 90 days, and deleted by the bounded maintenance runner. The
+  exception does not permit message text in agent traces, logs, metrics, analytics, error responses,
+  tool arguments, or any other telemetry sink. Any external-user rollout must revisit backup,
+  retention, and access requirements before enabling the feature.
 - Not yet implemented: metrics, distributed tracing, platform-wide correlation IDs, alerting or
   uptime monitoring, a browser product-analytics/ingest pipeline, a durable telemetry event queue,
   and production product AI agents. This standard therefore governs design and code-level discipline;

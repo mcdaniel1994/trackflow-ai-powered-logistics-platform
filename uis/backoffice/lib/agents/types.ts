@@ -47,4 +47,31 @@ export interface AgentAnswer {
   answer: string;
   trace_id: string;
   conversation_id: string;
+  route_taken: string;
+}
+
+export type AgentRoute = "auto" | "knowledge" | "ticket";
+
+export interface ChatSession {
+  session_id: string;
+  agent_id: "first_line_cx";
+  user_id: string;
+  client_id: string;
+  status: "active" | "interrupted" | "closed";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ChatMessage {
+  message_id: string;
+  session_id: string;
+  role: "user" | "assistant";
+  content: string;
+  sequence: number;
+  interrupted: boolean;
+  created_at: string;
+}
+
+export interface ChatSessionDetail extends ChatSession {
+  messages: ChatMessage[];
 }

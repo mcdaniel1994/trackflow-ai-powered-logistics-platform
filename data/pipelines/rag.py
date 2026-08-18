@@ -19,6 +19,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -58,6 +60,84 @@ Hard rules — follow every one:
 
 class RagPipelineError(RuntimeError):
     """Raised when the RAG pipeline is misconfigured or a provider call fails."""
+
+
+class GenerationCancelled(RuntimeError):
+    """Raised after a caller-requested streaming cancellation closes the provider stream."""
+
+
+class _AnswerDeltaDecoder:
+    """Extract decoded ``answer`` text from a chunked JSON response without exposing metadata."""
+
+    _START = re.compile(r'"answer"\s*:\s*"')
+
+    def __init__(self) -> None:
+        self._source = ""
+        self._cursor = 0
+        self._started = False
+        self._encoded = ""
+        self._decoded_length = 0
+        self._finished = False
+
+    def feed(self, delta: str) -> str:
+        if self._finished or not delta:
+            return ""
+        self._source += delta
+        if not self._started:
+            match = self._START.search(self._source)
+            if match is None:
+                return ""
+            self._started = True
+            self._cursor = match.end()
+
+        while self._cursor < len(self._source):
+            character = self._source[self._cursor]
+            if character == '"' and not self._quote_is_escaped():
+                self._finished = True
+                break
+            self._encoded += character
+            self._cursor += 1
+
+        decoded = self._decode_complete_prefix(self._encoded)
+        emitted = decoded[self._decoded_length :]
+        self._decoded_length = len(decoded)
+        return emitted
+
+    def _quote_is_escaped(self) -> bool:
+        backslashes = 0
+        index = len(self._encoded) - 1
+        while index >= 0 and self._encoded[index] == "\\":
+            backslashes += 1
+            index -= 1
+        return backslashes % 2 == 1
+
+    @staticmethod
+    def _decode_complete_prefix(encoded: str) -> str:
+        decoded: list[str] = []
+        index = 0
+        escapes = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r", "t": "\t"}
+        while index < len(encoded):
+            character = encoded[index]
+            if character != "\\":
+                decoded.append(character)
+                index += 1
+                continue
+            if index + 1 >= len(encoded):
+                break
+            escape = encoded[index + 1]
+            if escape == "u":
+                codepoint = encoded[index + 2 : index + 6]
+                if len(codepoint) < 4 or not all(char in "0123456789abcdefABCDEF" for char in codepoint):
+                    break
+                decoded.append(chr(int(codepoint, 16)))
+                index += 6
+                continue
+            replacement = escapes.get(escape)
+            if replacement is None:
+                break
+            decoded.append(replacement)
+            index += 2
+        return "".join(decoded)
 
 
 @dataclass(frozen=True)
@@ -272,6 +352,9 @@ def generate_answer(
     jurisdiction: str | None = None,
     *,
     include_memory_candidate: bool = False,
+    token_callback: Callable[[str], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    stream_started: Callable[[Callable[[], None]], None] | None = None,
 ) -> str | GenerationResult:
     """Generate a grounded answer from ALREADY-retrieved chunks (no retrieval here).
 
@@ -325,9 +408,40 @@ def generate_answer(
         }
         if include_memory_candidate:
             request["response_format"] = {"type": "json_object"}
-        completion = client.chat.completions.create(
-            **request,
-        )
+        if token_callback is None:
+            completion = client.chat.completions.create(**request)
+        else:
+            request["stream"] = True
+            request["stream_options"] = {"include_usage": True}
+            stream = client.chat.completions.create(**request)
+            raw_parts: list[str] = []
+            decoder = _AnswerDeltaDecoder() if include_memory_candidate else None
+            stream_usage: object | None = None
+            close = getattr(stream, "close", None)
+            close_stream: Callable[[], None] | None = close if callable(close) else None
+            if stream_started is not None and close_stream is not None:
+                stream_started(close_stream)
+            try:
+                for chunk in stream:
+                    if cancelled is not None and cancelled():
+                        raise GenerationCancelled("generation cancelled")
+                    choices = getattr(chunk, "choices", None)
+                    if choices:
+                        content_delta = getattr(choices[0].delta, "content", None)
+                        if isinstance(content_delta, str) and content_delta:
+                            raw_parts.append(content_delta)
+                            emitted = decoder.feed(content_delta) if decoder is not None else content_delta
+                            if emitted:
+                                token_callback(emitted)
+                    usage = getattr(chunk, "usage", None)
+                    if usage is not None:
+                        stream_usage = usage
+            finally:
+                if close_stream is not None:
+                    close_stream()
+            completion = _StreamingCompletion("".join(raw_parts), stream_usage)
+    except GenerationCancelled:
+        raise
     except Exception as exc:
         # Provider SDKs raise many concrete error types; collapse them to one domain error.
         raise RagPipelineError("generation model call failed") from exc
@@ -346,6 +460,17 @@ def generate_answer(
     if not isinstance(answer, str) or not answer.strip() or (candidate is not None and not isinstance(candidate, dict)):
         raise RagPipelineError("generation model returned an invalid structured answer")
     return GenerationResult(answer.strip(), candidate, _usage_counters(completion))
+
+
+class _StreamingChoice:
+    def __init__(self, content: str) -> None:
+        self.message = type("StreamingMessage", (), {"content": content})()
+
+
+class _StreamingCompletion:
+    def __init__(self, content: str, usage: object | None) -> None:
+        self.choices = [_StreamingChoice(content)]
+        self.usage = usage
 
 
 def _usage_counters(completion: object) -> dict[str, int] | None:

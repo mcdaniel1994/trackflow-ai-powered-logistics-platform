@@ -13,8 +13,8 @@ describe("Agent OS BFF", () => {
     delete process.env.CENTRAL_API_URL;
   });
 
-  it("exposes only GET reads and a single POST write; rejects other methods and non-allowlisted paths", async () => {
-    // The only write path is POST /agent/query; PATCH/DELETE stay unimplemented.
+  it("exposes only allowlisted agent and chat-session paths", async () => {
+    // The only writes are agent query and chat-session creation; PATCH/DELETE stay unimplemented.
     expect("PATCH" in agentsRoute).toBe(false);
     expect("DELETE" in agentsRoute).toBe(false);
     const fetchMock = vi.fn();
@@ -61,6 +61,44 @@ describe("Agent OS BFF", () => {
     expect(fetchMock.mock.calls[0][0].toString()).toBe("http://central.test/agent/query");
     const headers = fetchMock.mock.calls[0][1].headers as Headers;
     expect(headers.get("Cookie")).toContain("trackflow_access=access");
+  });
+
+  it("forwards only bounded chat-session create, list, and detail paths", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const sessionId = "11111111-1111-4111-8111-111111111111";
+    const fetchMock = vi.fn().mockResolvedValue(new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await POST(
+      new NextRequest("http://backoffice.test/api/agents/chat/sessions", {
+        method: "POST",
+        headers: { Cookie: "trackflow_access=access", "X-CSRF-Token": "csrf" },
+      }),
+      context(["chat", "sessions"]),
+    );
+    await GET(
+      new NextRequest("http://backoffice.test/api/agents/chat/sessions", {
+        headers: { Cookie: "trackflow_access=access" },
+      }),
+      context(["chat", "sessions"]),
+    );
+    await GET(
+      new NextRequest(`http://backoffice.test/api/agents/chat/sessions/${sessionId}`, {
+        headers: { Cookie: "trackflow_access=access" },
+      }),
+      context(["chat", "sessions", sessionId]),
+    );
+
+    expect(fetchMock.mock.calls.map((call) => call[0].toString())).toEqual([
+      "http://central.test/chat/sessions",
+      "http://central.test/chat/sessions",
+      `http://central.test/chat/sessions/${sessionId}`,
+    ]);
+    const invalid = await GET(
+      new NextRequest("http://backoffice.test/api/agents/chat/sessions/not-a-uuid"),
+      context(["chat", "sessions", "not-a-uuid"]),
+    );
+    expect(invalid.status).toBe(404);
   });
 
   it("forwards only an allowlisted list request with auth cookies and filters", async () => {

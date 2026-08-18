@@ -49,8 +49,17 @@ def _heuristic(question: str) -> RouteDecision:
     return RouteDecision("rag", None)
 
 
-def route_question(question: str, config: AgentConfig) -> RouteDecision:
+def route_question(
+    question: str,
+    config: AgentConfig,
+    route_preference: Literal["auto", "knowledge", "ticket"] = "auto",
+) -> RouteDecision:
     """Classify the question and extract a ticket id, with a heuristic fallback."""
+    if route_preference == "knowledge":
+        return RouteDecision("rag", None)
+    if route_preference == "ticket":
+        ticket_id = _heuristic(question).ticket_id
+        return RouteDecision("ticket", ticket_id) if ticket_id is not None else RouteDecision("rag", None)
     api_key = config.rag.openai_api_key
     if not api_key:
         return _heuristic(question)

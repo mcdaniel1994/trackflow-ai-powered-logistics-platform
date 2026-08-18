@@ -165,6 +165,37 @@ class _StubChat:
         return SimpleNamespace(choices=[SimpleNamespace(message=message)], usage=self.usage)
 
 
+class _StubStream:
+    def __init__(self, chunks: list[str]) -> None:
+        self.chunks = chunks
+        self.closed = False
+
+    def __iter__(self):  # type: ignore[no-untyped-def]
+        for content in self.chunks:
+            yield SimpleNamespace(
+                choices=[SimpleNamespace(delta=SimpleNamespace(content=content))],
+                usage=None,
+            )
+        yield SimpleNamespace(
+            choices=[],
+            usage=SimpleNamespace(prompt_tokens=10, completion_tokens=4, total_tokens=14),
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class _StubStreamingChat:
+    def __init__(self, chunks: list[str]) -> None:
+        self.stream = _StubStream(chunks)
+        self.received: dict[str, Any] = {}
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, **kwargs: Any) -> _StubStream:
+        self.received = kwargs
+        return self.stream
+
+
 def test_query_returns_generated_answer_not_raw_chunks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -298,6 +329,58 @@ def test_structured_generation_usage_is_none_when_provider_omits_counters(
     )
     assert isinstance(result, rag.GenerationResult)
     assert result.usage is None
+
+
+def test_structured_generation_streams_only_decoded_answer_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubStreamingChat(
+        ['{"ans', 'wer":"Hello\\n', 'world","memory_', 'candidate":null}']
+    )
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+    tokens: list[str] = []
+
+    result = rag.generate_answer(
+        "What is documented?",
+        [{"text": "fact"}],
+        _config(),
+        "US",
+        include_memory_candidate=True,
+        token_callback=tokens.append,
+    )
+
+    assert isinstance(result, rag.GenerationResult)
+    assert result.answer == "Hello\nworld"
+    assert "".join(tokens) == "Hello\nworld"
+    assert all("memory_candidate" not in token for token in tokens)
+    assert result.usage == {"prompt_tokens": 10, "completion_tokens": 4, "total_tokens": 14}
+    assert stub.received["stream"] is True
+    assert stub.stream.closed is True
+
+
+def test_streaming_generation_closes_provider_on_cancellation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubStreamingChat(['{"answer":"first', ' second","memory_candidate":null}'])
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+    tokens: list[str] = []
+    registered_closers: list[Any] = []
+
+    with pytest.raises(rag.GenerationCancelled):
+        rag.generate_answer(
+            "What is documented?",
+            [{"text": "fact"}],
+            _config(),
+            "US",
+            include_memory_candidate=True,
+            token_callback=tokens.append,
+            cancelled=lambda: bool(tokens),
+            stream_started=registered_closers.append,
+        )
+
+    assert "".join(tokens) == "first"
+    assert registered_closers == [stub.stream.close]
+    assert stub.stream.closed is True
 
 
 def test_complete_uses_caller_system_prompt_and_returns_text(

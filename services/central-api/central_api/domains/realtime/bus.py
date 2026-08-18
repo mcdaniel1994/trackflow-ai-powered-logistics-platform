@@ -19,6 +19,11 @@ def rfp_ticket_topic(owner_user_uuid: str) -> str:
     return f"rfp.tickets.{owner_user_uuid}"
 
 
+def chat_session_topic(session_id: str) -> str:
+    """Return the private topic for one owner-authorized chat session."""
+    return f"chat.{session_id}"
+
+
 class RealtimeSubscription:
     """A bounded topic subscription safe to publish to from synchronous threads."""
 

@@ -8,6 +8,7 @@ from sqlmodel import SQLModel
 
 from central_api.core.config import get_settings
 from central_api.domains.agents import models as agent_models  # noqa: F401
+from central_api.domains.chat import models as chat_models  # noqa: F401
 from central_api.domains.incidents import models as incident_models  # noqa: F401
 from central_api.domains.inventory import models as inventory_models  # noqa: F401
 from central_api.domains.operations import models as operations_models  # noqa: F401

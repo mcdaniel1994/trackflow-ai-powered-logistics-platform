@@ -43,6 +43,7 @@ def test_migration_upgrade_and_rollback(database_url: str, monkeypatch: object) 
             inspect(engine).get_table_names()
         )
         assert {"clients", "stockout_events", "inventory_discrepancies"}.issubset(inspect(engine).get_table_names())
+        assert {"chat_sessions", "chat_messages"}.issubset(inspect(engine).get_table_names())
         assert set(inspect(engine).get_table_names(schema="reporting")) == {
             "hourly_activity_rollups",
             "incomplete_weeks",

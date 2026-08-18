@@ -51,6 +51,18 @@ authoritative rows, and deduplicates by `ticket_id`. Network loss uses capped ex
 with jitter; every reconnect repeats the snapshot recovery. New tickets receive a distinct notice
 and highlighted row, while explicit Refresh/upload/decision reads remain available.
 
+Engagement 10 Phase 4 reworks the home-page Ask AI surface into an accessible chat slide-over:
+right-side drawer on larger screens, full-screen sheet on mobile, Escape/backdrop dismissal, focus
+return, cleared inputs after send, and an Auto/Knowledge base/Ticket lookup route picker. The panel
+creates an owner-scoped session, threads its `session_id` through the existing agent conversation,
+surfaces the route actually used, and restores ordered 90-day history from the allowlisted
+`/api/agents/chat/sessions` BFF paths. Phase 5 sends chat turns over the same-origin
+`/realtime/chat/{session_id}` WebSocket, which carries the existing host-only cookie automatically.
+The client queues until open, renders guarded answer deltas progressively, reconnects with capped
+exponential backoff and jitter, replaces cached history with the authoritative persisted and active
+generation snapshot, and supports both Stop and interrupt-with-new-input. No token is exposed to
+browser JavaScript or a URL.
+
 ## Local Development
 
 ```bash

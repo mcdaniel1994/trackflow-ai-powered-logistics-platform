@@ -46,7 +46,8 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
     with engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE rfp_final_documents, rfp_department_sections, rfp_tickets, "
+                "TRUNCATE chat_messages, chat_sessions, "
+                "rfp_final_documents, rfp_department_sections, rfp_tickets, "
                 "agent_memory_versions, agent_memory_decisions, agent_memory_proposals, "
                 "agent_memory_facts, agent_conversations, agent_guardrail_events, agent_runs, "
                 "agent_node_steps, agent_tool_calls, "

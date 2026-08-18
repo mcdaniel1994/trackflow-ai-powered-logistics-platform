@@ -16,6 +16,7 @@ from scripts.db_size_guard import guard_once
 from scripts.prune_agent_memory import prune_once as prune_agent_memory
 from scripts.prune_agent_traces import prune_once as prune_agent_traces
 from scripts.prune_business_events import prune_once as prune_business_events
+from scripts.prune_chat_history import prune_once as prune_chat_history
 from scripts.prune_prefect_runs import prune_once as prune_prefect_runs
 from scripts.prune_reporting_logs import prune_once as prune_reporting_logs
 from scripts.prune_telemetry_events import prune_once as prune_telemetry_events
@@ -72,6 +73,7 @@ def run_worker(
                 ("business_event_retention", prune_business_events),
                 ("agent_memory_retention", prune_agent_memory),
                 ("agent_trace_retention", prune_agent_traces),
+                ("chat_history_retention", prune_chat_history),
                 ("reporting_log_retention", prune_reporting_logs),
             )
             for operation, runner in operations:
@@ -86,6 +88,7 @@ def run_worker(
                 logger.info(
                     "maintenance_prune_complete telemetry_operational=%s telemetry_security=%s "
                     "business_discrepancies=%s business_stockouts=%s memory_proposals=%s agent_traces=%s "
+                    "chat_sessions=%s "
                     "reporting_log_files=%s reporting_log_bytes=%s",
                     telemetry.get("operational") if isinstance(telemetry, dict) else None,
                     telemetry.get("security") if isinstance(telemetry, dict) else None,
@@ -93,6 +96,7 @@ def run_worker(
                     business.get("stockout_events") if isinstance(business, dict) else None,
                     results.get("agent_memory_retention"),
                     results.get("agent_trace_retention"),
+                    results.get("chat_history_retention"),
                     reporting_logs.get("files_deleted") if isinstance(reporting_logs, dict) else None,
                     reporting_logs.get("bytes_deleted") if isinstance(reporting_logs, dict) else None,
                 )
