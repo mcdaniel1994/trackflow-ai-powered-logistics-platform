@@ -16,6 +16,7 @@ from sqlmodel import Session
 from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
 from ...core.config import Settings
+from ..chat.repository import ChatRepository
 from .config import build_agent_config, is_agents_configured
 from .graph import run_agent
 from .memory_service import AgentMemoryError, AgentMemoryService
@@ -62,6 +63,12 @@ class AgentService:
             raise AgentError(503, "The agent is not available right now.")
 
         memory = AgentMemoryService(self._require_session())
+        chat_repository = ChatRepository(self._require_session())
+        chat_session = (
+            chat_repository.get_session_for_user(str(payload.conversation_id), principal.user_id)
+            if payload.conversation_id
+            else None
+        )
         try:
             conversation = memory.conversation(
                 conversation_id=str(payload.conversation_id) if payload.conversation_id else None,
@@ -74,8 +81,26 @@ class AgentService:
         except AgentMemoryError as exc:
             raise AgentError(exc.status_code, exc.detail) from exc
 
+        if chat_session is not None:
+            chat_repository.append_message_for_user(
+                session_id=chat_session.session_id,
+                user_id=principal.user_id,
+                role="user",
+                content=payload.question,
+            )
+            self._require_session().commit()
+
         config = build_agent_config(self.settings, source_access_token)
-        result = run_agent(payload.question, config, principal.jurisdiction, evidence)
+        if payload.route == "auto":
+            result = run_agent(payload.question, config, principal.jurisdiction, evidence)
+        else:
+            result = run_agent(
+                payload.question,
+                config,
+                principal.jurisdiction,
+                evidence,
+                route_preference=payload.route,
+            )
         try:
             if payload.memory_decision is not None:
                 memory.decide(
@@ -105,10 +130,20 @@ class AgentService:
         except AgentMemoryError as exc:
             raise AgentError(exc.status_code, exc.detail) from exc
         input_summary, output_summary = (
-            (None, None) if result.guardrail_events else self._summaries(payload.question, result.answer)
+            (None, None)
+            if chat_session is not None or result.guardrail_events
+            else self._summaries(payload.question, result.answer)
         )
 
         if result.answer and result.status in {"ok", "rejected"}:
+            if chat_session is not None:
+                chat_repository.append_message_for_user(
+                    session_id=chat_session.session_id,
+                    user_id=principal.user_id,
+                    role="assistant",
+                    content=result.answer,
+                )
+                self._require_session().commit()
             # Success: persist after the response is sent (off the request path).
             background_tasks.add_task(
                 persist_run,
@@ -121,6 +156,7 @@ class AgentService:
                 answer=result.answer,
                 trace_id=result.trace_id,
                 conversation_id=UUID(conversation.id),
+                route_taken=result.route_taken,
                 memory_proposal=pending,
             )
 

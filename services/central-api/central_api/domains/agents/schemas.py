@@ -57,6 +57,7 @@ class AgentQueryRequest(APIModel):
 
     question: str = Field(min_length=1, max_length=1000)
     conversation_id: UUID | None = None
+    route: Literal["auto", "knowledge", "ticket"] = "auto"
     memory_decision: MemoryDecisionRequest | None = None
 
     @field_validator("question")
@@ -79,6 +80,7 @@ class AgentQueryResponse(APIModel):
     answer: str
     trace_id: str
     conversation_id: UUID
+    route_taken: str
     memory_proposal: MemoryProposalResponse | None = None
 
 

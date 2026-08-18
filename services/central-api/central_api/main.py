@@ -23,6 +23,10 @@ from .core.config import get_settings
 from .db.session import get_session
 from .domains.agents.router import router as agents_router
 from .domains.agents.service import AgentError
+from .domains.chat.realtime import router as chat_realtime_router
+from .domains.chat.router import router as chat_router
+from .domains.chat.service import ChatError
+from .domains.chat.streaming import ChatGenerationManager
 from .domains.incidents.router import router as incidents_router
 from .domains.incidents.service import IncidentError
 from .domains.inventory.router import router as inventory_router
@@ -65,6 +69,9 @@ logger = logging.getLogger(__name__)
 async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Release application-scoped realtime subscriptions during shutdown."""
     yield
+    chat_manager = getattr(app.state, "chat_generation_manager", None)
+    if isinstance(chat_manager, ChatGenerationManager):
+        await chat_manager.close()
     bus = getattr(app.state, "realtime_bus", None)
     if isinstance(bus, RealtimeBus):
         bus.close()
@@ -75,6 +82,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title="TrackFlow Central API", version="0.1.0", lifespan=_application_lifespan)
     app.state.realtime_bus = RealtimeBus()
+    app.state.chat_generation_manager = ChatGenerationManager(app.state.realtime_bus)
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -182,6 +190,12 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @app.exception_handler(ChatError)
+    async def chat_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, ChatError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
     @app.exception_handler(RfpError)
     async def rfp_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         if not isinstance(exc, RfpError):
@@ -260,6 +274,8 @@ def create_app() -> FastAPI:
     app.include_router(reporting_router)
     app.include_router(rag_router)
     app.include_router(agents_router)
+    app.include_router(chat_router)
+    app.include_router(chat_realtime_router)
     app.include_router(rfp_router)
     app.include_router(realtime_router)
     return app

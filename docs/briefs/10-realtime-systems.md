@@ -6,9 +6,12 @@
 
 In progress — Engagement 10. The owner approved the binding specification:
 [`docs/planning/remaining_planning/spec-10-realtime.md`](../planning/remaining_planning/spec-10-realtime.md).
-Phase 0 is verified and Part 1 (Phases 1–2) is implemented on `feature/sse-notifications`, awaiting
-owner review. Two graded deliverables ship as two pull requests against `main`:
-`feature/sse-notifications` (Part 1) and `feature/websocket-chat` (Part 2).
+Phase 0 is verified and Part 1 (Phases 1–2) merged to `main` through PR #35 on 2026-08-18. Phases
+3–5 chat persistence, bounded 90-day retention, owner-scoped HTTP session history, the responsive
+chat slide-over, route picker, WebSocket token streaming, genuine interrupt, and reconnect
+rehydration are implemented on `feature/websocket-chat`, awaiting owner review. Two graded deliverables ship as two
+pull requests against `main`: `feature/sse-notifications` (Part 1) and `feature/websocket-chat`
+(Part 2).
 
 ## Background
 

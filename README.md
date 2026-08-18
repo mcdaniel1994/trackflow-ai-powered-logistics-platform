@@ -271,7 +271,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚧 Engagement 10 — Real-Time Systems *(Part 1 awaiting owner review)*
+### 🚧 Engagement 10 — Real-Time Systems *(Phase 5 awaiting owner review)*
 
 - A bounded in-process topic bus and same-origin `/realtime` Traefik route provide the single-worker
   transport runtime without exposing the rest of Central API.
@@ -281,6 +281,19 @@ TrackFlow reflects real-world logistics challenges:
 - The RFP Desk uses `fetch` + `ReadableStream`, progressive jittered reconnect, and a
   subscribe-buffer-snapshot merge that deduplicates by `ticket_id`; its former list/detail polling
   is removed. `RFP_ENABLED` remains off by default.
+- Part 1 merged to `main` through PR #35. Phase 3 adds owner-scoped `chat_sessions` and ordered
+  `chat_messages`, additive migration `20260818_0018`, database-enforced session/message invariants,
+  concurrent-safe sequence allocation, and bounded 90-day cascade retention through the existing
+  maintenance worker. The approved raw-content exception is limited to user-facing chat history;
+  message text remains prohibited from traces and logs.
+- Phase 4 adds owner-scoped session create/list/detail APIs, threads the same UUID through the
+  existing agent conversation, persists HTTP chat turns without trace content, and replaces the
+  inline Ask AI result with a responsive slide-over. Inputs clear on send; history is restorable;
+  Auto, Knowledge base, and Ticket lookup choices surface the route actually used.
+- Phase 5 moves chat turns to a same-origin, cookie-authenticated WebSocket. Guarded provider answer
+  deltas render progressively, one producer fans out per owner-bound session, interrupt closes the
+  provider stream and persists the partial response, redirected input starts a new turn, and every
+  connect/reconnect receives an authoritative persisted snapshot before live events.
 
 📁 Locations: `services/central-api/`, `uis/backoffice/`, and `compose.coolify.yaml`
 
@@ -330,7 +343,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
-| 10 | Real-time systems — SSE notifications + WebSocket chat | 🚧 Owner-approved; Phases 0–2 implemented on `feature/sse-notifications`, Part 1 awaiting owner review; production remains unchanged |
+| 10 | Real-time systems — SSE notifications + WebSocket chat | 🚧 Part 1 merged through PR #35; Phases 3–5 persistent WebSocket chat implemented on `feature/websocket-chat`, awaiting owner review; production remains unchanged |
 
 All remaining work is planned from
 **[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its

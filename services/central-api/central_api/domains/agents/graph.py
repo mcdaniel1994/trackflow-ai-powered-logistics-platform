@@ -21,14 +21,20 @@ from __future__ import annotations
 import logging
 import operator
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import Annotated, Any, TypedDict
+from typing import Annotated, Any, Literal, TypedDict
 from uuid import uuid4
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph
-from pipelines.rag import GenerationResult, generate_answer, retrieve  # type: ignore[import-untyped]
+from pipelines.rag import (  # type: ignore[import-untyped]
+    GenerationCancelled,
+    GenerationResult,
+    generate_answer,
+    retrieve,
+)
 
 from .config import AgentConfig
 from .guardrails import (
@@ -57,6 +63,7 @@ class AgentState(TypedDict):
     trace_id: str
     agent_name: str
     jurisdiction: str | None
+    route_preference: Literal["auto", "knowledge", "ticket"]
     route: str
     ticket_id: int | None
     retrieved: list[dict[str, object]] | None
@@ -116,7 +123,13 @@ def _record_generation_usage(step: dict[str, Any], generated: object, model: str
     return step
 
 
-def build_graph(config: AgentConfig) -> Any:
+def build_graph(
+    config: AgentConfig,
+    *,
+    token_callback: Callable[[str], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    stream_started: Callable[[Callable[[], None]], None] | None = None,
+) -> Any:
     """Compile the agent graph with routing, retrieval, and tools bound to ``config``.
 
     Config is bound via closures, never placed in graph state, so provider keys never enter the
@@ -147,7 +160,11 @@ def build_graph(config: AgentConfig) -> Any:
 
     def route_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        decision = route_question(state["question"], config)
+        decision = (
+            route_question(state["question"], config)
+            if state["route_preference"] == "auto"
+            else route_question(state["question"], config, state["route_preference"])
+        )
         step = _step(state, "route", "ok", started, notes=f"route={decision.route}")
         if decision.usage is not None:
             step["tokens"] = decision.usage.total_tokens
@@ -294,10 +311,54 @@ def build_graph(config: AgentConfig) -> Any:
         )
         return usable, events
 
+    def guarded_token_callback(
+        state: AgentState,
+        *,
+        has_grounded_evidence: bool,
+        blocked: list[str],
+    ) -> Callable[[str], None] | None:
+        if token_callback is None:
+            return None
+        streamed: list[str] = []
+
+        def emit(delta: str) -> None:
+            streamed.append(delta)
+            rule_id = validate_output(
+                "".join(streamed),
+                state.get("jurisdiction"),
+                authoritative_status=state.get("authoritative_status"),
+                has_grounded_evidence=has_grounded_evidence,
+            )
+            if rule_id:
+                blocked.append(rule_id)
+                raise GenerationCancelled("streaming output blocked")
+            token_callback(delta)
+
+        return emit
+
+    def blocked_stream_result(state: AgentState, started: float, rule_id: str) -> dict[str, Any]:
+        if token_callback is not None:
+            token_callback(OUTPUT_FALLBACK)
+        return {
+            "answer": OUTPUT_FALLBACK,
+            "route": "reject",
+            "guardrail_events": [
+                {
+                    "layer": "output",
+                    "rule_id": rule_id,
+                    "category": "content",
+                    "outcome": "blocked",
+                    "duration_ms": max(0, int((time.perf_counter() - started) * 1000)),
+                }
+            ],
+            "steps": [_step(state, "generate", "ok", started, notes="stream blocked")],
+        }
+
     def generate_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         memory, events = usable_memory(state)
         context = list(state.get("retrieved") or []) + list(state.get("tool_context") or []) + memory
+        blocked: list[str] = []
         try:
             generated = generate_answer(
                 state["question"],
@@ -305,7 +366,18 @@ def build_graph(config: AgentConfig) -> Any:
                 config.rag,
                 jurisdiction=state.get("jurisdiction"),
                 include_memory_candidate=True,
+                token_callback=guarded_token_callback(
+                    state,
+                    has_grounded_evidence=bool(context),
+                    blocked=blocked,
+                ),
+                cancelled=cancelled,
+                stream_started=stream_started,
             )
+        except GenerationCancelled:
+            if blocked:
+                return blocked_stream_result(state, started, blocked[0])
+            raise
         except Exception as exc:
             logger.warning("agent_generate_failed error_type=%s", type(exc).__name__)
             return {
@@ -327,6 +399,7 @@ def build_graph(config: AgentConfig) -> Any:
     def no_context_node(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         memory, events = usable_memory(state)
+        blocked: list[str] = []
         try:
             generated = generate_answer(
                 state["question"],
@@ -334,7 +407,18 @@ def build_graph(config: AgentConfig) -> Any:
                 config.rag,
                 jurisdiction=state.get("jurisdiction"),
                 include_memory_candidate=True,
+                token_callback=guarded_token_callback(
+                    state,
+                    has_grounded_evidence=bool(memory),
+                    blocked=blocked,
+                ),
+                cancelled=cancelled,
+                stream_started=stream_started,
             )
+        except GenerationCancelled:
+            if blocked:
+                return blocked_stream_result(state, started, blocked[0])
+            raise
         except Exception as exc:
             logger.warning("agent_no_context_failed error_type=%s", type(exc).__name__)
             return {
@@ -463,9 +547,18 @@ def run_agent(
     config: AgentConfig,
     jurisdiction: str | None = None,
     memory_evidence: list[dict[str, object]] | None = None,
+    route_preference: Literal["auto", "knowledge", "ticket"] = "auto",
+    token_callback: Callable[[str], None] | None = None,
+    cancelled: Callable[[], bool] | None = None,
+    stream_started: Callable[[Callable[[], None]], None] | None = None,
 ) -> AgentRunResult:
     """Invoke the compiled graph once and return a structured, persistable run result."""
-    graph = build_graph(config)
+    graph = build_graph(
+        config,
+        token_callback=token_callback,
+        cancelled=cancelled,
+        stream_started=stream_started,
+    )
     trace_id = uuid4().hex
     started_at = _utc_now()
     perf_start = time.perf_counter()
@@ -475,6 +568,7 @@ def run_agent(
         "trace_id": trace_id,
         "agent_name": config.agent_name,
         "jurisdiction": jurisdiction,
+        "route_preference": route_preference,
         "route": "",
         "ticket_id": None,
         "retrieved": None,

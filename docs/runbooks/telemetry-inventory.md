@@ -40,6 +40,21 @@ These exist in the repository now and are evidenced by tests or verified deploym
 
 **Not implemented today (intentional gaps — do not claim otherwise):** centralized/structured log aggregation & retention, metrics, distributed tracing, request-correlation IDs, product analytics, alerting/uptime monitoring, a telemetry event store, and any AI telemetry. See `../standards/observability.md` §4.
 
+### 1.1 Engagement 10 chat-history exception (product data, not telemetry)
+
+Engagement 10 Phase 3 adds `chat_sessions` and `chat_messages` to the Central API PostgreSQL database.
+This is user-facing product history needed to rehydrate a chat, not an application log, trace,
+metric, audit event, or analytics signal. The approved exception to the telemetry standard applies
+only to `chat_messages.content`:
+
+| Purpose | Fields | Storage | Retention | Access | Explicit exclusions | Evidence | Status |
+|---|---|---|---|---|---|---|---|
+| Restore an owner's first-line CX conversation after navigation or reconnect | Session: `session_id`, `agent_id`, `user_id`, `client_id`, `status`, timestamps. Message: `message_id`, `session_id`, `role`, `content`, `sequence`, `interrupted`, `created_at` | `chat_sessions` / `chat_messages` (PostgreSQL) | 90 days from session `updated_at`; daily bounded deletion by `prune_chat_history`, with message cascade | Owner-scoped repository and authenticated HTTP reads; no raw-content reporting surface | No message content in traces, logs, metrics, analytics, errors, tool arguments, or RFP events | `test_chat_persistence.py`, `test_chat_api.py`, `test_maintenance_worker.py` | ✅ Phases 3–4 repository, history API, and trace-content exclusion; production migration and feature enablement remain approval-gated |
+
+The current portfolio environment has only the owner as a prospective author. Before external B2B
+or B2C users can create chat history, TrackFlow must revisit the disposable-data waiver and make an
+explicit backup/recovery and retention decision.
+
 ---
 
 ## 2. Engagement 6 Phase 1 (🧭 — implemented in code, verified locally; production collection gated)

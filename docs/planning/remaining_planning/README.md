@@ -43,7 +43,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 | **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |
 | **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
-| **Engagement 10** — real-time systems (SSE + WebSocket) | [`10_realtime/`](10_realtime/), [`spec-10-realtime.md`](spec-10-realtime.md) | ✅ approved | Phase 0 verified; Part 1 (Phases 1–2) implemented and awaiting owner review |
+| **Engagement 10** — real-time systems (SSE + WebSocket) | [`10_realtime/`](10_realtime/), [`spec-10-realtime.md`](spec-10-realtime.md) | ✅ approved | Part 1 merged through PR #35; Phases 3–5 WebSocket chat implemented, awaiting owner review |
 | **Cross-cutting backlog** | [`important_considerations/others.md`](important_considerations/others.md) | ❌ none | Unscheduled; fold into the engagement that needs it |
 
 ---
@@ -116,10 +116,13 @@ The earlier note that `realtime.md` is empty is obsolete.
 The owner-approved specification — [`spec-10-realtime.md`](spec-10-realtime.md) — covers both parts
 as one design, with the stakeholder brief at
 [`docs/briefs/10-realtime-systems.md`](../../briefs/10-realtime-systems.md). Phase 0 verified the
-same-origin Coolify/Traefik design, and Part 1 (Phases 1–2) is implemented on
-`feature/sse-notifications` pending owner review. The approved decisions include the narrowly scoped
-chat-history telemetry exception and same-origin `/realtime` production exposure; deployment and
-feature enablement remain separately approval-gated.
+same-origin Coolify/Traefik design, and Part 1 (Phases 1–2) merged to `main` through PR #35 on
+2026-08-18. Phases 3–5 add owner-scoped chat sessions/messages, database-enforced ordering, bounded
+90-day retention, the narrowly scoped chat-history telemetry exception, authenticated session
+history, the responsive chat slide-over with route selection, same-origin cookie-authenticated
+WebSocket streaming, genuine provider abort, partial-message retention, and reconnect snapshots on
+`feature/websocket-chat`; they await owner review. Deployment and feature enablement remain
+separately approval-gated.
 
 ### Cross-cutting backlog
 [`others.md`](important_considerations/others.md) holds three real items that are not an engagement

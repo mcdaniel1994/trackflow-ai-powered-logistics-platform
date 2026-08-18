@@ -1,6 +1,6 @@
 # Specification — Engagement 10: Real-Time Systems
 
-**Status:** proposed — awaiting owner approval
+**Status:** owner-approved; Phases 0–2 merged through PR #35; Phases 3–5 implemented, awaiting review
 **Author:** drafted 2026-08-18 from the planning inputs in [`10_realtime/`](10_realtime/)
 **Supersedes:** nothing. The three planning inputs
 (`realtime_instructions.md`, `real_systems_part1.md`, `real_systems_part2.md`) remain the
@@ -276,8 +276,10 @@ Named events with structured payloads, per the Part 2 CONTEXT:
 
 ### 6.3 Streaming and interrupt
 
-- Tokens stream from the agent via LangGraph's message streaming mode, published to
-  `chat.<session_id>` and fanned out (§3.2).
+- Answer deltas stream from the existing agent's provider call inside the LangGraph generation node,
+  are checked by the output guardrail before publication to `chat.<session_id>`, and are then fanned
+  out (§3.2). This preserves the real provider stream while keeping the existing graph, agent, and
+  tools intact; see §9.7 for why this repository does not use `stream_mode="messages"`.
 - **Interrupt genuinely aborts generation** — the running task is cancelled and the model stream
   stopped, so no further `token_chunk` is produced for that generation. It is *not* implemented by
   ignoring a response that still arrives.
@@ -385,6 +387,16 @@ Each is a graded requirement met differently, surfaced per the precedence rule i
 5. **Owner-scoped notifications** rather than team-wide (§4.4).
 6. **Additional scope:** persistent chat history, the slide-over panel, the textarea fix, and the
    agent picker are owner-requested and not in the planning inputs.
+7. **LangGraph `stream_mode="messages"` → provider callback inside the existing generation node.**
+   The existing first-line agent calls the OpenAI-compatible DeepSeek SDK from its LangGraph
+   generation node and returns a structured JSON object containing both `answer` and an optional
+   memory candidate. LangGraph message mode cannot expose that nested provider stream without
+   replacing the established generation boundary or duplicating agent logic. The implementation
+   therefore opts the same provider call into streaming, incrementally decodes only the `answer`
+   field, applies the existing output guardrail before each browser-visible delta, closes the
+   provider stream on interruption, and rebuilds the same structured result for the graph. This
+   satisfies the underlying real-token-streaming and genuine-abort requirements without streaming
+   memory metadata or adding a second agent.
 
 ---
 
@@ -406,10 +418,10 @@ Phase 0 is blocking: if §2.2 fails, phases 1–5 change shape and the fallback 
 
 ---
 
-## 11. Open items for owner approval
+## 11. Owner approvals
 
-1. Approve this specification as binding (the `README.md` gate: no spec, no implementation).
-2. Approve the telemetry standard exception in §8.2.
-3. Approve production exposure of `/realtime` via Traefik path routing (§2.1) — an exposure decision
-   in the same class as the earlier MCP one.
-4. Confirm the fallback in §2.2 may be escalated if Coolify rejects custom labels.
+1. ✅ This specification is binding.
+2. ✅ The telemetry standard exception in §8.2 is approved.
+3. ✅ Repository preparation for same-origin `/realtime` exposure is approved; actual deployment and
+   feature enablement remain separately gated.
+4. ✅ Phase 0 confirmed Coolify retains the custom labels, so the fallback was not required.

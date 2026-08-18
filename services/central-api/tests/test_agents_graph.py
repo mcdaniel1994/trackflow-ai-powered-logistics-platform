@@ -9,13 +9,13 @@ ordered trace of node steps and tool calls carrying only safe metadata.
 from __future__ import annotations
 
 import pytest
-from pipelines.rag import GenerationResult
+from pipelines.rag import GenerationCancelled, GenerationResult
 
 from central_api.domains.agents import graph as g
 from central_api.domains.agents.config import AgentConfig
 from central_api.domains.agents.mcp_client import TicketLookupResult, TicketStatus
 from central_api.domains.agents.pricing import ModelUsage
-from central_api.domains.agents.routing import RouteDecision
+from central_api.domains.agents.routing import RouteDecision, route_question
 
 
 class _RagCfg:
@@ -43,6 +43,13 @@ def _config() -> AgentConfig:
 
 def _names(result: g.AgentRunResult) -> list[str]:
     return [step["node_name"] for step in result.steps]
+
+
+def test_manual_route_preferences_bypass_automatic_classification() -> None:
+    knowledge = route_question("status of ticket 42?", _config(), "knowledge")
+    ticket = route_question("status of ticket 42?", _config(), "ticket")
+    assert (knowledge.route, knowledge.ticket_id) == ("rag", None)
+    assert (ticket.route, ticket.ticket_id) == ("ticket", 42)
 
 
 def _route(monkeypatch: pytest.MonkeyPatch, decision: RouteDecision) -> None:
@@ -116,6 +123,43 @@ def test_answer_is_grounded_in_retrieved_context(monkeypatch: pytest.MonkeyPatch
     g.run_agent("return window?", _config(), "US")
 
     assert seen["chunks"] == [chunk]  # the RAG context reached generation
+
+
+def test_streaming_guardrail_never_emits_the_triggering_secret_delta(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    emitted: list[str] = []
+
+    def generate(*_args: object, **kwargs: object) -> GenerationResult:
+        callback = kwargs["token_callback"]
+        callback("Here is a safe preface. ")
+        callback("sk-this-must-never-reach-the-browser")
+        raise AssertionError("the guardrail callback must abort generation")
+
+    _route(monkeypatch, RouteDecision("rag", None))
+    monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [{"text": "Documented."}])
+    monkeypatch.setattr(g, "generate_answer", generate)
+
+    result = g.run_agent("documented question?", _config(), "US", token_callback=emitted.append)
+
+    assert result.answer == g.OUTPUT_FALLBACK
+    assert "sk-" not in "".join(emitted)
+    assert emitted == ["Here is a safe preface. ", g.OUTPUT_FALLBACK]
+    assert any(event["rule_id"] == "sensitive_output" for event in result.guardrail_events)
+
+
+def test_external_stream_cancellation_propagates_without_becoming_provider_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def generate(*_args: object, **_kwargs: object) -> GenerationResult:
+        raise GenerationCancelled("client interrupted")
+
+    _route(monkeypatch, RouteDecision("rag", None))
+    monkeypatch.setattr(g, "retrieve", lambda _q, **_kwargs: [{"text": "Documented."}])
+    monkeypatch.setattr(g, "generate_answer", generate)
+
+    with pytest.raises(GenerationCancelled):
+        g.run_agent("documented question?", _config(), "US", token_callback=lambda _delta: None)
 
 
 def test_current_rag_evidence_outranks_conflicting_memory(monkeypatch: pytest.MonkeyPatch) -> None:

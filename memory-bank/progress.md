@@ -212,11 +212,20 @@ implementing any of the items below.
   `docs/planning/remaining_planning/spec-10-realtime.md`. Phase 0 read-only verification confirmed
   Coolify 4.3.6 preserves custom Traefik labels and that a priority-1000
   `Host(backoffice.forgehub.cloud) && PathPrefix(/realtime)` router can target private
-  `central-api:8000`. Phases 1–2 are implemented on `feature/sse-notifications` and await owner
-  review: bounded owner-scoped in-process fan-out, cookie-authenticated SSE with keep-alive and
+  `central-api:8000`. Phases 1–2 merged to `main` through PR #35: bounded owner-scoped in-process
+  fan-out, cookie-authenticated SSE with keep-alive and
   token-expiry close, post-commit/pre-intake `rfp_ticket_created` publication, and an RFP Desk
   `fetch`/`ReadableStream` client with buffered snapshot recovery, deduplication, jittered reconnect,
-  and no list/detail polling. `RFP_ENABLED` stays off by default; no production mutation occurred.
+  and no list/detail polling. Phases 3–5 are implemented on `feature/websocket-chat` and await owner
+  review: additive `20260818_0018` chat session/message persistence, database-enforced ordering and
+  invariants, owner-scoped bounded reads, 90-day cascade retention in the maintenance worker, and the
+  approved raw-chat-history exception without relaxing trace/log exclusions; authenticated session
+  history; a responsive chat slide-over with textarea reset, multi-turn IDs, and Auto/Knowledge
+  base/Ticket lookup selection; and the same-origin cookie-authenticated chat WebSocket with guarded
+  provider answer deltas, one active producer per session, genuine provider-stream abort,
+  interrupted partial-message persistence, redirected turns, capped reconnect/backoff, and
+  authoritative connect/reconnect snapshots. `RFP_ENABLED` and `AGENTS_ENABLED` stay off by default;
+  no production mutation occurred and PR 2 has not been prepared or published.
 - Cross-cutting backlog (`important_considerations/others.md`): website
   contact-form lead persistence, a job-applicant form plus migration off the
   third-party talent API, and a Back Office information-architecture

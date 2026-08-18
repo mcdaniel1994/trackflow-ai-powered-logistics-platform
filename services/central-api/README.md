@@ -54,10 +54,30 @@ and closes at JWT expiry. RFP creation publishes `rfp_ticket_created` after the 
 and before background intake; this notification path imports or calls no model, RAG, or agent code.
 `RFP_ENABLED` gates the endpoint and remains off by default.
 
+Engagement 10 Phase 3 adds owner-scoped `chat_sessions` and ordered `chat_messages` at additive
+Alembic head `20260818_0018`. Database constraints fix the agent identity to `first_line_cx`, enforce
+session/message states, and prevent duplicate per-session sequences. Repository reads require the
+owner `user_id`; message inserts allocate sequence numbers under a session row lock. The daily
+maintenance worker deletes one bounded batch of sessions inactive for more than 90 days and relies
+on cascade deletion for their messages. Message content is approved user-facing product history,
+not telemetry, and is never copied into traces or logs. WebSocket transport and chat APIs were
+deferred at that boundary. Phase 4 adds owner-scoped create/list/detail HTTP endpoints and threads chat
+session IDs through the existing agent query path. Each successful HTTP turn persists ordered user
+and assistant messages while suppressing trace content summaries, and the response reports the
+route actually used. Auto keeps existing classifier behavior; Knowledge base and Ticket lookup pin
+the existing routes without changing the agent or its tools. Phase 5 adds
+`/realtime/chat/{session_id}`: the same host-only JWT cookie authenticates the upgrade before accept,
+the session is rechecked as owner-scoped, and a subscribe-before-snapshot sequence closes reconnect
+gaps. One application-scoped generation manager produces guarded DeepSeek answer deltas for every
+subscriber. Interrupt closes the provider stream, persists any partial assistant message as
+interrupted, and optionally starts the redirected input as a new turn. Raw chat content remains out
+of logs and agent traces.
+
 ## Ownership and boundaries
 
 - Central API owns inventory SKUs and stock movements in PostgreSQL.
 - Central API owns operational incidents, lifecycle transitions, and summary metrics.
+- Central API owns owner-scoped chat sessions and their 90-day message history.
 - Identity remains the sole owner of TinyDB users and sessions.
 - Central API verifies Identity-issued RS256 access tokens through
   `packages/trackflow_auth`; it never opens Identity's TinyDB.

@@ -2,9 +2,12 @@ import { fetchWithAuth } from "@/lib/auth/client-http";
 import type {
   AgentAnswer,
   AgentAPIError,
+  AgentRoute,
   AgentRunDetail,
   AgentRunStatus,
   AgentRunSummary,
+  ChatSession,
+  ChatSessionDetail,
 } from "@/lib/agents/types";
 
 const API_PATH = "/api/agents";
@@ -71,13 +74,47 @@ async function parseAskError(response: Response): Promise<AgentAPIError> {
  * Ask one question through the LangGraph agent, which classifies and routes it to the knowledge
  * base, the live ticket-status tool, or both, applies guardrails, and records a trace.
  */
-export async function askAgent(question: string): Promise<AgentAnswer> {
+export async function askAgent(
+  question: string,
+  options: { conversationId?: string; route?: AgentRoute } = {},
+): Promise<AgentAnswer> {
   const response = await fetchWithAuth(`${API_PATH}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({
+      question,
+      conversation_id: options.conversationId,
+      route: options.route ?? "auto",
+    }),
     cache: "no-store",
   });
   if (!response.ok) throw await parseAskError(response);
   return (await response.json()) as AgentAnswer;
+}
+
+export async function createChatSession(): Promise<ChatSession> {
+  const response = await fetchWithAuth(`${API_PATH}/chat/sessions`, {
+    method: "POST",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw await parseAskError(response);
+  return (await response.json()) as ChatSession;
+}
+
+async function chatRequest<T>(path: string): Promise<T> {
+  const response = await fetchWithAuth(`${API_PATH}${path}`, {
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!response.ok) throw await parseAskError(response);
+  return (await response.json()) as T;
+}
+
+export function listChatSessions() {
+  return chatRequest<ChatSession[]>("/chat/sessions");
+}
+
+export function getChatSession(sessionId: string) {
+  return chatRequest<ChatSessionDetail>(`/chat/sessions/${encodeURIComponent(sessionId)}`);
 }
