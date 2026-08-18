@@ -7,6 +7,7 @@ authorization and the disabled-service fallback live in one place.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -15,6 +16,8 @@ from sqlmodel import Session
 
 from ...core.config import Settings
 from ..rag.config import build_rag_config
+from ..realtime.bus import RealtimeBus, rfp_ticket_topic
+from ..realtime.schemas import RfpTicketCreatedEvent
 from .approval import AlreadyResolved, submit_decision
 from .config import (
     build_rfp_config,
@@ -30,6 +33,7 @@ from .repository import RfpRepository
 from .schemas import RfpDepartmentSectionRead, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
 
 _PDF_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
+logger = logging.getLogger(__name__)
 
 
 def _new_rfp_id() -> str:
@@ -45,10 +49,33 @@ class RfpError(Exception):
 
 
 class RfpService:
-    def __init__(self, settings: Settings, session: Session) -> None:
+    def __init__(self, settings: Settings, session: Session, *, realtime_bus: RealtimeBus | None = None) -> None:
         self.settings = settings
         self.session = session
         self.repository = RfpRepository(session)
+        self.realtime_bus = realtime_bus
+
+    def _publish_ticket_created(self, ticket: RfpTicket) -> None:
+        """Notify the ticket owner after commit without coupling creation to a consumer."""
+        if self.realtime_bus is None:
+            return
+        payload = RfpTicketCreatedEvent(
+            ticket_id=ticket.id,
+            rfp_id=ticket.rfp_id,
+            client_name=ticket.client_name,
+            client_country=ticket.client_country,
+            services_requested=list(ticket.services_requested or []),
+            status=ticket.status,
+            created_at=ticket.created_at,
+        )
+        try:
+            self.realtime_bus.publish(
+                rfp_ticket_topic(ticket.owner_user_uuid),
+                "rfp_ticket_created",
+                payload.model_dump(mode="json"),
+            )
+        except RuntimeError:
+            logger.warning("RFP realtime notification unavailable", extra={"event_type": "rfp_ticket_created"})
 
     def _require_enabled(self) -> None:
         if not is_rfp_configured(self.settings):
@@ -87,6 +114,7 @@ class RfpService:
                 readability_metrics=dict(metrics),
             )
         )
+        self._publish_ticket_created(ticket)
         config = build_rfp_config(self.settings)
         # When generation is configured, chain Phase 2 drafting and the Phase 3 approval pause.
         generate = is_rfp_generation_configured(self.settings)

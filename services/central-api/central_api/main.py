@@ -1,6 +1,8 @@
 """FastAPI application factory and safe service-level failure boundaries."""
 
 import logging
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Annotated, cast
 
 from fastapi import Depends, FastAPI, Request
@@ -28,6 +30,8 @@ from .domains.inventory.schemas import HealthRead
 from .domains.inventory.service import InventoryError
 from .domains.rag.router import router as rag_router
 from .domains.rag.service import RagError
+from .domains.realtime.bus import RealtimeBus
+from .domains.realtime.router import router as realtime_router
 from .domains.reporting.router import router as reporting_router
 from .domains.reporting.service import ReportingError
 from .domains.rfp.router import router as rfp_router
@@ -57,10 +61,21 @@ def _access_denied_reason(exc: StarletteHTTPException) -> str | None:
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Release application-scoped realtime subscriptions during shutdown."""
+    yield
+    bus = getattr(app.state, "realtime_bus", None)
+    if isinstance(bus, RealtimeBus):
+        bus.close()
+
+
 def create_app() -> FastAPI:
     """Build the service app while keeping configuration injectable in later phases."""
     settings = get_settings()
-    app = FastAPI(title="TrackFlow Central API", version="0.1.0")
+    app = FastAPI(title="TrackFlow Central API", version="0.1.0", lifespan=_application_lifespan)
+    app.state.realtime_bus = RealtimeBus()
+
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request: Request, exc: Exception) -> JSONResponse:
         if not isinstance(exc, RequestValidationError):
@@ -246,6 +261,7 @@ def create_app() -> FastAPI:
     app.include_router(rag_router)
     app.include_router(agents_router)
     app.include_router(rfp_router)
+    app.include_router(realtime_router)
     return app
 
 

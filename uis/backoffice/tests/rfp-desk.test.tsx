@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   getRfpTicket: vi.fn(),
   uploadRfp: vi.fn(),
   decideDepartment: vi.fn(),
+  useRfpTicketStream: vi.fn(),
 }));
 vi.mock("@/lib/rfp/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/rfp/api")>("@/lib/rfp/api");
@@ -19,6 +20,9 @@ vi.mock("@/lib/rfp/api", async () => {
     decideDepartment: mocks.decideDepartment,
   };
 });
+vi.mock("@/lib/realtime/rfp-stream", () => ({
+  useRfpTicketStream: mocks.useRfpTicketStream,
+}));
 
 import { RfpDesk } from "@/components/agents/RfpDesk";
 
@@ -60,11 +64,23 @@ function detail(updates: Partial<RfpTicketDetail> = {}): RfpTicketDetail {
   };
 }
 
+function streamTickets(tickets: RfpTicketSummary[]) {
+  mocks.useRfpTicketStream.mockReturnValue({
+    tickets,
+    loading: false,
+    error: null,
+    connection: "connected",
+    newTicketId: null,
+    acknowledgeTicket: vi.fn(),
+  });
+}
+
 describe("RFP Desk", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.getRfpTickets.mockResolvedValue([summary]);
     mocks.getRfpTicket.mockResolvedValue(detail());
+    streamTickets([summary]);
   });
 
   it("lists tickets and shows routed detail with department key aspects", async () => {
@@ -90,7 +106,7 @@ describe("RFP Desk", () => {
   });
 
   it("shows the discard reason for a non-RFP ticket", async () => {
-    mocks.getRfpTickets.mockResolvedValue([{ ...summary, status: "discarded" }]);
+    streamTickets([{ ...summary, status: "discarded" }]);
     mocks.getRfpTicket.mockResolvedValue(detail({ status: "discarded", discard_reason: "vendor pitch", sections: [] }));
     render(<RfpDesk />);
     expect(await screen.findByText(/Discarded: vendor pitch/)).toBeInTheDocument();
@@ -108,14 +124,14 @@ describe("RFP Desk", () => {
   });
 
   it("shows the empty state when there are no tickets", async () => {
-    mocks.getRfpTickets.mockResolvedValue([]);
+    streamTickets([]);
     render(<RfpDesk />);
     expect(await screen.findByText("No RFPs yet")).toBeInTheDocument();
   });
 
   it("shows per-department approval controls and submits a decision when awaiting approval", async () => {
     const waiting = { ...summary, status: "waiting_for_approval" as const };
-    mocks.getRfpTickets.mockResolvedValue([waiting]);
+    streamTickets([waiting]);
     mocks.getRfpTicket.mockResolvedValue(detail({ status: "waiting_for_approval" }));
     mocks.decideDepartment.mockResolvedValue(detail({ status: "done" }));
     render(<RfpDesk />);
@@ -127,7 +143,7 @@ describe("RFP Desk", () => {
   });
 
   it("shows the completion banner when the proposal is done", async () => {
-    mocks.getRfpTickets.mockResolvedValue([{ ...summary, status: "done" }]);
+    streamTickets([{ ...summary, status: "done" }]);
     mocks.getRfpTicket.mockResolvedValue(detail({ status: "done" }));
     render(<RfpDesk />);
     expect(await screen.findByText(/Proposal complete/)).toBeInTheDocument();

@@ -19,6 +19,22 @@ endpoint broke the release (`GET` → `405` → `reason=coolify_http_error`). Th
 webhook; Engagement 9 then deployed successfully with `RFP_ENABLED`/`AGENTS_ENABLED` defaulting off.
 See the deploy-endpoint note and the `coolify_http_error` troubleshooting entry below.
 
+### Engagement 10 `/realtime` routing verification (2026-08-18)
+
+Read-only inspection of Coolify 4.3.6 and its effective Docker metadata confirmed that custom
+Compose Traefik labels are retained alongside Coolify-generated labels. The generated Back Office
+HTTPS router uses ``Host(backoffice.forgehub.cloud) && PathPrefix(`/`)`` on entrypoint `https`, targets
+port 3000, and has no explicit priority. Central API exposes port 8000 as `central-api` on the shared
+deployment network, which `coolify-proxy` also joins.
+
+`compose.coolify.yaml` therefore declares a priority-1000 HTTPS router for
+``Host(backoffice.forgehub.cloud) && PathPrefix(`/realtime`)``, with the existing `letsencrypt`
+resolver, targeting the private Central API service on port 8000. Local `docker compose config`
+rendering accepted the label set. This preserves the host-only authentication cookie, adds no
+production CORS origin, and exposes no Central API path outside `/realtime`. The labels have not been
+deployed and `RFP_ENABLED` remains off; production rollout still requires the normal explicit
+approval gate.
+
 ## July 15, 2026 Prefect startup incident
 
 The first dedicated-Prefect release reached Supabase migration `20260716_0010`, but the application
