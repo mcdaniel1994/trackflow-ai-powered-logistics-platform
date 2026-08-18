@@ -1,6 +1,6 @@
 # Specification — Engagement 10: Real-Time Systems
 
-**Status:** owner-approved; Phases 0–2 merged through PR #35; Phases 3–5 implemented, awaiting review
+**Status:** implementation complete; Phases 0–2 merged through PR #35 and Phases 3–5 through PR #36 on 2026-08-18; Phase 6 production rollout deferred
 **Author:** drafted 2026-08-18 from the planning inputs in [`10_realtime/`](10_realtime/)
 **Supersedes:** nothing. The three planning inputs
 (`realtime_instructions.md`, `real_systems_part1.md`, `real_systems_part2.md`) remain the
@@ -412,9 +412,13 @@ An owner review-and-approval pause follows every phase, per the working agreemen
 | **3** | `chat_sessions` / `chat_messages`, migration, retention, standards exception landed | `feature/websocket-chat` |
 | **4** | Chat UI rework: slide-over, session history, textarea fix, agent picker | `feature/websocket-chat` |
 | **5** | WebSocket endpoint, token streaming, interrupt/abort, rehydrate, tests → **PR 2** | `feature/websocket-chat` |
-| **6** | Deployment, flag enablement, runbook updates, design-question answers in both PRs | — |
+| **6 (deferred)** | Production deployment, migration execution, flag enablement, live verification, and rollout-runbook closeout | — |
 
 Phase 0 is blocking: if §2.2 fails, phases 1–5 change shape and the fallback needs separate approval.
+
+The owner accepted Phases 0–5 as the completed Engagement 10 implementation after PR #36 merged.
+Phase 6 is a separately gated production rollout and was explicitly deferred; it is not required to
+describe the implementation as complete, and no deployment claim is made.
 
 ---
 
@@ -425,3 +429,6 @@ Phase 0 is blocking: if §2.2 fails, phases 1–5 change shape and the fallback 
 3. ✅ Repository preparation for same-origin `/realtime` exposure is approved; actual deployment and
    feature enablement remain separately gated.
 4. ✅ Phase 0 confirmed Coolify retains the custom labels, so the fallback was not required.
+5. ✅ Phases 1–5 were accepted as implementation-complete after PRs #35 and #36 merged.
+6. ⏸ Phase 6 production deployment and feature enablement are explicitly deferred; production
+   remains unchanged.

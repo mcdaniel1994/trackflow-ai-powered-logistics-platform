@@ -216,16 +216,18 @@ implementing any of the items below.
   fan-out, cookie-authenticated SSE with keep-alive and
   token-expiry close, post-commit/pre-intake `rfp_ticket_created` publication, and an RFP Desk
   `fetch`/`ReadableStream` client with buffered snapshot recovery, deduplication, jittered reconnect,
-  and no list/detail polling. Phases 3–5 are implemented on `feature/websocket-chat` and await owner
-  review: additive `20260818_0018` chat session/message persistence, database-enforced ordering and
+  and no list/detail polling. Phases 3–5 merged to `main` through PR #36 on 2026-08-18: additive
+  `20260818_0018` chat session/message persistence, database-enforced ordering and
   invariants, owner-scoped bounded reads, 90-day cascade retention in the maintenance worker, and the
   approved raw-chat-history exception without relaxing trace/log exclusions; authenticated session
   history; a responsive chat slide-over with textarea reset, multi-turn IDs, and Auto/Knowledge
   base/Ticket lookup selection; and the same-origin cookie-authenticated chat WebSocket with guarded
   provider answer deltas, one active producer per session, genuine provider-stream abort,
   interrupted partial-message persistence, redirected turns, capped reconnect/backoff, and
-  authoritative connect/reconnect snapshots. `RFP_ENABLED` and `AGENTS_ENABLED` stay off by default;
-  no production mutation occurred and PR 2 has not been prepared or published.
+  authoritative connect/reconnect snapshots. The owner accepted the Engagement 10 implementation
+  as complete. Phase 6 production deployment, migration execution, feature enablement, live
+  verification, and rollout/runbook closeout are deferred. `RFP_ENABLED` and `AGENTS_ENABLED` stay
+  off by default; no production mutation occurred.
 - Cross-cutting backlog (`important_considerations/others.md`): website
   contact-form lead persistence, a job-applicant form plus migration off the
   third-party talent API, and a Back Office information-architecture

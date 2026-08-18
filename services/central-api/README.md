@@ -73,6 +73,10 @@ subscriber. Interrupt closes the provider stream, persists any partial assistant
 interrupted, and optionally starts the redirected input as a new turn. Raw chat content remains out
 of logs and agent traces.
 
+Engagement 10 implementation is complete and merged to `main` through PR #36. Phase 6 production
+rollout is deferred: migration `20260818_0018` has not been applied to production by this closeout,
+feature flags remain off by default, and no production deployment is claimed.
+
 ## Ownership and boundaries
 
 - Central API owns inventory SKUs and stock movements in PostgreSQL.

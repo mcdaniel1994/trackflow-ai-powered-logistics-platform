@@ -185,14 +185,15 @@ Then read the active engagement brief and the README for every folder being modi
   merge and the same-origin priority `/realtime` route without changing production. Phases 1–2
   merged to `main` through PR #35: a bounded in-process bus,
   cookie-authenticated owner-only RFP SSE, immediate post-commit/pre-intake notification, and an RFP
-  Desk stream client with buffered authoritative recovery and no polling. Phases 3–5 are implemented on
-  `feature/websocket-chat` under `services/central-api/central_api/domains/chat/`: additive
+  Desk stream client with buffered authoritative recovery and no polling. Phases 3–5 merged to `main`
+  through PR #36 under `services/central-api/central_api/domains/chat/`: additive
   `chat_sessions`/`chat_messages`, owner-only bounded reads, concurrent-safe message ordering, daily
   90-day retention, the approved telemetry exception, authenticated HTTP session history, and a
   responsive chat slide-over with multi-turn IDs and route selection. The same-origin WebSocket adds
   guarded provider token deltas, a single producer per session, true provider-stream interruption,
-  partial-message persistence, redirected turns, and authoritative reconnect snapshots. It awaits
-  owner review. The feature remains off by default and production is unchanged.
+  partial-message persistence, redirected turns, and authoritative reconnect snapshots. The owner
+  accepted the implementation as complete on 2026-08-18. Phase 6 production rollout and feature
+  enablement are deferred; the feature remains off by default and production is unchanged.
 
 - **Engagement 11+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the

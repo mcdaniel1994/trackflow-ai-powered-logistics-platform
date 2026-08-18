@@ -35,6 +35,11 @@ production CORS origin, and exposes no Central API path outside `/realtime`. The
 deployed and `RFP_ENABLED` remains off; production rollout still requires the normal explicit
 approval gate.
 
+Engagement 10 implementation was accepted as complete after PRs #35 and #36 merged on 2026-08-18.
+Phase 6 production deployment, migration execution, flag enablement, and live verification were
+explicitly deferred; `RFP_ENABLED` and `AGENTS_ENABLED` remain off by default, and this routing
+verification is not deployment evidence.
+
 ## July 15, 2026 Prefect startup incident
 
 The first dedicated-Prefect release reached Supabase migration `20260716_0010`, but the application

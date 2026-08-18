@@ -271,7 +271,7 @@ TrackFlow reflects real-world logistics challenges:
 
 ---
 
-### 🚧 Engagement 10 — Real-Time Systems *(Phase 5 awaiting owner review)*
+### ✅ Engagement 10 — Real-Time Systems *(implementation complete)*
 
 - A bounded in-process topic bus and same-origin `/realtime` Traefik route provide the single-worker
   transport runtime without exposing the rest of Central API.
@@ -294,6 +294,9 @@ TrackFlow reflects real-world logistics challenges:
   deltas render progressively, one producer fans out per owner-bound session, interrupt closes the
   provider stream and persists the partial response, redirected input starts a new turn, and every
   connect/reconnect receives an authoritative persisted snapshot before live events.
+- Part 1 merged through PR #35 and Part 2 through PR #36 on 2026-08-18. The owner accepted the
+  implementation as complete. Phase 6 production rollout is explicitly deferred; production remains
+  unchanged and `RFP_ENABLED` / `AGENTS_ENABLED` remain off by default.
 
 📁 Locations: `services/central-api/`, `uis/backoffice/`, and `compose.coolify.yaml`
 
@@ -343,7 +346,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
-| 10 | Real-time systems — SSE notifications + WebSocket chat | 🚧 Part 1 merged through PR #35; Phases 3–5 persistent WebSocket chat implemented on `feature/websocket-chat`, awaiting owner review; production remains unchanged |
+| 10 | Real-time systems — SSE notifications + WebSocket chat | ✅ Implementation complete — Part 1 merged through PR #35 and Part 2 through PR #36 on 2026-08-18; Phase 6 production rollout deferred by owner, production unchanged |
 
 All remaining work is planned from
 **[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its

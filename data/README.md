@@ -63,6 +63,9 @@ memory candidate—while retaining the complete provider response for the existi
 Caller cancellation closes the provider stream and raises `GenerationCancelled`; non-streaming RAG
 callers keep their existing behavior unchanged.
 
+Engagement 10 data-package implementation is complete and merged through PR #36. Phase 6 production
+rollout is deferred, and existing non-streaming callers remain unchanged.
+
 ```bash
 uv run --project data --extra dev ruff check data/pipelines data/process tests/pipelines
 uv run --project data --extra dev mypy --config-file data/pyproject.toml data/pipelines data/process

@@ -8,3 +8,5 @@ inventory revision, which are verified against the disposable PostgreSQL service
 The current additive head is `20260818_0018`, which adds owner-scoped Engagement 10
 `chat_sessions` and `chat_messages`. Production migration execution remains part of the normal
 approval-gated deployment path; Phase 3 verification uses only the disposable local PostgreSQL.
+The Engagement 10 implementation is complete and merged through PR #36, while its Phase 6
+production migration and rollout are explicitly deferred.
