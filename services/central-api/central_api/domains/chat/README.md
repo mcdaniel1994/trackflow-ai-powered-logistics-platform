@@ -32,3 +32,6 @@ publishes persisted user messages, guarded answer deltas, and terminal completio
 events through `chat.<session_id>`.
 Interrupt sets the provider cancellation signal, waits for the stream to close, persists a nonempty
 partial assistant message with `interrupted=true`, and only then starts optional redirected input.
+
+Phases 3–5 are implementation-complete and merged to `main` through PR #36. Phase 6 production
+migration, deployment, and feature enablement are deferred.

@@ -63,6 +63,10 @@ exponential backoff and jitter, replaces cached history with the authoritative p
 generation snapshot, and supports both Stop and interrupt-with-new-input. No token is exposed to
 browser JavaScript or a URL.
 
+Engagement 10 browser implementation is complete and merged to `main` through PR #36. Phase 6
+production rollout is deferred; this closeout does not claim the UI is enabled or deployed in
+production.
+
 ## Local Development
 
 ```bash
