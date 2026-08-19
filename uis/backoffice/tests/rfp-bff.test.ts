@@ -104,6 +104,55 @@ describe("RFP BFF", () => {
     expect(fetchMock.mock.calls[0][0].toString()).toBe(`http://central.test/rfp/tickets/${id}/document`);
   });
 
+  it("routes a final-document download and relays Content-Disposition", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("# RFP Proposal", {
+        status: 200,
+        headers: {
+          "Content-Type": "text/markdown; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="trackflow-rfp-0a1b2c3d-20260819.md"',
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const id = "0a1b2c3d";
+
+    const response = await GET(
+      new NextRequest(`http://backoffice.test/api/rfp/tickets/${id}/document/download`),
+      context(["tickets", id, "document", "download"]),
+    );
+
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(
+      `http://central.test/rfp/tickets/${id}/document/download`,
+    );
+    // The proxy must relay Content-Disposition (it is not a hop-by-hop header).
+    expect(response.headers.get("Content-Disposition")).toContain("attachment; filename=");
+  });
+
+  it("routes a final-document PDF download", async () => {
+    process.env.CENTRAL_API_URL = "http://central.test";
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response("%PDF-1.7", {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": 'attachment; filename="trackflow-rfp-0a1b2c3d-20260819.pdf"',
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const id = "0a1b2c3d";
+
+    const response = await GET(
+      new NextRequest(`http://backoffice.test/api/rfp/tickets/${id}/document/pdf`),
+      context(["tickets", id, "document", "pdf"]),
+    );
+
+    expect(fetchMock.mock.calls[0][0].toString()).toBe(`http://central.test/rfp/tickets/${id}/document/pdf`);
+    expect(response.headers.get("Content-Disposition")).toContain(".pdf");
+  });
+
   it("does not expose mutating verbs beyond POST", async () => {
     const route = await import("@/app/api/rfp/[[...path]]/route");
     expect("PATCH" in route).toBe(false);
@@ -118,6 +167,9 @@ describe("RFP BFF", () => {
     ["POST", ["tickets", "0a1b"]],
     ["POST", ["tickets", "0a1b", "departments", "Warehouse", "decision"]],
     ["GET", ["tickets", "0a1b", "departments", "warehouse", "decision"]],
+    ["GET", ["tickets", "0a1b", "document", "other"]],
+    ["GET", ["tickets", "not a uuid!", "document", "download"]],
+    ["POST", ["tickets", "0a1b", "document", "download"]],
   ])("blocks non-allowlisted %s routes", async (method, path) => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);

@@ -9,6 +9,13 @@ Phase 1)** from **deferred/future**, and never claims a planned signal is live.
 - **Related:** engagement scope in [`../briefs/06-data-pipelines-telemetry.md`](../briefs/06-data-pipelines-telemetry.md);
   storage/retention operations in this `docs/runbooks/` set.
 - **Never** record secrets, tokens, raw PII, request bodies, or example production values in this file.
+- **Agent OS telemetry (final-polish 2.1).** RFP agent runs now populate real token counts and
+  (where the model is priced) cost: intake captures `usage_metadata`, and generation/approval steps
+  carry summed drafting tokens (`deepseek-chat` is unpriced, so those steps show tokens with no cost —
+  "Not priced", never a fabricated number). Truncated input/output previews are stored **only** when
+  `AGENTS_STORE_CONTENT=true` (owner-approved posture; local `.env` and `compose.coolify.yaml`, code
+  default `false`); guardrail-blocked content is still never stored, and no prompt, completion,
+  retrieved chunk, tool argument, or credential is written to logs.
 
 > **Maintenance rule.** Update this inventory in the **same change** whenever telemetry is
 > added, changed, or removed, or whenever a signal's fields, storage, retention, access, or

@@ -27,8 +27,10 @@ from .config import (
 )
 from .document import DocumentError, pdf_to_markdown
 from .intake import run_intake_for_ticket
-from .models import RfpTicket
+from .models import RfpFinalDocument, RfpTicket
+from .pdf import render_final_document_pdf
 from .readability import readability_dict
+from .render import render_final_document
 from .repository import RfpRepository
 from .schemas import RfpDepartmentSectionRead, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
 
@@ -175,6 +177,51 @@ class RfpService:
         if document is None:
             raise RfpError(404, "The final document is not ready yet.")
         return RfpFinalDocumentRead.model_validate(document)
+
+    def get_document_markdown(self, ticket_id: str, owner_user_uuid: str) -> tuple[str, str]:
+        """Render the finalized proposal as Markdown and a safe, server-generated filename.
+
+        Reuses the exact ownership/readiness checks in ``get_document`` (404 for a missing/non-owned
+        ticket, 404 when the document is not ready). The filename is derived only from the ticket UUID
+        and the generation date — never from client input.
+        """
+        self._require_enabled()
+        ticket = self.repository.get_for_owner(ticket_id, owner_user_uuid)
+        if ticket is None:
+            raise RfpError(404, "RFP ticket not found.")
+        document = self.repository.final_document(ticket_id)
+        if document is None:
+            raise RfpError(404, "The final document is not ready yet.")
+        sections = self.repository.sections_for_ticket(ticket_id)
+        markdown = render_final_document(ticket, document, sections)
+        return markdown, self._document_filename(ticket, document, "md")
+
+    def get_document_pdf(self, ticket_id: str, owner_user_uuid: str) -> tuple[bytes, str]:
+        """Render the finalized proposal to a branded PDF and a safe, server-generated filename.
+
+        Same ownership/readiness 404s as ``get_document``. The PDF is produced on the fly and never
+        persisted (consistent with the raw-bytes-never-persisted rule).
+        """
+        self._require_enabled()
+        ticket = self.repository.get_for_owner(ticket_id, owner_user_uuid)
+        if ticket is None:
+            raise RfpError(404, "RFP ticket not found.")
+        document = self.repository.final_document(ticket_id)
+        if document is None:
+            raise RfpError(404, "The final document is not ready yet.")
+        sections = self.repository.sections_for_ticket(ticket_id)
+        try:
+            pdf_bytes = render_final_document_pdf(ticket, document, sections)
+        except Exception as exc:  # WeasyPrint/native-lib failure must not leak a stack trace
+            logger.warning("rfp_pdf_render_failed error_type=%s", type(exc).__name__)
+            raise RfpError(503, "The proposal PDF could not be generated right now.") from None
+        return pdf_bytes, self._document_filename(ticket, document, "pdf")
+
+    @staticmethod
+    def _document_filename(ticket: RfpTicket, document: RfpFinalDocument, ext: str) -> str:
+        short_id = ticket.id.replace("-", "")[:8]
+        stamp = document.generated_at.strftime("%Y%m%d")
+        return f"trackflow-rfp-{short_id}-{stamp}.{ext}"
 
     def list_tickets(
         self,

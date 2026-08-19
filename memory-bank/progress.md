@@ -162,6 +162,32 @@
   Browser analytics, a durable event queue, correlation IDs, metrics/tracing backends, real
   carriers tables, and AI telemetry remain explicitly deferred.
 
+- Final polish pass (spec: `docs/planning/remaining_planning/spec-11-final-polish.md`) — a
+  pre-recording corrective/presentational pass across delivered surfaces, on branch
+  `feature/final-polish-spec-11`. **Phase 1 (public website):** the fixed bottom `MobileNav` was
+  replaced by a header hamburger dropdown in `SiteHeader.tsx` (native `<button>`/`<nav>`, Escape/
+  backdrop close, focus return), and the hero still image became a looping, muted, `playsInline`
+  background video (`Hero.tsx` + `trackflow_video.mp4`) with a mandatory `prefers-reduced-motion`
+  still fallback; both gradient overlays and the JSON-LD PNG are preserved. **Phase 2 (Back Office):**
+  (2.1) Agent OS telemetry is now produced, not just rendered — RFP intake captures `usage_metadata`
+  via `with_structured_output(include_raw=True)`, drafting uses a new `pipelines.rag.complete_with_usage`
+  primitive, generation/approval steps carry summed tokens (cost `None` when unpriced via a shared
+  `combine_usage`), approval latency sums step durations, and output previews return under owner-approved
+  `AGENTS_STORE_CONTENT=true` (chat-session suppression removed, guardrail suppression kept); DeepSeek
+  stays unpriced by design and the dashboard shows "Not priced". (2.2) The RFP final document is now
+  reachable: a deterministic Markdown renderer (`domains/rfp/render.py`), a `GET
+  /rfp/tickets/{id}/document/download` route, BFF allowlist + client `downloadRfpDocument`, and a
+  `CompletedProposal` UI in the RFP Desk. (2.3) The Business Reporting Run now / Force refresh triggers
+  were removed as a product/demo decision (not a Prefect consequence — Prefect is still deployed;
+  the buttons drove real direct-SQL work) and replaced with hand-rolled inline-SVG charts (KPI tiles,
+  grouped bars, discrepancy-rate bars, a 6-week trend line) on a validated palette, keeping the precise
+  table. (2.4) "Ask AI" now opens the chat slide-over from any route: the Engagement 10 chat client was
+  relocated verbatim into `components/knowledge/ChatPanel.tsx`, mounted once in the protected layout via
+  `ChatPanelProvider`; opening issues no write. (2.5) The top Business/Technical toggle, its context, and
+  the orphaned `TechnicalOverview` were deleted (owner chose deletion); the home always shows the live
+  Operations Overview. All website and Back Office gates (type-check, lint, test, build) pass; Central
+  API RFP/agents/rag tests pass with `.env` moved aside for CI parity.
+
 ## Subprojects
 
 - Centralized Incident Manager (spec: `docs/planning/centralized-incident-manager.md`) — built; remains a subproject rather than a numbered engagement. Persistent PostgreSQL CRUD, lifecycle transitions, summary metrics, and historical seed support live in `services/central-api/`; shared privacy-safe legacy validation lives in `packages/trackflow_incidents/`; and the Back Office manager lives at `/incidents`.

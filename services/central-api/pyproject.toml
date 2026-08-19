@@ -20,6 +20,9 @@ dependencies = [
   "mcp>=1.24,<2",
   "pdfminer-six>=20250506",
   "langgraph-checkpoint-postgres>=2.0.0",
+  # RFP proposal PDF rendering (final-polish). BSD-3-Clause. Needs Pango/cairo system libs
+  # (installed in docker/central-api.Dockerfile). Content generated on-the-fly, never persisted.
+  "weasyprint>=65,<66",
 ]
 
 [project.scripts]

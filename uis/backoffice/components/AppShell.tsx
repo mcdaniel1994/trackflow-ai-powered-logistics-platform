@@ -2,11 +2,10 @@
 
 import type { ReactNode } from "react";
 import { useState } from "react";
-import Link from "next/link";
 import { Menu, PanelLeftClose, PanelLeftOpen, Sparkles, Warehouse, X } from "lucide-react";
 import { AccountMenu } from "@/components/account/AccountMenu";
 import { BackofficeNavigation } from "@/components/BackofficeNavigation";
-import { ViewToggle } from "@/components/ViewToggle";
+import { useChatPanel } from "@/lib/chat/panel-context";
 
 function BrandMark() {
   return (
@@ -23,6 +22,7 @@ function BrandMark() {
 }
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const { open: chatOpen, openPanel } = useChatPanel();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -48,23 +48,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             <BrandMark />
           </div>
 
-          <div className="hidden md:block">
-            <ViewToggle />
-          </div>
-
           <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="hidden items-center gap-2 rounded-full border border-sky/60 bg-white px-4 py-2 text-sm font-black text-navy shadow-sm transition hover:border-sky hover:bg-ivory dark:border-sky/50 dark:bg-ink-800 dark:text-neutral-100 dark:hover:bg-ink-700 sm:inline-flex"
+            <button
+              type="button"
+              onClick={() => openPanel()}
+              aria-expanded={chatOpen}
+              className="inline-flex items-center gap-2 rounded-full border border-sky/60 bg-white px-4 py-2 text-sm font-black text-navy shadow-sm transition hover:border-sky hover:bg-ivory dark:border-sky/50 dark:bg-ink-800 dark:text-neutral-100 dark:hover:bg-ink-700"
             >
               <Sparkles className="h-4 w-4 text-sky" aria-hidden="true" />
               Ask AI
-            </Link>
+            </button>
             <AccountMenu />
           </div>
-        </div>
-        <div className="border-t border-mist/70 px-4 py-2 dark:border-ink-700 md:hidden">
-          <ViewToggle />
         </div>
       </header>
 

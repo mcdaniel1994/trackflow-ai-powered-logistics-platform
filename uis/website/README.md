@@ -6,6 +6,8 @@ Next.js + TypeScript public website for TrackFlow.
 
 This app is the Engagement 4 component-based refactor of the delivered Engagement 1 static marketing site (originally `apps/marketing-site/`, retired June 2026 — see `docs/archive/marketing-site-retirement.md`). It preserves the public sections, bilingual client-side language toggle, visibility metadata, crawl assets, and lead-capture intent, and is now the sole home of TrackFlow's public website.
 
+Mobile navigation is a header hamburger dropdown in `SiteHeader.tsx` (there is no fixed bottom bar). The hero renders a looping, muted, `playsInline` background video (`Hero.tsx`) with a mandatory `prefers-reduced-motion` still fallback that reuses the existing poster/JSON-LD PNG.
+
 ## Local Development
 
 ```bash

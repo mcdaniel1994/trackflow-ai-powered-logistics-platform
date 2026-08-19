@@ -53,6 +53,40 @@ export function getRfpDocument(ticketId: string) {
   return request<RfpFinalDocument>(`/tickets/${encodeURIComponent(ticketId)}/document`);
 }
 
+async function downloadBlob(ticketId: string, segment: string, accept: string, fallbackExt: string): Promise<void> {
+  const response = await fetchWithAuth(
+    `${API_PATH}/tickets/${encodeURIComponent(ticketId)}/document/${segment}`,
+    { headers: { Accept: accept }, cache: "no-store" },
+  );
+  if (!response.ok) {
+    throw { message: fallbackMessage(response.status), status: response.status } satisfies RfpAPIError;
+  }
+  // Derive the filename from the server's Content-Disposition; fall back to a safe default.
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="?([^"]+)"?/.exec(disposition);
+  const filename = match?.[1] ?? `trackflow-rfp-${ticketId}.${fallbackExt}`;
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  try {
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+export function downloadRfpDocument(ticketId: string): Promise<void> {
+  return downloadBlob(ticketId, "download", "text/markdown", "md");
+}
+
+export function downloadRfpPdf(ticketId: string): Promise<void> {
+  return downloadBlob(ticketId, "pdf", "application/pdf", "pdf");
+}
+
 export async function decideDepartment(
   ticketId: string,
   departmentId: string,

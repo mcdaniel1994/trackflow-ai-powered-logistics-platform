@@ -46,6 +46,18 @@ vi.mock("@/lib/agents/api", async () => {
 vi.mock("@/lib/realtime/chat", () => ({ ChatSocketClient: socketMocks.ChatSocketClient }));
 
 import { AskKnowledgeBox } from "@/components/knowledge/AskKnowledgeBox";
+import { ChatPanel } from "@/components/knowledge/ChatPanel";
+import { ChatPanelProvider } from "@/lib/chat/panel-context";
+
+// The hero box and the chat panel are separate components sharing the ChatPanelProvider; render both.
+function renderAsk() {
+  return render(
+    <ChatPanelProvider>
+      <AskKnowledgeBox />
+      <ChatPanel />
+    </ChatPanelProvider>,
+  );
+}
 
 const session = {
   session_id: "11111111-1111-4111-8111-111111111111",
@@ -73,7 +85,7 @@ describe("Ask knowledge base", () => {
   });
 
   it("opens immediately, clears input, and renders progressive server tokens", async () => {
-    render(<AskKnowledgeBox />);
+    renderAsk();
 
     const input = screen.getByLabelText(/ask a question/i);
     await userEvent.type(input, "return window?");
@@ -100,7 +112,7 @@ describe("Ask knowledge base", () => {
   });
 
   it("surfaces a safe server failure in the open chat panel", async () => {
-    render(<AskKnowledgeBox />);
+    renderAsk();
     await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
     await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
     await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
@@ -110,7 +122,7 @@ describe("Ask knowledge base", () => {
   });
 
   it("sends a suggested question in one click", async () => {
-    render(<AskKnowledgeBox />);
+    renderAsk();
     await userEvent.click(screen.getByRole("button", { name: /rural Aragón/i }));
 
     await waitFor(() => expect(socketMocks.instances[0]?.sendUserMessage).toHaveBeenCalledWith(
@@ -120,7 +132,7 @@ describe("Ask knowledge base", () => {
   });
 
   it("pins the selected route and does not submit a blank question", async () => {
-    render(<AskKnowledgeBox />);
+    renderAsk();
     const askButton = screen.getByRole("button", { name: /^ask$/i });
     expect(askButton).toBeDisabled();
 
@@ -135,7 +147,7 @@ describe("Ask knowledge base", () => {
   });
 
   it("interrupts an active generation and redirects it with the new input", async () => {
-    render(<AskKnowledgeBox />);
+    renderAsk();
     await userEvent.type(screen.getByLabelText(/ask a question/i), "track parcel");
     await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
     await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
@@ -147,6 +159,17 @@ describe("Ask knowledge base", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /stop response/i }));
     expect(socketMocks.instances[0].interrupt).toHaveBeenLastCalledWith(null, "auto");
+  });
+
+  it("opens a recent conversation without creating a new chat session", async () => {
+    agentMocks.listChatSessions.mockResolvedValue([session]);
+    renderAsk();
+
+    await userEvent.click(await screen.findByRole("button", { name: /resume recent conversation/i }));
+
+    expect(await screen.findByRole("dialog", { name: /first-line cx agent/i })).toBeInTheDocument();
+    // Opening issues no write: a session is created only when the first message is sent.
+    expect(agentMocks.createChatSession).not.toHaveBeenCalled();
   });
 
   it("restores an owner session, accepts its authoritative snapshot, and closes with Escape", async () => {
@@ -163,7 +186,7 @@ describe("Ask knowledge base", () => {
         created_at: session.created_at,
       }],
     });
-    render(<AskKnowledgeBox />);
+    renderAsk();
 
     expect(await screen.findByRole("button", { name: /resume recent conversation/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /resume recent conversation/i }));

@@ -211,6 +211,23 @@ def _chat_client(api_key: str, base_url: str) -> OpenAI:
     return OpenAI(api_key=api_key, base_url=base_url)
 
 
+# OpenAI chat-model prefixes; anything else is treated as a DeepSeek-compatible model.
+_OPENAI_MODEL_PREFIXES = ("gpt-", "o1", "o3", "o4", "chatgpt")
+
+
+def _generation_client(cfg: RagConfig) -> OpenAI:
+    """Route generation to the provider that owns the configured model.
+
+    Keeps DeepSeek as the default (``deepseek-chat``) but sends OpenAI models (e.g. ``gpt-4o-mini``,
+    which is priced) to OpenAI's endpoint, so ``RAG_GENERATION_MODEL`` alone switches providers.
+    """
+    if cfg.generation_model.startswith(_OPENAI_MODEL_PREFIXES):
+        if not cfg.openai_api_key:
+            raise RagPipelineError("OPENAI_API_KEY is not configured for generation")
+        return _chat_client(cfg.openai_api_key, "https://api.openai.com/v1")
+    return _chat_client(cfg.deepseek_api_key, cfg.deepseek_base_url)
+
+
 def embed(text: str, config: RagConfig | None = None) -> list[float]:
     """Return the embedding vector for a single text (used at index AND query time)."""
     cfg = _resolve(config)
@@ -396,7 +413,7 @@ def generate_answer(
             "or cross-country facts."
         )
 
-    client = _chat_client(cfg.deepseek_api_key, cfg.deepseek_base_url)
+    client = _generation_client(cfg)
     try:
         request: dict[str, object] = {
             "model": cfg.generation_model,
@@ -494,17 +511,18 @@ def _usage_counters(completion: object) -> dict[str, int] | None:
     }
 
 
-def complete(system_prompt: str, user_content: str, config: RagConfig | None = None) -> str:
-    """Low-level single-turn completion against the generation model with a caller-supplied prompt.
+def complete_with_usage(
+    system_prompt: str, user_content: str, config: RagConfig | None = None
+) -> GenerationResult:
+    """Low-level single-turn completion returning the answer plus the call's token counters.
 
-    ``query``/``generate_answer`` are the knowledge-assistant path: they enforce the anti-invention
-    ``SYSTEM_PROMPT`` because they answer factual questions from documented context. A drafting caller
-    (the Engagement 9 RFP desk) instead composes proposal content for later human approval and must
-    supply its own system prompt. This helper only reuses the DeepSeek client plumbing and error
-    translation; it applies no knowledge-base guardrails and must not be used for RAG answers.
+    Same DeepSeek plumbing and guardrail-free contract as ``complete`` (see that function's caveat),
+    but it surfaces the generation model's numeric usage so an orchestrator (the Engagement 9 RFP
+    desk) can account tokens/cost for the drafting call. The ``GenerationResult`` carries no memory
+    candidate and only numeric counters — never prompts, completions, or raw provider payloads.
     """
     cfg = _resolve(config)
-    client = _chat_client(cfg.deepseek_api_key, cfg.deepseek_base_url)
+    client = _generation_client(cfg)
     try:
         completion = client.chat.completions.create(
             model=cfg.generation_model,
@@ -519,7 +537,22 @@ def complete(system_prompt: str, user_content: str, config: RagConfig | None = N
     content = completion.choices[0].message.content
     if not content or not content.strip():
         raise RagPipelineError("generation model returned an empty answer")
-    return str(content).strip()
+    return GenerationResult(str(content).strip(), None, _usage_counters(completion))
+
+
+def complete(system_prompt: str, user_content: str, config: RagConfig | None = None) -> str:
+    """Low-level single-turn completion against the generation model with a caller-supplied prompt.
+
+    ``query``/``generate_answer`` are the knowledge-assistant path: they enforce the anti-invention
+    ``SYSTEM_PROMPT`` because they answer factual questions from documented context. A drafting caller
+    (the Engagement 9 RFP desk) instead composes proposal content for later human approval and must
+    supply its own system prompt. This helper only reuses the DeepSeek client plumbing and error
+    translation; it applies no knowledge-base guardrails and must not be used for RAG answers.
+
+    Thin wrapper over ``complete_with_usage`` that keeps the existing ``-> str`` contract for callers
+    that do not need token accounting.
+    """
+    return complete_with_usage(system_prompt, user_content, config).answer
 
 
 def query(question: str, config: RagConfig | None = None) -> str:

@@ -10,7 +10,7 @@ the raw provider payload never enter graph state or persistence.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
@@ -107,3 +107,22 @@ def usage_from_counters(usage: Mapping[str, Any] | None, model: str) -> ModelUsa
     if not usage:
         return None
     return _build_usage(usage, model)
+
+
+def combine_usage(usages: Iterable[ModelUsage | None]) -> tuple[int | None, float | None]:
+    """Fold several priced calls into one step's ``(tokens, cost_usd)``.
+
+    Tokens sum across every call that produced counters. Cost sums **only when every present call was
+    priced** — if any contributing call has ``cost_usd=None`` (e.g. an unpriced model), the combined
+    cost is ``None`` rather than a partial, misleading sum. Returns ``(None, None)`` when no call
+    produced usage at all.
+    """
+    present = [usage for usage in usages if usage is not None]
+    if not present:
+        return None, None
+    tokens = sum(usage.total_tokens for usage in present)
+    if all(usage.cost_usd is not None for usage in present):
+        cost: float | None = float(sum(usage.cost_usd or 0.0 for usage in present))
+    else:
+        cost = None
+    return tokens, cost

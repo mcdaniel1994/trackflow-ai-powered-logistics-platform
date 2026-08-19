@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { RequirePasswordChangeGate } from "@/components/auth/RequirePasswordChangeGate";
+import { ChatPanel } from "@/components/knowledge/ChatPanel";
 import { AuthProvider } from "@/lib/auth/context";
-import { BackofficeViewProvider } from "@/lib/backoffice/view-context";
+import { ChatPanelProvider } from "@/lib/chat/panel-context";
 import { ThemeProvider } from "@/lib/theme/context";
 import { getServerSessionUser } from "@/lib/auth/session";
 import { loginPathFor, safeNextPath } from "@/lib/auth/redirects";
@@ -27,11 +28,12 @@ export default async function ProtectedLayout({ children }: { children: React.Re
   return (
     <AuthProvider initialUser={user}>
       <ThemeProvider>
-        <BackofficeViewProvider>
+        <ChatPanelProvider>
           <RequirePasswordChangeGate>
             <AppShell>{children}</AppShell>
+            <ChatPanel />
           </RequirePasswordChangeGate>
-        </BackofficeViewProvider>
+        </ChatPanelProvider>
       </ThemeProvider>
     </AuthProvider>
   );

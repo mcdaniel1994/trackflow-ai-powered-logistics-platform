@@ -3,9 +3,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import * as reportingRoute from "@/app/api/reporting/[[...path]]/route";
-import { CSRF_HEADER_NAME } from "@/lib/auth/constants";
 
-const { GET, POST } = reportingRoute;
+const { GET } = reportingRoute;
 
 function context(path: string[]) {
   return { params: Promise.resolve({ path }) };
@@ -46,40 +45,21 @@ describe("reporting BFF", () => {
     expect(fetchMock.mock.calls[1][0].toString()).toBe("http://central.test/reporting/pipeline-runs/latest");
   });
 
-  it("forwards CSRF only through the allowlisted pipeline queue POST", async () => {
-    process.env.CENTRAL_API_URL = "http://central.test";
-    const fetchMock = vi.fn().mockResolvedValue(new Response('{"run_id":"run-1","status":"requested"}', { status: 202 }));
-    vi.stubGlobal("fetch", fetchMock);
-
-    const response = await POST(
-      new NextRequest("http://backoffice.test/api/reporting/pipeline-runs", {
-        method: "POST",
-        body: JSON.stringify({ week_start: "2026-07-13", force_refresh: true }),
-        headers: {
-          Cookie: "trackflow_access=access; trackflow_csrf=csrf",
-          "Content-Type": "application/json",
-          [CSRF_HEADER_NAME]: "csrf",
-        },
-      }),
-      context(["pipeline-runs"]),
-    );
-    const headers = fetchMock.mock.calls[0][1].headers as Headers;
-
-    expect(response.status).toBe(202);
-    expect(headers.get(CSRF_HEADER_NAME)).toBe("csrf");
-    expect(fetchMock.mock.calls[0][0].toString()).toBe("http://central.test/reporting/pipeline-runs");
+  it("no longer exposes a POST handler (manual pipeline triggering removed)", () => {
+    // Manual Run now / Force refresh were removed from the Back Office (final-polish 2.3); the BFF is
+    // read-only. Central API still owns POST /reporting/pipeline-runs for scheduled/CLI dispatch.
+    expect("POST" in reportingRoute).toBe(false);
   });
 
   it.each([
     ["GET", ["pipeline-runs"]],
-    ["POST", ["pipeline-runs", "latest"]],
+    ["GET", ["pipeline-runs", "run"]],
     ["GET", ["weekly-warehouse-client-performance", "extra"]],
-    ["DELETE", ["pipeline-runs"]],
-  ])("blocks non-allowlisted %s routes without an upstream call", async (method, path) => {
+  ])("blocks non-allowlisted %s routes without an upstream call", async (_method, path) => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
-    const request = new NextRequest(`http://backoffice.test/api/reporting/${path.join("/")}`, { method });
-    const response = method === "POST" ? await POST(request, context(path)) : await GET(request, context(path));
+    const request = new NextRequest(`http://backoffice.test/api/reporting/${path.join("/")}`, { method: "GET" });
+    const response = await GET(request, context(path));
     expect(response.status).toBe(404);
     expect(fetchMock).not.toHaveBeenCalled();
   });

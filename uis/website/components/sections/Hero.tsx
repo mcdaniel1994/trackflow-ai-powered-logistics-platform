@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import type { Translation } from "@/content/types";
 
@@ -11,13 +10,26 @@ export function Hero({ copy }: { copy: HeroCopy }) {
       className="relative flex min-h-[76vh] items-center overflow-hidden"
       aria-labelledby="hero-heading"
     >
-      <Image
+      {/* Decorative background: the headline and subheading carry all meaning. */}
+      <video
+        className="hero-video absolute inset-0 h-full w-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        poster="/images/trackflow-operations-hero.png"
+        aria-hidden="true"
+        tabIndex={-1}
+      >
+        <source src="/images/trackflow_video.mp4" type="video/mp4" />
+      </video>
+      {/* Reduced-motion fallback (WCAG 2.2.2): shown via CSS instead of the looping video. */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src="/images/trackflow-operations-hero.png"
         alt={copy.imageAlt}
-        fill
-        priority
-        sizes="100vw"
-        className="object-cover"
+        className="hero-video-fallback absolute inset-0 h-full w-full object-cover"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-navy-deep/95 via-navy-deep/80 to-navy-deep/20" />
       <div className="absolute inset-y-0 left-0 w-full bg-gradient-to-b from-navy-deep/20 via-transparent to-navy-deep/30 lg:w-3/5" />

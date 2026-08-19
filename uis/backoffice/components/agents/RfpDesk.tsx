@@ -5,15 +5,46 @@ import {
   CheckCircle2,
   ChevronRight,
   CircleDashed,
+  Download,
   FileText,
   RefreshCw,
   Upload,
   XCircle,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { decideDepartment, getRfpTicket, rfpError, uploadRfp } from "@/lib/rfp/api";
-import type { RfpDecisionAction, RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
+import {
+  decideDepartment,
+  downloadRfpDocument,
+  downloadRfpPdf,
+  getRfpDocument,
+  getRfpTicket,
+  rfpError,
+  uploadRfp,
+} from "@/lib/rfp/api";
+import type {
+  RfpDecisionAction,
+  RfpFinalDocument,
+  RfpTicketDetail,
+  RfpTicketSummary,
+} from "@/lib/rfp/types";
 import { useRfpTicketStream } from "@/lib/realtime/rfp-stream";
+
+const DEPARTMENT_ORDER = ["warehouse", "lastmile", "reverse"] as const;
+const DEPARTMENT_NAMES: Record<string, string> = {
+  warehouse: "Warehouse & Storage",
+  lastmile: "Last-Mile Delivery",
+  reverse: "Reverse Logistics",
+};
+
+function departmentName(id: string) {
+  return DEPARTMENT_NAMES[id] ?? label(id);
+}
+
+function orderedDepartments(ids: string[]) {
+  const known = DEPARTMENT_ORDER.filter((dept) => ids.includes(dept));
+  const extra = ids.filter((dept) => !DEPARTMENT_ORDER.includes(dept as (typeof DEPARTMENT_ORDER)[number])).sort();
+  return [...known, ...extra];
+}
 
 const DECISIONS: { action: RfpDecisionAction; label: string }[] = [
   { action: "approve", label: "Approve" },
@@ -57,6 +88,106 @@ function aspectsOf(section: RfpTicketDetail["sections"][number]): string[] {
   return Array.isArray(raw) ? raw.map((item) => String(item)) : [];
 }
 
+function CompletedProposal({ ticket }: { ticket: RfpTicketDetail }) {
+  const ticketId = ticket.id;
+  const [document_, setDocument] = useState<RfpFinalDocument | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<"pdf" | "md" | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // The parent remounts this via key={ticket.id}, so state resets on ticket change without a
+  // synchronous setState in the effect body.
+  useEffect(() => {
+    let active = true;
+    void getRfpDocument(ticketId)
+      .then((data) => {
+        if (active) setDocument(data);
+      })
+      .catch((err: unknown) => {
+        if (active) setError(rfpError(err).message);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [ticketId]);
+
+  async function onDownload(kind: "pdf" | "md") {
+    setDownloading(kind);
+    setDownloadError(null);
+    try {
+      await (kind === "pdf" ? downloadRfpPdf(ticketId) : downloadRfpDocument(ticketId));
+    } catch (err) {
+      setDownloadError(rfpError(err).message);
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  const sections = document_?.sections ?? {};
+  const departments = orderedDepartments(Object.keys(sections));
+  const ready = !loading && error === null && document_ !== null;
+
+  return (
+    <div className="rounded-2xl border border-teal/40 bg-teal/5 p-4 dark:border-teal/40 dark:bg-teal/10">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p role="note" className="text-sm font-black text-teal-700 dark:text-teal">
+          Proposal complete — every department approved. The final document is ready.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void onDownload("pdf")}
+            disabled={downloading !== null || !ready}
+            className="inline-flex items-center gap-2 rounded-xl bg-teal px-3 py-2 text-sm font-black text-white transition hover:bg-teal-700 disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {downloading === "pdf" ? "Generating…" : "Download proposal (PDF)"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void onDownload("md")}
+            disabled={downloading !== null || !ready}
+            className="inline-flex items-center gap-2 rounded-xl border border-teal/50 px-3 py-2 text-sm font-bold text-teal-700 transition hover:bg-teal/10 disabled:opacity-50 dark:text-teal"
+          >
+            {downloading === "md" ? "Preparing…" : "Markdown"}
+          </button>
+        </div>
+      </div>
+      {downloadError && (
+        <p role="alert" className="mt-2 flex items-center gap-1 text-sm font-bold text-coral">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" /> {downloadError}
+        </p>
+      )}
+      {loading ? (
+        <p role="status" className="mt-3 text-sm text-neutral-500 dark:text-neutral-300">
+          Loading the consolidated proposal…
+        </p>
+      ) : error ? (
+        <p role="alert" className="mt-3 text-sm font-bold text-coral">
+          {error}
+        </p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {departments.map((department) => (
+            <details key={department} className="rounded-xl bg-white p-3 dark:bg-ink-800">
+              <summary className="cursor-pointer text-sm font-black text-navy-deep dark:text-neutral-100">
+                {departmentName(department)}
+              </summary>
+              <p className="mt-2 whitespace-pre-wrap text-xs leading-6 text-neutral-600 dark:text-neutral-200">
+                {String(sections[department] ?? "")}
+              </p>
+            </details>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function TicketDetail({
   ticket,
   onDecide,
@@ -86,11 +217,7 @@ function TicketDetail({
         </p>
       )}
 
-      {ticket.status === "done" && (
-        <p role="note" className="rounded-xl bg-teal/10 p-3 text-sm font-bold text-teal-700 dark:text-teal">
-          Proposal complete — every department approved. The final document is ready.
-        </p>
-      )}
+      {ticket.status === "done" && <CompletedProposal key={ticket.id} ticket={ticket} />}
 
       <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Metric title="Country" value={label(ticket.client_country)} />

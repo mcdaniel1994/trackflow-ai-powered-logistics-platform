@@ -7,7 +7,7 @@ each ticket is scoped to its owner.
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, Response, UploadFile
 from sqlmodel import Session
 from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
@@ -91,3 +91,33 @@ def get_document(
     service: Annotated[RfpService, Depends(_service)],
 ) -> RfpFinalDocumentRead:
     return service.get_document(ticket_id, principal.user_id)
+
+
+@router.get("/tickets/{ticket_id}/document/download")
+def download_document(
+    ticket_id: str,
+    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+) -> Response:
+    """Download the finalized proposal as a Markdown attachment (server-generated filename)."""
+    markdown, filename = service.get_document_markdown(ticket_id, principal.user_id)
+    return Response(
+        content=markdown,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/tickets/{ticket_id}/document/pdf")
+def download_document_pdf(
+    ticket_id: str,
+    principal: Annotated[AuthenticatedPrincipal, Depends(current_principal)],
+    service: Annotated[RfpService, Depends(_service)],
+) -> Response:
+    """Download the finalized proposal as a branded PDF attachment (server-generated filename)."""
+    pdf_bytes, filename = service.get_document_pdf(ticket_id, principal.user_id)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

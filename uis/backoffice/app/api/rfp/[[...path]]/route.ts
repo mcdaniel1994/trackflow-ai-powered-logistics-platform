@@ -16,6 +16,12 @@ function isAllowed(method: string, path: string[]): boolean {
   const isTicketsRoot = path.length === 1 && path[0] === "tickets";
   const isDocument =
     path.length === 3 && path[0] === "tickets" && UUID_RE.test(path[1]) && path[2] === "document";
+  const isDocumentDownload =
+    path.length === 4 &&
+    path[0] === "tickets" &&
+    UUID_RE.test(path[1]) &&
+    path[2] === "document" &&
+    (path[3] === "download" || path[3] === "pdf");
   const isDecision =
     path.length === 5 &&
     path[0] === "tickets" &&
@@ -24,7 +30,7 @@ function isAllowed(method: string, path: string[]): boolean {
     DEPARTMENT_RE.test(path[3]) &&
     path[4] === "decision";
   return (
-    (method === "GET" && (isTicketsRoot || isTicketDetail || isDocument)) ||
+    (method === "GET" && (isTicketsRoot || isTicketDetail || isDocument || isDocumentDownload)) ||
     (method === "POST" && (isTicketsRoot || isDecision))
   );
 }

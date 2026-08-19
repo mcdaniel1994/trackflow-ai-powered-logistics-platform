@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   Bot,
   Check,
+  ChevronLeft,
   ChevronRight,
   CircleDashed,
   Clock3,
@@ -35,8 +36,13 @@ function duration(value: number | null) {
   return value >= 1000 ? `${(value / 1000).toFixed(2)}s` : `${value}ms`;
 }
 
-function cost(value: number | null) {
-  return value === null ? "—" : `$${value.toFixed(6)}`;
+const NOT_PRICED_HINT = "Token counts are exact, but this model has no published per-token price.";
+
+// Distinguish "no data" (—) from "not priced" (tokens exist but the model is unpriced, e.g. deepseek-chat).
+function costDisplay(value: number | null, tokens: number | null): { text: string; hint?: string } {
+  if (value !== null) return { text: `$${value.toFixed(6)}` };
+  if (tokens !== null && tokens > 0) return { text: "Not priced", hint: NOT_PRICED_HINT };
+  return { text: "—" };
 }
 
 function when(value: string) {
@@ -63,11 +69,11 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function Metric({ title, value, icon: Icon }: { title: string; value: string; icon: typeof Clock3 }) {
+function Metric({ title, value, icon: Icon, hint }: { title: string; value: string; icon: typeof Clock3; hint?: string }) {
   return (
     <div className="rounded-xl border border-mist bg-white px-3 py-3 dark:border-ink-600 dark:bg-ink-800">
       <div className="flex items-center gap-2 text-neutral-400"><Icon className="h-4 w-4" aria-hidden="true" /><span className="text-[10px] font-black uppercase tracking-wider">{title}</span></div>
-      <p className="mt-1 truncate text-sm font-black text-navy-deep dark:text-neutral-100">{value}</p>
+      <p className="mt-1 truncate text-sm font-black text-navy-deep dark:text-neutral-100" title={hint}>{value}</p>
     </div>
   );
 }
@@ -88,7 +94,10 @@ function RunDetail({ run }: { run: AgentRunDetail }) {
         <Metric title="Route" value={label(run.route_taken)} icon={Route} />
         <Metric title="Duration" value={duration(run.duration_ms)} icon={Clock3} />
         <Metric title="Tokens" value={run.total_tokens?.toLocaleString() ?? "—"} icon={CircleDashed} />
-        <Metric title="Cost" value={cost(run.total_cost_usd)} icon={Coins} />
+        {(() => {
+          const c = costDisplay(run.total_cost_usd, run.total_tokens);
+          return <Metric title="Cost" value={c.text} icon={Coins} hint={c.hint} />;
+        })()}
       </div>
 
       <div className="rounded-2xl border border-mist bg-white p-4 dark:border-ink-600 dark:bg-ink-800">
@@ -105,11 +114,24 @@ function RunDetail({ run }: { run: AgentRunDetail }) {
                 {index < run.node_steps.length - 1 && <span aria-hidden="true" className="absolute left-[0.94rem] top-8 h-[calc(100%-1rem)] w-px bg-mist dark:bg-ink-600" />}
                 <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-black text-white dark:bg-sky">{step.sequence}</span>
                 <div className="min-w-0 rounded-xl bg-ivory px-3 py-3 dark:bg-ink-700">
-                  <div className="flex flex-wrap items-center justify-between gap-2"><p className="break-words text-sm font-black text-navy-deep dark:text-neutral-100">{label(step.node_name)}</p><StatusBadge status={step.status} /></div>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="break-words text-sm font-black text-navy-deep dark:text-neutral-100">{label(step.node_name)}</p>
+                    <div className="flex items-center gap-2">
+                      {step.tokens == null && step.cost_usd == null ? (
+                        <span
+                          title="This node is deterministic — it does not call a language model, so it reports no tokens or cost."
+                          className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-neutral-500 dark:bg-ink-600 dark:text-neutral-300"
+                        >
+                          No LLM call
+                        </span>
+                      ) : null}
+                      <StatusBadge status={step.status} />
+                    </div>
+                  </div>
                   <dl className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500 dark:text-neutral-300">
                     <div><dt className="inline font-bold">Latency </dt><dd className="inline">{duration(step.duration_ms)}</dd></div>
                     <div><dt className="inline font-bold">Tokens </dt><dd className="inline">{step.tokens?.toLocaleString() ?? "—"}</dd></div>
-                    <div><dt className="inline font-bold">Cost </dt><dd className="inline">{cost(step.cost_usd)}</dd></div>
+                    <div><dt className="inline font-bold">Cost </dt>{(() => { const c = costDisplay(step.cost_usd, step.tokens); return <dd className="inline" title={c.hint}>{c.text}</dd>; })()}</div>
                   </dl>
                   {step.notes && <p className="mt-2 break-words text-xs text-neutral-400">{step.notes}</p>}
                 </div>
@@ -143,11 +165,17 @@ function RunDetail({ run }: { run: AgentRunDetail }) {
   );
 }
 
+const RUNS_PER_PAGE = 8;
+
 export function AgentOSDashboard() {
   const [agent, setAgent] = useState("");
   const [status, setStatus] = useState<"" | AgentRunStatus>("");
   const [selectedTrace, setSelectedTrace] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [page, setPage] = useState(0);
+  // On narrow screens, selecting a run swaps the list out for a focused detail view (with a Back
+  // button); on xl the list and detail sit side by side as before.
+  const [mobileDetail, setMobileDetail] = useState(false);
 
   const catalogState = useAutoRefresh(() => getAgentRuns(), [refreshNonce], { intervalMs: 5000 });
   const knownAgents = useMemo(
@@ -165,6 +193,20 @@ export function AgentOSDashboard() {
     ? selectedTrace
     : runs[0]?.trace_id ?? null;
 
+  const totalPages = Math.max(1, Math.ceil(runs.length / RUNS_PER_PAGE));
+  const safePage = Math.min(page, totalPages - 1);
+  const pagedRuns = runs.slice(safePage * RUNS_PER_PAGE, safePage * RUNS_PER_PAGE + RUNS_PER_PAGE);
+
+  function selectRun(traceId: string) {
+    setSelectedTrace(traceId);
+    setMobileDetail(true);
+  }
+
+  function changeFilters(next: () => void) {
+    next();
+    setPage(0);
+  }
+
   const detailState = useAutoRefresh(
     () => effectiveTrace ? getAgentRun(effectiveTrace) : Promise.resolve(null),
     [effectiveTrace, refreshNonce],
@@ -181,22 +223,32 @@ export function AgentOSDashboard() {
       </header>
 
       <div className="grid gap-5 xl:grid-cols-[390px_minmax(0,1fr)]">
-        <aside aria-label="Agent runs" className="min-w-0 rounded-2xl border border-mist bg-white p-4 dark:border-ink-600 dark:bg-ink-800">
+        <aside aria-label="Agent runs" className={`min-w-0 rounded-2xl border border-mist bg-white p-4 dark:border-ink-600 dark:bg-ink-800 ${mobileDetail ? "hidden xl:block" : "block"}`}>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <label className="text-xs font-black uppercase tracking-wide text-neutral-500 dark:text-neutral-300">Agent<select aria-label="Filter by agent" value={agent} onChange={(event) => setAgent(event.target.value)} className="mt-1 w-full rounded-xl border border-mist bg-white px-3 py-2 text-sm font-bold text-navy-deep dark:border-ink-600 dark:bg-ink-700 dark:text-neutral-100"><option value="">All agents</option>{knownAgents.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
-            <label className="text-xs font-black uppercase tracking-wide text-neutral-500 dark:text-neutral-300">Status<select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value as "" | AgentRunStatus)} className="mt-1 w-full rounded-xl border border-mist bg-white px-3 py-2 text-sm font-bold text-navy-deep dark:border-ink-600 dark:bg-ink-700 dark:text-neutral-100">{STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <label className="text-xs font-black uppercase tracking-wide text-neutral-500 dark:text-neutral-300">Agent<select aria-label="Filter by agent" value={agent} onChange={(event) => changeFilters(() => setAgent(event.target.value))} className="mt-1 w-full rounded-xl border border-mist bg-white px-3 py-2 text-sm font-bold text-navy-deep dark:border-ink-600 dark:bg-ink-700 dark:text-neutral-100"><option value="">All agents</option>{knownAgents.map((name) => <option key={name} value={name}>{name}</option>)}</select></label>
+            <label className="text-xs font-black uppercase tracking-wide text-neutral-500 dark:text-neutral-300">Status<select aria-label="Filter by status" value={status} onChange={(event) => changeFilters(() => setStatus(event.target.value as "" | AgentRunStatus))} className="mt-1 w-full rounded-xl border border-mist bg-white px-3 py-2 text-sm font-bold text-navy-deep dark:border-ink-600 dark:bg-ink-700 dark:text-neutral-100">{STATUS_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
           </div>
           <div className="my-4 flex items-center justify-between"><h2 className="text-sm font-black text-navy-deep dark:text-neutral-100">Recent runs</h2><span className="text-xs font-bold text-neutral-400">{runs.length}</span></div>
           {runsState.loading ? <div role="status" className="space-y-2" aria-label="Loading agent runs">{[1,2,3].map((item) => <div key={item} className="h-24 animate-pulse rounded-xl bg-mist dark:bg-ink-700" />)}</div> : runsState.error ? <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-300"><AlertTriangle className="mb-2 h-5 w-5" aria-hidden="true" />{runsState.error}</div> : runs.length === 0 ? <div className="rounded-xl bg-ivory p-5 text-center dark:bg-ink-700"><CircleDashed className="mx-auto h-6 w-6 text-neutral-400" aria-hidden="true" /><p className="mt-2 text-sm font-black text-navy-deep dark:text-neutral-100">No runs found</p><p className="mt-1 text-xs text-neutral-400">Try another filter or wait for the agent to run.</p></div> : (
-            <div role="listbox" aria-label="Recent agent runs" className="max-h-[68vh] space-y-2 overflow-y-auto pr-1">{runs.map((run: AgentRunSummary) => (
-              <button key={run.trace_id} type="button" role="option" aria-selected={run.trace_id === effectiveTrace} onClick={() => setSelectedTrace(run.trace_id)} className={`w-full min-w-0 rounded-xl border p-3 text-left transition ${run.trace_id === effectiveTrace ? "border-sky bg-mist/70 dark:border-sky dark:bg-ink-700" : "border-mist hover:border-sky/60 hover:bg-ivory dark:border-ink-600 dark:hover:bg-ink-700"}`}>
-                <div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-black text-navy-deep dark:text-neutral-100">{run.agent_name}</p><ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden="true" /></div><div className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={run.status} /><span className="text-xs font-bold text-neutral-400">{label(run.route_taken)}</span></div><div className="mt-2 flex items-center justify-between gap-2 text-xs text-neutral-400"><span>{when(run.started_at)}</span><span>{duration(run.duration_ms)} · {run.total_tokens ?? "—"} tok</span></div>{run.guardrail_trigger_count > 0 && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-coral"><ShieldAlert className="h-3 w-3" aria-hidden="true" />{run.guardrail_trigger_count} guardrail trigger{run.guardrail_trigger_count === 1 ? "" : "s"}</p>}
-              </button>
-            ))}</div>
+            <>
+              <div role="listbox" aria-label="Recent agent runs" className="space-y-2">{pagedRuns.map((run: AgentRunSummary) => (
+                <button key={run.trace_id} type="button" role="option" aria-selected={run.trace_id === effectiveTrace} onClick={() => selectRun(run.trace_id)} className={`w-full min-w-0 rounded-xl border p-3 text-left transition ${run.trace_id === effectiveTrace ? "border-sky bg-mist/70 dark:border-sky dark:bg-ink-700" : "border-mist hover:border-sky/60 hover:bg-ivory dark:border-ink-600 dark:hover:bg-ink-700"}`}>
+                  <div className="flex items-center justify-between gap-2"><p className="truncate text-sm font-black text-navy-deep dark:text-neutral-100">{run.agent_name}</p><ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden="true" /></div><div className="mt-2 flex flex-wrap items-center gap-2"><StatusBadge status={run.status} /><span className="text-xs font-bold text-neutral-400">{label(run.route_taken)}</span></div><div className="mt-2 flex items-center justify-between gap-2 text-xs text-neutral-400"><span>{when(run.started_at)}</span><span>{duration(run.duration_ms)} · {run.total_tokens ?? "—"} tok</span></div>{run.guardrail_trigger_count > 0 && <p className="mt-2 flex items-center gap-1 text-xs font-bold text-coral"><ShieldAlert className="h-3 w-3" aria-hidden="true" />{run.guardrail_trigger_count} guardrail trigger{run.guardrail_trigger_count === 1 ? "" : "s"}</p>}
+                </button>
+              ))}</div>
+              {totalPages > 1 ? (
+                <div className="mt-4 flex items-center justify-between gap-2">
+                  <button type="button" onClick={() => setPage((value) => Math.max(0, value - 1))} disabled={safePage === 0} className="inline-flex items-center gap-1 rounded-lg border border-mist px-3 py-1.5 text-xs font-black text-navy transition hover:bg-ivory disabled:opacity-40 dark:border-ink-600 dark:text-neutral-100 dark:hover:bg-ink-700"><ChevronLeft className="h-4 w-4" aria-hidden="true" />Prev</button>
+                  <span className="text-xs font-bold text-neutral-400">Page {safePage + 1} of {totalPages}</span>
+                  <button type="button" onClick={() => setPage((value) => Math.min(totalPages - 1, value + 1))} disabled={safePage >= totalPages - 1} className="inline-flex items-center gap-1 rounded-lg border border-mist px-3 py-1.5 text-xs font-black text-navy transition hover:bg-ivory disabled:opacity-40 dark:border-ink-600 dark:text-neutral-100 dark:hover:bg-ink-700">Next<ChevronRight className="h-4 w-4" aria-hidden="true" /></button>
+                </div>
+              ) : null}
+            </>
           )}
         </aside>
 
-        <main className="min-w-0 rounded-2xl border border-mist bg-neutral-50 p-4 dark:border-ink-600 dark:bg-ink-900 sm:p-5">
+        <main className={`min-w-0 rounded-2xl border border-mist bg-neutral-50 p-4 dark:border-ink-600 dark:bg-ink-900 sm:p-5 ${mobileDetail ? "block" : "hidden xl:block"}`}>
+          <button type="button" onClick={() => setMobileDetail(false)} className="mb-4 inline-flex items-center gap-1 rounded-lg border border-mist bg-white px-3 py-1.5 text-xs font-black text-navy transition hover:bg-ivory dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100 xl:hidden"><ChevronLeft className="h-4 w-4" aria-hidden="true" />Back to runs</button>
           {!selected ? <div className="flex min-h-72 items-center justify-center text-center"><div><Route className="mx-auto h-8 w-8 text-neutral-300" aria-hidden="true" /><p className="mt-3 text-sm font-black text-neutral-500 dark:text-neutral-300">Select a run to inspect its exact graph path.</p></div></div> : detailState.error ? <div role="alert" className="rounded-xl bg-red-50 p-4 text-sm font-bold text-red-700 dark:bg-red-950/40 dark:text-red-300">{detailState.error}</div> : !detail ? <div role="status" className="flex min-h-72 items-center justify-center"><RefreshCw className="h-6 w-6 animate-spin text-teal" aria-hidden="true" /><span className="sr-only">Loading selected run</span></div> : <RunDetail run={detail} />}
         </main>
       </div>

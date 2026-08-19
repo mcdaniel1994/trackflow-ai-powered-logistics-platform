@@ -129,9 +129,13 @@ class AgentService:
             pending = memory.pending_response(conversation.id)
         except AgentMemoryError as exc:
             raise AgentError(exc.status_code, exc.detail) from exc
+        # Guardrail-blocked content is never stored (telemetry standard §8). Chat-session content is
+        # NOT suppressed here: Engagement 10 already persists full chat messages under the approved
+        # telemetry exception, so a truncated preview of the same content adds no new category of
+        # stored data — it just makes chat-routed runs legible in the Agent OS dashboard.
         input_summary, output_summary = (
             (None, None)
-            if chat_session is not None or result.guardrail_events
+            if result.guardrail_events
             else self._summaries(payload.question, result.answer)
         )
 

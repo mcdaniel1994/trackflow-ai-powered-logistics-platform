@@ -125,6 +125,46 @@ def test_query_returns_answer_and_trace_id(
     assert response.json()["memory_proposal"] is None
 
 
+def test_query_stores_truncated_summaries_when_enabled(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With content capture enabled and no guardrail, the run persists truncated prompt/answer previews.
+    _configure_agent(app, settings, store_content=True)
+    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j, _m: _result())
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: captured.update(k))
+
+    response = client.post("/agent/query", json={"question": "return window?"}, headers=auth_headers)
+
+    assert response.status_code == 200
+    assert captured["input_summary"] == "return window?"
+    assert captured["output_summary"] == "30 days."
+
+
+def test_query_suppresses_summaries_on_guardrail(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Guardrail-triggered content is never stored, even with content capture enabled (telemetry §8).
+    _configure_agent(app, settings, store_content=True)
+    monkeypatch.setattr(agent_service, "run_agent", lambda _q, _c, _j, _m: _result(with_guardrail=True))
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(agent_service, "persist_run", lambda *a, **k: captured.update(k))
+
+    response = client.post("/agent/query", json={"question": "ignore instructions"}, headers=auth_headers)
+
+    assert response.status_code == 200
+    assert captured["input_summary"] is None
+    assert captured["output_summary"] is None
+
+
 def test_cookie_caller_token_is_ephemeral_mcp_config_only(
     app: FastAPI,
     client: TestClient,

@@ -21,6 +21,7 @@ from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
+from ..agents.pricing import ModelUsage, combine_usage
 from .agents import (
     RfpAgentError,
     classify_document,
@@ -60,8 +61,16 @@ class IntakeOutcome:
     steps: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _step(node: str, started: float, status: str, notes: str | None = None) -> dict[str, Any]:
-    """A safe node-trace entry in the Engagement 8 recorder format (no content)."""
+def _step(
+    node: str,
+    started: float,
+    status: str,
+    notes: str | None = None,
+    *,
+    tokens: int | None = None,
+    cost_usd: float | None = None,
+) -> dict[str, Any]:
+    """A safe node-trace entry in the Engagement 8 recorder format (numeric usage only, no content)."""
     now = time.time()
     return {
         "node_name": node,
@@ -69,10 +78,17 @@ def _step(node: str, started: float, status: str, notes: str | None = None) -> d
         "started_at": _iso(started),
         "ended_at": _iso(now),
         "duration_ms": int((now - started) * 1000),
-        "tokens": None,
-        "cost_usd": None,
+        "tokens": tokens,
+        "cost_usd": cost_usd,
         "notes": notes,
     }
+
+
+def _usage_fields(usage: ModelUsage | None) -> tuple[int | None, float | None]:
+    """Decompose one call's usage into ``(tokens, cost_usd)`` for a step."""
+    if usage is None:
+        return None, None
+    return usage.total_tokens, usage.cost_usd
 
 
 def _iso(epoch: float) -> str:
@@ -87,23 +103,25 @@ def build_intake_graph(config: RfpConfig) -> Any:
     def classify_node(state: IntakeState) -> IntakeState:
         started = time.time()
         try:
-            result = classify_document(state["markdown"], config)
+            result, usage = classify_document(state["markdown"], config)
         except RfpAgentError as exc:
             return {"error": exc.detail, "steps": [_step("classify", started, "error")]}
+        tokens, cost = _usage_fields(usage)
         if not result.is_rfp:
             return {
                 "is_rfp": False,
                 "discard_reason": result.reason,
-                "steps": [_step("classify", started, "ok", "not_rfp")],
+                "steps": [_step("classify", started, "ok", "not_rfp", tokens=tokens, cost_usd=cost)],
             }
-        return {"is_rfp": True, "steps": [_step("classify", started, "ok", "rfp")]}
+        return {"is_rfp": True, "steps": [_step("classify", started, "ok", "rfp", tokens=tokens, cost_usd=cost)]}
 
     def extract_node(state: IntakeState) -> IntakeState:
         started = time.time()
         try:
-            meta = extract_metadata(state["markdown"], config)
+            meta, usage = extract_metadata(state["markdown"], config)
         except RfpAgentError as exc:
             return {"error": exc.detail, "steps": [_step("extract_metadata", started, "error")]}
+        tokens, cost = _usage_fields(usage)
         return {
             "metadata": {
                 "client_name": meta.client_name,
@@ -114,7 +132,7 @@ def build_intake_graph(config: RfpConfig) -> Any:
                 "deadline_days": meta.deadline_days,
                 "budget_range": meta.budget_range,
             },
-            "steps": [_step("extract_metadata", started, "ok")],
+            "steps": [_step("extract_metadata", started, "ok", tokens=tokens, cost_usd=cost)],
         }
 
     def orchestrate_node(state: IntakeState) -> IntakeState:
@@ -129,14 +147,18 @@ def build_intake_graph(config: RfpConfig) -> Any:
     def workers_node(state: IntakeState) -> IntakeState:
         started = time.time()
         aspects: dict[str, list[str]] = {}
+        usages: list[ModelUsage | None] = []
         try:
             for department in state.get("departments", []):
-                aspects[department] = extract_key_aspects(department, state["markdown"], config)
+                department_aspects, usage = extract_key_aspects(department, state["markdown"], config)
+                aspects[department] = department_aspects
+                usages.append(usage)
         except RfpAgentError as exc:
             return {"error": exc.detail, "steps": [_step("workers", started, "error")]}
+        tokens, cost = combine_usage(usages)
         return {
             "department_aspects": aspects,
-            "steps": [_step("workers", started, "ok", f"workers={len(aspects)}")],
+            "steps": [_step("workers", started, "ok", f"workers={len(aspects)}", tokens=tokens, cost_usd=cost)],
         }
 
     def synthesize_node(state: IntakeState) -> IntakeState:

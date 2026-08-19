@@ -3,14 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const reportingMocks = vi.hoisted(() => ({
-  role: "admin" as "admin" | "user",
   getWeeklyPerformance: vi.fn(),
   getPipelineRunsStatus: vi.fn(),
-  requestPipelineRun: vi.fn(),
-}));
-
-vi.mock("@/lib/auth/context", () => ({
-  useAuth: () => ({ user: { role: reportingMocks.role } }),
 }));
 
 vi.mock("@/lib/reporting/api", async () => {
@@ -76,22 +70,19 @@ const status = {
 describe("business reporting dashboard", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    reportingMocks.role = "admin";
     reportingMocks.getWeeklyPerformance.mockResolvedValue(report);
     reportingMocks.getPipelineRunsStatus.mockResolvedValue(status);
-    reportingMocks.requestPipelineRun.mockResolvedValue({ run_id: "queued-run", status: "requested" });
-    vi.spyOn(window, "confirm").mockReturnValue(true);
   });
 
-  it("renders KPI contracts, client display names, incomplete status, and safe run metadata", async () => {
+  it("renders KPI tiles, the precise table, incomplete status, and safe run metadata", async () => {
     render(<BusinessReportingView />);
 
-    expect(await screen.findByText("Fashion Co")).toBeInTheDocument();
-    expect(screen.getAllByText("Inbound units")).toHaveLength(2);
-    expect(screen.getAllByText("Outbound orders")).toHaveLength(2);
-    expect(screen.getAllByText("Stockout events")).toHaveLength(2);
-    expect(screen.getAllByText("Discrepancy events")).toHaveLength(2);
-    expect(screen.getByText("0.20%")).toBeInTheDocument();
+    // The client display name appears in both the KPI charts and the retained precise table.
+    expect((await screen.findAllByText("Fashion Co")).length).toBeGreaterThan(0);
+    // Each metric label appears in a KPI tile plus both warehouse table headers.
+    expect(screen.getAllByText("Inbound units")).toHaveLength(3);
+    expect(screen.getAllByText("Outbound orders")).toHaveLength(3);
+    expect(screen.getByText("0.20%")).toBeInTheDocument(); // precise table cell (2 decimals)
     expect(screen.getByText("Incomplete — ledger reset mid-week")).toBeInTheDocument();
     expect(screen.getByText("1 queued")).toBeInTheDocument();
     expect(screen.getByText("Failure: LOAD_FAILED")).toBeInTheDocument();
@@ -101,24 +92,19 @@ describe("business reporting dashboard", () => {
     expect(document.body.textContent?.toLowerCase()).not.toMatch(/r2|cache_nonce|object key|bucket/);
   });
 
-  it("queues normal and force-refresh requests and then polls status", async () => {
-    const user = userEvent.setup();
+  it("no longer exposes manual pipeline trigger controls", async () => {
     render(<BusinessReportingView />);
-    await screen.findByText("Fashion Co");
-
-    await user.click(screen.getByRole("button", { name: "Run now" }));
-    await waitFor(() => expect(reportingMocks.requestPipelineRun).toHaveBeenCalledWith({ force_refresh: false }));
-    expect(await screen.findByRole("status")).toHaveTextContent("queued-run");
-
-    await user.click(screen.getByRole("button", { name: "Force refresh" }));
-    await waitFor(() => expect(reportingMocks.requestPipelineRun).toHaveBeenCalledWith({ force_refresh: true }));
-    expect(window.confirm).toHaveBeenCalledWith(expect.stringMatching(/rollup work from the durable source ledger/i));
+    await screen.findAllByText("Fashion Co");
+    expect(screen.queryByRole("button", { name: "Run now" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Force refresh" })).not.toBeInTheDocument();
+    // Load week and the read-only status panel remain.
+    expect(screen.getByRole("button", { name: "Load week" })).toBeInTheDocument();
   });
 
   it("validates Monday selection and loads an explicit week", async () => {
     const user = userEvent.setup();
     render(<BusinessReportingView />);
-    await screen.findByText("Fashion Co");
+    await screen.findAllByText("Fashion Co");
 
     const picker = screen.getByLabelText("Report week (Monday)");
     fireEvent.change(picker, { target: { value: "2026-07-14" } });
@@ -130,13 +116,13 @@ describe("business reporting dashboard", () => {
     await waitFor(() => expect(reportingMocks.getWeeklyPerformance).toHaveBeenCalledWith("2026-07-20"));
   });
 
-  it("hides administrator controls from standard users and renders the empty state", async () => {
-    reportingMocks.role = "user";
+  it("renders the empty state and no charts when the week has no entries", async () => {
     reportingMocks.getWeeklyPerformance.mockResolvedValue({ week_start: "2026-07-13", incomplete: false, entries: [] });
     render(<BusinessReportingView />);
     expect(await screen.findByText("No report computed yet for this week")).toBeInTheDocument();
+    // No KPI tiles/charts without entries; the manual triggers are gone regardless.
+    expect(screen.queryByText("Outbound orders by client")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Run now" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Force refresh" })).not.toBeInTheDocument();
   });
 
   it.each(["idle", "processing", "queued", "retrying", "stuck", "unavailable"] as const)(
