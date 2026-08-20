@@ -41,6 +41,14 @@ function routeLabel(route: string) {
 // How far from the bottom the reader may be before auto-follow stops fighting them.
 const FOLLOW_THRESHOLD_PX = 80;
 
+/** True on touch-primary devices, where an on-screen keyboard covers the transcript. */
+function hasOnScreenKeyboard(): boolean {
+  // Guarded rather than assumed: matchMedia is absent in jsdom, and a missing
+  // capability should degrade to desktop behaviour rather than throw mid-render.
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
 export function ChatPanel() {
   const { open, seed, closePanel } = useChatPanel();
   const [panelQuestion, setPanelQuestion] = useState("");
@@ -78,15 +86,34 @@ export function ChatPanel() {
       const partial = typeof active?.content === "string" ? active.content : "";
       const sequence = typeof active?.sequence === "number" ? active.sequence : 0;
       tokenSequencesRef.current = generationId ? { [generationId]: sequence } : {};
-      setMessages(generationId && partial
+      const base: DisplayMessage[] = generationId && partial
         ? [...snapshotMessages, {
             message_id: `stream-${generationId}`,
             role: "assistant",
             content: partial,
             interrupted: false,
           }]
-        : snapshotMessages);
-      setStatus(generationId ? "streaming" : "idle");
+        : snapshotMessages;
+      // A snapshot for a session created moments ago is empty: the question is still
+      // in flight and has not been persisted yet. Replacing state wholesale would
+      // erase the message the sender is looking at, show the empty state, then bring
+      // it back when `user_message` lands. Carry forward anything the server has not
+      // acknowledged instead.
+      let carried: DisplayMessage[] = [];
+      setMessages((current) => {
+        carried = current.filter(
+          (row) =>
+            row.message_id.startsWith("pending-user-") &&
+            !base.some((row2) => row2.role === "user" && row2.content === row.content),
+        );
+        return carried.length ? [...base, ...carried] : base;
+      });
+      // Likewise, do not drop back to idle while a question is still unacknowledged;
+      // that flickers the "responding" indicator off and on.
+      setStatus((current) => {
+        if (generationId) return "streaming";
+        return carried.length ? current : "idle";
+      });
       setErrorMessage("");
       return;
     }
@@ -205,6 +232,7 @@ export function ChatPanel() {
         socket.sendUserMessage(trimmed, activeRoute);
       }
       setStatus("streaming");
+      if (hasOnScreenKeyboard()) panelInputRef.current?.blur();
     } catch (error) {
       setErrorMessage(agentError(error).message);
       setStatus("error");
@@ -234,7 +262,7 @@ export function ChatPanel() {
   // Focus the composer and wire Escape-to-close while the panel is open.
   useEffect(() => {
     if (!open) return;
-    panelInputRef.current?.focus();
+    if (!hasOnScreenKeyboard()) panelInputRef.current?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") closePanel();
     };
@@ -353,7 +381,7 @@ export function ChatPanel() {
             </div>
           </div>
 
-          <div ref={messagesRef} aria-live="polite" className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-6">
+          <div ref={messagesRef} aria-live="polite" className="flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-5 sm:px-6">
             {!messages.length && status !== "connecting" && status !== "streaming" ? (
               <div className="mx-auto mt-12 max-w-sm text-center">
                 <Sparkles className="mx-auto mb-3 h-8 w-8 text-sky" aria-hidden="true" />

@@ -169,6 +169,67 @@ describe("Ask knowledge base", () => {
     }
   });
 
+  it("keeps an in-flight question visible when a new session snapshot arrives empty", async () => {
+    // A session created moments ago has nothing persisted yet, so its snapshot is
+    // empty. Replacing state wholesale erased the question the sender was looking
+    // at, flashed the empty state, then restored it when user_message landed.
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "what is the return window?");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+
+    emit("session_snapshot", { session_id: "s1", messages: [] });
+
+    // Still on screen, and no empty state.
+    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+    expect(panel.queryByText(/how can i help\?/i)).not.toBeInTheDocument();
+  });
+
+  it("adopts an authoritative snapshot for a session that already has history", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "hello");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    emit("session_snapshot", {
+      session_id: "s1",
+      messages: [
+        { message_id: "m1", role: "user", content: "earlier question", interrupted: false },
+        { message_id: "m2", role: "assistant", content: "earlier answer", interrupted: false },
+      ],
+    });
+
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByText("earlier question")).toBeInTheDocument();
+    expect(panel.getByText("earlier answer")).toBeInTheDocument();
+    // The unacknowledged question is carried alongside the recovered history.
+    expect(panel.getByText("hello")).toBeInTheDocument();
+  });
+
+  it("dismisses the on-screen keyboard after sending on a touch device", async () => {
+    // On a phone the keyboard covers the transcript, so holding focus after send
+    // hides the answer being streamed. Desktop keeps focus for a fast follow-up.
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query.includes("coarse"),
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    }));
+
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "a question");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    const composer = within(await screen.findByRole("dialog")).getByLabelText(/send a message/i);
+    await waitFor(() => expect(document.activeElement).not.toBe(composer));
+
+    vi.unstubAllGlobals();
+  });
+
   it("surfaces a safe server failure in the open chat panel", async () => {
     renderAsk();
     await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
