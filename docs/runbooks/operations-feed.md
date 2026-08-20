@@ -100,7 +100,11 @@ thresholds, not retention, are what bound it.
 | `ix_stock_exits_*` | 19.64 MB | 7.1% |
 | `ix_stock_entries_*` | 17.35 MB | 6.3% |
 | `reporting.hourly_activity_rollups` | 15.41 MB | 5.6% |
-| **Total database** | **272.3 MB** | of a 2 GB volume (26% disk) |
+| **Total database** (`pg_database_size`) | **272.3 MB** | what the guard measures against 400/450 MB |
+
+Disk usage is a different, larger number: 525.59 MB of a 1.9 GB volume (~27%), because the volume
+also carries WAL (~80 MB) and system files (~169 MB). The guard reads `pg_database_size` only, so
+compare it against the 272.3 MB row above — not against disk usage.
 
 The ledger and its indexes are ~95% of the database. At a 15 s tick and a 1–4 movement batch
 (~2.5 average) the feed writes on the order of 14,000 movements/day; against the measured ~185 B
