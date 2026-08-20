@@ -11,6 +11,7 @@ from sqlmodel import Session
 
 from ...core.config import get_settings
 from ...db.session import get_engine
+from .balances import rebuild_stock_balances
 from .models import SKU, Client, StockEntry, StockExit
 from .repository import client_table, entry_table, exit_table, sku_table
 
@@ -248,6 +249,9 @@ def seed_inventory(session: Session, user_uuid: str) -> None:
         skus = _ensure_skus(session, clients)
         _ensure_entries(session, skus, user_uuid)
         _ensure_exits(session, skus, user_uuid)
+        # Bulk movement writes bypass the incremental balance path, so re-derive
+        # in the same transaction: seeded stock is visible only if both land.
+        rebuild_stock_balances(session)
         session.commit()
     except (SQLAlchemyError, SeedConflictError):
         session.rollback()

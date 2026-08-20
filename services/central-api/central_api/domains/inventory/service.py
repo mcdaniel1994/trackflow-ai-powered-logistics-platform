@@ -232,6 +232,14 @@ class InventoryService:
                 user_uuid=user_uuid,
             )
             self.repository.add_entry(entry)
+            # Same transaction as the movement, under the SKU lock taken above, so
+            # the materialized balance cannot diverge from the ledger.
+            self.repository.apply_balance_delta(
+                payload.sku_id,
+                payload.warehouse.value,
+                payload.quantity,
+                now=utc_now(),
+            )
             self.session.commit()
             self.session.refresh(entry)
         except InventoryError:
@@ -287,6 +295,15 @@ class InventoryService:
                 user_uuid=user_uuid,
             )
             self.repository.add_exit(stock_exit)
+            # Same transaction and SKU lock as the movement. `available` was read
+            # from the balance under that lock, so `after` and the stored balance
+            # are guaranteed to agree.
+            self.repository.apply_balance_delta(
+                payload.sku_id,
+                payload.warehouse.value,
+                -payload.quantity,
+                now=utc_now(),
+            )
             self.session.flush()
             after = available - payload.quantity
             # The locked before/after values and event share one commit, so the

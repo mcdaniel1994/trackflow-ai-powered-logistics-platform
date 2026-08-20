@@ -36,6 +36,7 @@ from sqlmodel import Session
 
 from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_engine
+from central_api.domains.inventory.balances import rebuild_stock_balances
 from central_api.domains.inventory.models import StockEntry, StockExit
 from central_api.domains.inventory.repository import InventoryRepository, entry_table, exit_table, sku_table
 from central_api.domains.inventory.schemas import (
@@ -165,6 +166,9 @@ def backfill_history(session: Session, user_uuid: str, *, days: int) -> int:
                 )
                 balances[(sku_id, warehouse)] -= qty
                 written += 1
+    # Backfill writes movements in bulk, outside the per-movement incremental
+    # path, so re-derive the materialized balances in the same transaction.
+    rebuild_stock_balances(session)
     session.commit()
     logger.info("operations_feed_backfill_complete rows=%s days=%s", written, days)
     return written

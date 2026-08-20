@@ -121,10 +121,14 @@ def _reset_source_tables(
         target_weeks,
         checkpoint_succeeded=checkpoint_succeeded,
     )
+    # stock_balances is derived from the ledger, so it must be cleared in the same
+    # statement. Leaving it behind would strand balances for movements that no
+    # longer exist, which reads as real stock. seed_inventory and backfill_history
+    # both rebuild it before this transaction's caller returns.
     session.execute(
         text(
             "TRUNCATE inventory_discrepancies, stockout_events, "
-            "stock_exits, stock_entries RESTART IDENTITY"
+            "stock_exits, stock_entries, stock_balances RESTART IDENTITY"
         )
     )
     session.execute(

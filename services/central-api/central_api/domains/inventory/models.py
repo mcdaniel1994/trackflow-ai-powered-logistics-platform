@@ -70,6 +70,47 @@ class SKU(SQLModel, table=True):
     warehouse: str = Field(sa_column=Column(String(3), nullable=False))
 
 
+class StockBalance(SQLModel, table=True):
+    """The materialized entry-minus-exit balance for one SKU at one warehouse.
+
+    Stock was previously computed on every read by summing the whole movement
+    ledger for a `(sku_id, warehouse)` pair — an O(ledger) query that grew slower
+    forever and dominated production disk IO. This table holds the same value
+    incrementally.
+
+    It is a *derived* table, not a second source of truth: every write happens in
+    the same transaction as the movement that caused it, serialized by the
+    existing `SELECT ... FOR UPDATE` on the parent SKU row, so it cannot diverge
+    under concurrency. `scripts/verify_stock_balances.py` re-derives it from the
+    ledger and is the drift check.
+    """
+
+    __tablename__ = "stock_balances"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        ForeignKeyConstraint(
+            ["sku_id", "warehouse"],
+            ["skus.id", "skus.warehouse"],
+            name="fk_stock_balances_sku_warehouse",
+            ondelete="RESTRICT",
+        ),
+        # Deliberately no `quantity >= 0` constraint. This value is *derived* from
+        # the ledger, so constraining it would make the table refuse to represent
+        # what the ledger actually says, and would turn any pre-existing data
+        # anomaly into a failed migration. Over-dispatch is prevented where it
+        # belongs -- the insufficient-stock check in `InventoryService` -- and
+        # `verify_stock_balances` surfaces any ledger/balance disagreement.
+        CheckConstraint("warehouse IN ('LA', 'ZGZ')", name="ck_stock_balances_warehouse"),
+    )
+
+    sku_id: int = Field(primary_key=True, nullable=False)
+    warehouse: str = Field(sa_column=Column(String(3), primary_key=True, nullable=False))
+    quantity: int = Field(nullable=False, default=0)
+    updated_at: datetime = Field(
+        default_factory=utc_now,
+        sa_column=Column(DateTime(timezone=True), nullable=False),
+    )
+
+
 class StockEntry(SQLModel, table=True):
     """An immutable goods receipt recorded against a warehouse SKU."""
 
