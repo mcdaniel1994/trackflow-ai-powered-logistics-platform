@@ -3,33 +3,48 @@
 This document covers per-shipment and per-return pricing. Storage is priced
 separately in the storage pricing document.
 
-## Last-mile delivery
+Rates are listed per country. Quote a client only the rates for the country their
+operation runs in.
 
-Charged per outbound shipment, by service level:
+## Last-mile delivery — United States
 
-- Standard (3-5 business days): 6.40 USD per shipment (United States) or
-  5.80 EUR per shipment (Spain).
-- Express (24-48 hours): 11.20 USD per shipment (United States) or
-  10.10 EUR per shipment (Spain).
-- International (7-12 business days): 18.50 USD per shipment (United States)
-  or 16.75 EUR per shipment (Spain).
+Charged per outbound shipment from Los Angeles, by service level:
 
-These are the final prices offered to the client. The rates TrackFlow
+- Standard (3-5 business days): 6.40 USD per shipment.
+- Express (24-48 hours): 11.20 USD per shipment.
+- International (7-12 business days): 18.50 USD per shipment.
+
+## Last-mile delivery — Spain
+
+Charged per outbound shipment from Zaragoza, by service level:
+
+- Standard (3-5 business days): 5.80 EUR per shipment.
+- Express (24-48 hours): 10.10 EUR per shipment.
+- International (7-12 business days): 16.75 EUR per shipment.
+
+## Carrier rates are internal
+
+The figures above are the final prices offered to the client. The rates TrackFlow
 negotiates with individual carriers are internal and are never shared with a
 client, quoted in a proposal, or broken out on an invoice.
 
-Unless a client specifies otherwise, a proposal assumes standard service for
-all shipments.
+Unless a client specifies otherwise, a proposal assumes standard service for all
+shipments.
 
-## Returns processing
+## Returns processing — United States
 
-Charged per returned unit received and processed:
+Charged per returned unit received and processed at Los Angeles: 3.90 USD per
+unit.
 
-- 3.90 USD per unit (United States) or 3.50 EUR per unit (Spain).
+## Returns processing — Spain
 
-This covers inspection, restocking, and disposition. It does not include the
-return shipping cost, which the client brand bears unless the return was caused
-by a TrackFlow error.
+Charged per returned unit received and processed at Zaragoza: 3.50 EUR per unit.
+
+## What returns processing covers
+
+The per-unit fee covers inspection, restocking, and disposition. It does not
+include the return shipping cost, which the client brand bears unless the return
+was caused by a TrackFlow error.
 
 Returns processing is quoted at a 48-hour turnaround. No proposal may commit to
 faster than 48 hours. International returns require manual handling by Sofía
@@ -46,8 +61,8 @@ on average monthly order volume:
 - 20,000 orders per month or more: 12% discount tier.
 
 An account manager may apply these published tiers directly. They apply only to
-last-mile and returns processing. Storage discounts are not covered by this
-tier table and still require Miguel Torres's approval, as set out in the storage
+last-mile and returns processing. Storage discounts are not covered by this tier
+table and still require Miguel Torres's approval, as set out in the storage
 pricing document.
 
 ## Estimating storage from order volume

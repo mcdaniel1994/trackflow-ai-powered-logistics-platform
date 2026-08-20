@@ -66,6 +66,7 @@ export function ChatPanel() {
   const seedNonceRef = useRef<number | null>(null);
   const openHandledRef = useRef(false);
   const wasOpenRef = useRef(false);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -239,6 +240,57 @@ export function ChatPanel() {
     }
   }, [activeSession, connectSession, route, status]);
 
+  // Lock the page behind the dialog while it is open.
+  //
+  // Without this the document keeps scrolling under the panel, and on iOS the
+  // browser scrolls the document to reveal the focused composer when the keyboard
+  // opens -- which slid the fixed overlay up and exposed a strip of the Back Office
+  // beneath it. Position-fixing the body pins the page and preserves the reader's
+  // place, which `overflow: hidden` alone does not do on iOS.
+  useEffect(() => {
+    if (!open) return;
+    const { body } = document;
+    const scrollY = window.scrollY;
+    const previous = {
+      position: body.style.position,
+      top: body.style.top,
+      left: body.style.left,
+      right: body.style.right,
+      overflow: body.style.overflow,
+    };
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.overflow = "hidden";
+    return () => {
+      body.style.position = previous.position;
+      body.style.top = previous.top;
+      body.style.left = previous.left;
+      body.style.right = previous.right;
+      body.style.overflow = previous.overflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [open]);
+
+  // Size the panel to the visual viewport, which shrinks when the on-screen
+  // keyboard opens. `100dvh` accounts for browser chrome but not the keyboard, so
+  // the composer sat below the fold while typing.
+  useEffect(() => {
+    if (!open) return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const sync = () => setViewportHeight(viewport.height);
+    sync();
+    viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+      setViewportHeight(null);
+    };
+  }, [open]);
+
   // Keep the transcript pinned to the latest message (on open, on new tokens, on session load).
   //
   // `messages` changes on every streamed token, so writing scrollTop directly here
@@ -335,6 +387,7 @@ export function ChatPanel() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="chat-panel-title"
+        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
         className="absolute inset-0 flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-white shadow-2xl dark:bg-ink-900 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[min(48rem,calc(100vw-2rem))] sm:border-l sm:border-mist dark:sm:border-ink-600"
       >
         <aside className="hidden w-56 shrink-0 border-r border-mist bg-neutral-50 p-4 dark:border-ink-600 dark:bg-ink-800 md:block">
