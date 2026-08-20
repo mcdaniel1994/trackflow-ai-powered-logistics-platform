@@ -126,6 +126,14 @@ describe("RFP Desk", () => {
     expect(await screen.findByText(/Discarded: vendor pitch/)).toBeInTheDocument();
   });
 
+  it("renders terminal worker failure as a failed ticket state", async () => {
+    streamTickets([{ ...summary, status: "failed" }]);
+    mocks.getRfpTicket.mockResolvedValue(detail({ status: "failed", sections: [] }));
+    render(<RfpDesk />);
+    expect((await screen.findAllByText("failed")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: /Download proposal/ })).not.toBeInTheDocument();
+  });
+
   it("surfaces a safe upload error", async () => {
     mocks.uploadRfp.mockRejectedValue({ status: 415, message: "Only PDF documents are accepted." });
     render(<RfpDesk />);

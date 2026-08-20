@@ -57,6 +57,11 @@ class RfpRepository:
         self.session.refresh(ticket)
         return ticket
 
+    def delete_ticket(self, ticket: RfpTicket) -> None:
+        """Compensate a failed broker publication so no analyzing orphan remains."""
+        self.session.delete(ticket)
+        self.session.commit()
+
     def save(self, ticket: RfpTicket) -> RfpTicket:
         self.session.add(ticket)
         self.session.commit()

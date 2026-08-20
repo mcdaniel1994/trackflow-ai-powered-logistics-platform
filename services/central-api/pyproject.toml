@@ -6,9 +6,12 @@ license = { text = "Proprietary" }
 requires-python = ">=3.11"
 dependencies = [
   "alembic>=1.16.0",
+  "celery[redis]==5.6.3",
   "fastapi>=0.116.0",
+  "flower==2.1.0",
   "psycopg2-binary>=2.9.10",
   "pydantic-settings>=2.10.0",
+  "redis==6.4.0",
   "sqlmodel>=0.0.24",
   "trackflow-auth",
   "trackflow-incidents",
@@ -88,10 +91,16 @@ module = [
   "process.*",
   "trackflow_auth",
   "trackflow_auth.*",
+  "celery",
+  "celery.*",
+  "kombu",
+  "kombu.*",
+  "weasyprint",
+  "weasyprint.*",
 ]
 ignore_missing_imports = true
 
-# The LangGraph/LangChain stack (Engagement 8) is typed but transitively pulls numpy, whose 1.26
+# The LangGraph/LangChain stack (Engagement 8) is typed but transitively pulls numpy, whose current
 # stubs use 3.12-only `type` syntax that mypy rejects under python_version 3.11. Skip following into
 # these third-party libraries (treat as Any) rather than lowering our own strictness.
 [[tool.mypy.overrides]]

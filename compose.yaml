@@ -14,6 +14,22 @@ services:
       timeout: 3s
       retries: 20
 
+  # DEV-55 coursework broker/result backend. Local only; intentionally absent from
+  # compose.coolify.yaml and bound to loopback rather than the LAN.
+  redis:
+    image: redis:7.2.14-alpine@sha256:dfa18828cbc07b3ae6a95ec7343f6c214fdee2d836197b4be8e9904420762cd8
+    command:
+      ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis-data:/data"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
   prefect-postgres:
     build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
     environment:
@@ -191,6 +207,7 @@ services:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
     environment:
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      REDIS_URL: redis://redis:6379/0
       CENTRAL_API_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
       IDENTITY_OAUTH_ISSUER_URL: http://localhost:8002
@@ -203,9 +220,81 @@ services:
       REPORTING_ROLLUP_CUTOVER_ENABLED: ${REPORTING_ROLLUP_CUTOVER_ENABLED:-false}
       REPORTING_COMPUTATION_ENABLED: ${REPORTING_COMPUTATION_ENABLED:-true}
       REPORTING_FORCE_STALE: ${REPORTING_FORCE_STALE:-false}
+      RFP_ENABLED: ${RFP_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     depends_on:
       postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
     ports: ["8003:8000"]
+
+  # DEV-55 coursework consumer. Single concurrency makes retries and screenshots
+  # deterministic while remaining independent from the API process.
+  celery-worker:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
+      REDIS_URL: redis://redis:6379/0
+      APP_ENV: local
+      RFP_ENABLED: ${RFP_ENABLED:-false}
+      RFP_MODEL: ${RFP_MODEL:-gpt-4o-mini}
+      RFP_LLM_TIMEOUT_SECONDS: ${RFP_LLM_TIMEOUT_SECONDS:-12}
+      RFP_MAX_ITERATIONS: ${RFP_MAX_ITERATIONS:-2}
+      RAG_ENABLED: ${RAG_ENABLED:-false}
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      RAG_COLLECTION: ${RAG_COLLECTION:-trackflow}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RAG_EMBEDDING_MODEL: ${RAG_EMBEDDING_MODEL:-text-embedding-3-small}
+      RAG_EMBEDDING_DIM: ${RAG_EMBEDDING_DIM:-1536}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      RAG_GENERATION_MODEL: ${RAG_GENERATION_MODEL:-deepseek-chat}
+      RAG_TOP_K: ${RAG_TOP_K:-5}
+      RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.35}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck: {disable: true}
+    command:
+      [
+        ".venv/bin/celery",
+        "-A",
+        "central_api.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--queues=rfp,dev55,dead_letter",
+        "--concurrency=1",
+        "--events",
+      ]
+
+  # Persistent local Flower state preserves the successful and failure evidence
+  # needed for the submission screenshot across container restarts.
+  flower:
+    build: {context: ., dockerfile: docker/central-api.Dockerfile}
+    restart: on-failure
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis: {condition: service_healthy}
+      celery-worker: {condition: service_started}
+    ports: ["127.0.0.1:5555:5555"]
+    volumes: ["flower-data:/var/lib/trackflow/flower"]
+    read_only: true
+    tmpfs: ["/tmp"]
+    healthcheck: {disable: true}
+    command:
+      [
+        ".venv/bin/celery",
+        "-A",
+        "central_api.celery_app:celery_app",
+        "flower",
+        "--port=5555",
+        "--persistent=True",
+        "--db=/var/lib/trackflow/flower/flower.db",
+      ]
 
   mcp:
     build: {context: ., dockerfile: docker/mcp.Dockerfile}
@@ -371,6 +460,8 @@ services:
 
 volumes:
   identity-data:
+  redis-data:
+  flower-data:
   prefect-db:
   reporting-logs:
   qdrant-storage:

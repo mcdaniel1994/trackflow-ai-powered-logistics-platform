@@ -4,6 +4,8 @@ Cross-cutting documentation for the TrackFlow monorepo — material shared acros
 
 ## Contents
 
+- **[`DEV-55-async-tasks.md`](DEV-55-async-tasks.md)** — Submission-only Celery coursework spec;
+  branch-local, not an engagement, production change, or merge candidate.
 - **[`briefs/`](briefs/)** — Stakeholder briefs, one per engagement. Source of truth for scope and acceptance criteria.
 - **[`planning/`](planning/)** — Active planning and implementation specs that are not engagement briefs (e.g., the Incident Report Processor subproject spec, Central API architecture proposals).
 - **[`standards/`](standards/)** — Cross-cutting standards that apply across engagements (e.g., public-page visibility requirements).

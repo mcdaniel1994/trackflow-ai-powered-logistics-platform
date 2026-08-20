@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     database_connect_timeout_seconds: int = 10
     database_statement_timeout_ms: int = 15_000
     database_lock_timeout_ms: int = 5_000
+    redis_url: str = "redis://localhost:6379/0"
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     app_env: str = "local"
     runtime_database_role: str = "trackflow_runtime"

@@ -67,13 +67,13 @@ function when(value: string) {
 
 function statusStyle(status: string) {
   if (status === "done") return "bg-teal/15 text-teal-700 dark:text-teal";
-  if (status === "discarded") return "bg-coral/15 text-coral";
+  if (status === "discarded" || status === "failed") return "bg-coral/15 text-coral";
   if (status === "waiting_for_approval") return "bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300";
   return "bg-sky/15 text-navy dark:text-sky";
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const Icon = status === "done" ? CheckCircle2 : status === "discarded" ? XCircle : CircleDashed;
+  const Icon = status === "done" ? CheckCircle2 : status === "discarded" || status === "failed" ? XCircle : CircleDashed;
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-black uppercase tracking-wide ${statusStyle(status)}`}

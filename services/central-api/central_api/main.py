@@ -42,6 +42,8 @@ from .domains.rfp.router import router as rfp_router
 from .domains.rfp.service import RfpError
 from .domains.suppliers.router import router as suppliers_router
 from .domains.suppliers.service import SupplierError
+from .domains.tasks.router import router as tasks_router
+from .domains.tasks.service import TaskStatusError
 from .domains.telemetry.recorder import access_denied_task, dispatch_rejection_task
 from .domains.telemetry.router import router as telemetry_router
 from .domains.telemetry.service import TelemetryError
@@ -202,6 +204,12 @@ def create_app() -> FastAPI:
             return JSONResponse(status_code=500, content={"detail": "Internal server error"})
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
+    @app.exception_handler(TaskStatusError)
+    async def task_status_error_handler(_request: Request, exc: Exception) -> JSONResponse:
+        if not isinstance(exc, TaskStatusError):
+            return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
     @app.exception_handler(SQLAlchemyError)
     async def database_error_handler(_request: Request, exc: Exception) -> JSONResponse:
         """Catch unexpected driver failures while keeping URLs and SQL out of logs."""
@@ -277,6 +285,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router)
     app.include_router(chat_realtime_router)
     app.include_router(rfp_router)
+    app.include_router(tasks_router)
     app.include_router(realtime_router)
     return app
 

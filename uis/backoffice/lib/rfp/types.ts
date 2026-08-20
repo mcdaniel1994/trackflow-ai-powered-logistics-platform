@@ -4,7 +4,8 @@ export type RfpTicketStatus =
   | "drafting"
   | "under_evaluation"
   | "done"
-  | "discarded";
+  | "discarded"
+  | "failed";
 
 export interface RfpDepartmentSection {
   department_id: string;

@@ -7,7 +7,7 @@ each ticket is scoped to its owner.
 
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Query, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile
 from sqlmodel import Session
 from trackflow_auth import AuthenticatedPrincipal  # type: ignore[import-untyped]
 
@@ -16,7 +16,7 @@ from ...core.dependencies import current_principal, write_principal
 from ...db.session import get_session
 from ..realtime.bus import RealtimeBus
 from ..realtime.router import get_realtime_bus
-from .schemas import DepartmentDecisionRequest, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
+from .schemas import DepartmentDecisionRequest, RfpFinalDocumentRead, RfpTaskAccepted, RfpTicketDetail, RfpTicketSummary
 from .service import RfpService
 
 router = APIRouter(prefix="/rfp", tags=["rfp"])
@@ -30,13 +30,12 @@ def _service(
     return RfpService(settings, session, realtime_bus=realtime_bus)
 
 
-@router.post("/tickets", response_model=RfpTicketSummary, status_code=202)
+@router.post("/tickets", response_model=RfpTaskAccepted, status_code=202)
 def upload_ticket(
-    background_tasks: BackgroundTasks,
     principal: Annotated[AuthenticatedPrincipal, Depends(write_principal)],
     service: Annotated[RfpService, Depends(_service)],
     file: Annotated[UploadFile, File()],
-) -> RfpTicketSummary:
+) -> RfpTaskAccepted:
     data = file.file.read()
     return service.create_from_upload(
         owner_user_uuid=principal.user_id,
@@ -44,7 +43,6 @@ def upload_ticket(
         filename=file.filename,
         content_type=file.content_type,
         data=data,
-        background_tasks=background_tasks,
     )
 
 

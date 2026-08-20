@@ -27,6 +27,7 @@ from ...db.session import get_engine
 from ..agents.graph import AgentRunResult
 from ..agents.pricing import ModelUsage, combine_usage, usage_from_counters
 from ..agents.recorder import persist_run
+from .errors import RetryableRfpProcessingError
 from .evaluators import evaluate_section
 from .models import RfpDepartmentSection, RfpTicket, utc_now
 from .repository import RfpRepository
@@ -158,8 +159,15 @@ def generate_section(
     )
 
 
-def run_generation_for_ticket(ticket_id: str, rag_config: RagConfig, max_iterations: int, *, env: str) -> None:
-    """Generate and evaluate every department section, then advance the ticket. Never raises."""
+def run_generation_for_ticket(
+    ticket_id: str,
+    rag_config: RagConfig,
+    max_iterations: int,
+    *,
+    env: str,
+    raise_errors: bool = False,
+) -> None:
+    """Generate and evaluate every department section, then advance the ticket."""
     try:
         engine = get_engine()
         steps: list[dict[str, Any]] = []
@@ -171,14 +179,18 @@ def run_generation_for_ticket(ticket_id: str, rag_config: RagConfig, max_iterati
             sections = repo.sections_for_ticket(ticket_id)
             for section in sections:
                 steps.append(_generate_one(ticket, section, rag_config, max_iterations))
+            if raise_errors and any((section.evaluation_results or {}).get("error") for section in sections):
+                raise RetryableRfpProcessingError("RFP generation provider failed")
             ticket.status = "under_evaluation"
             ticket.updated_at = utc_now()
             repo.save(ticket)
             for section in sections:
                 section.updated_at = utc_now()
             repo.add_sections(sections)
-    except Exception as exc:  # a background worker must never crash the process
+    except Exception as exc:
         logger.warning("rfp_generation_failed error_type=%s", type(exc).__name__)
+        if raise_errors:
+            raise RetryableRfpProcessingError("RFP generation failed") from exc
         return
     _record_trace(steps, env=env)
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 
 import pytest
@@ -242,7 +243,7 @@ def test_upload_rejects_non_pdf(
     assert response.status_code == 415
 
 
-def test_upload_creates_ticket_then_background_intake_routes(
+def test_upload_creates_ticket_and_enqueues_only_ticket_id(
     app: FastAPI,
     client: TestClient,
     settings: Settings,
@@ -253,16 +254,26 @@ def test_upload_creates_ticket_then_background_intake_routes(
     _enable_intake(app, settings)
     monkeypatch.setattr(rfp_service, "pdf_to_markdown", lambda _data: "converted markdown")
     _patch_graph_agents(monkeypatch)
+    queued: list[str] = []
+    monkeypatch.setattr(rfp_service, "enqueue_rfp_processing", queued.append)
 
+    started = time.perf_counter()
     created = client.post(
         "/rfp/tickets", files={"file": ("rfp.pdf", b"%PDF-1.4", "application/pdf")}, headers=auth_headers
     )
+    elapsed = time.perf_counter() - started
     assert created.status_code == 202
+    assert elapsed < 0.2
     body = created.json()
     assert body["status"] == "analyzing"
     ticket_id = body["id"]
+    assert body["task_id"] == ticket_id
+    assert queued == [ticket_id]
 
-    # TestClient runs background tasks after the response, so intake has completed by the next read.
+    detail = client.get(f"/rfp/tickets/{ticket_id}", headers=auth_headers).json()
+    assert detail["status"] == "analyzing"
+
+    rfp_intake.run_intake_for_ticket(ticket_id, CFG, env="test")
     detail = client.get(f"/rfp/tickets/{ticket_id}", headers=auth_headers).json()
     assert detail["status"] == "drafting"
     assert detail["client_country"] == "US" and detail["currency"] == "USD"
