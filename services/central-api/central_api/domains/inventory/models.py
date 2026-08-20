@@ -83,7 +83,12 @@ class StockEntry(SQLModel, table=True):
         ),
         CheckConstraint("quantity > 0", name="ck_stock_entries_quantity_positive"),
         CheckConstraint("warehouse IN ('LA', 'ZGZ')", name="ck_stock_entries_warehouse"),
-        Index("ix_stock_entries_sku_warehouse_created_at", "sku_id", "warehouse", "created_at"),
+        Index(
+            "ix_stock_entries_sku_warehouse_quantity",
+            "sku_id",
+            "warehouse",
+            postgresql_include=["quantity"],
+        ),
         Index("ix_stock_entries_created_at", "created_at"),
     )
 
@@ -118,7 +123,12 @@ class StockExit(SQLModel, table=True):
             "(exit_type = 'loss' AND tracking_number IS NULL)",
             name="ck_stock_exits_tracking_rule",
         ),
-        Index("ix_stock_exits_sku_warehouse_created_at", "sku_id", "warehouse", "created_at"),
+        Index(
+            "ix_stock_exits_sku_warehouse_quantity",
+            "sku_id",
+            "warehouse",
+            postgresql_include=["quantity"],
+        ),
         Index("ix_stock_exits_created_at", "created_at"),
     )
 

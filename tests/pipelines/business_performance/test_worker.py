@@ -63,6 +63,53 @@ def test_worker_heartbeats_dispatches_polls_and_stops(
     assert calls["poll"] >= 1
 
 
+def test_steady_state_polling_does_not_write_a_heartbeat_per_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Polling must stay read-only once orchestrator health has settled.
+
+    The per-poll heartbeat write was the single largest source of database write
+    volume in production. Only the periodic beat and genuine health transitions may
+    write the row.
+    """
+    stop = Event()
+    writes: list[dict[str, object]] = []
+    polls = 0
+
+    monkeypatch.setattr(
+        worker, "record_worker_heartbeat", lambda _engine, **kwargs: writes.append(kwargs)
+    )
+    monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
+    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: True)
+
+    def poll(_engine: Any) -> None:
+        nonlocal polls
+        polls += 1
+        if polls >= 25:
+            stop.set()
+        return None
+
+    monkeypatch.setattr(worker, "claim_next", poll)
+    worker.run_worker(
+        object(),
+        lambda *_args: None,
+        stop=stop,
+        orchestrator_health=lambda: True,
+        reconcile_prefect_runs=False,
+        poll_interval_seconds=0.0,
+        # Long enough that no periodic beat fires during the polling burst, so any
+        # write observed here came from the poll loop itself.
+        heartbeat_interval_seconds=30.0,
+        dispatch_interval_seconds=30.0,
+    )
+
+    assert polls >= 25
+    # Exactly one write: the initial beat, plus the first health verdict written
+    # through as a transition from "unknown". Never one per poll.
+    assert len(writes) <= 2, f"{len(writes)} writes for {polls} polls"
+    assert any(item.get("orchestrator_healthy") is True for item in writes)
+
+
 def test_worker_logs_only_safe_exception_type(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -149,7 +196,9 @@ def test_worker_skips_claim_when_prefect_is_unhealthy(
 
     def record(_engine: object, **kwargs: object) -> None:
         heartbeats.append(kwargs)
-        if "orchestrator_healthy" in kwargs:
+        # Stop on an observed health verdict, not on the periodic beat that precedes
+        # the first health check and carries no verdict yet.
+        if kwargs.get("orchestrator_healthy") is not None:
             stop.set()
 
     monkeypatch.setattr(worker, "record_worker_heartbeat", record)

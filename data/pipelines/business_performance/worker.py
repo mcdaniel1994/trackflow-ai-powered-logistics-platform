@@ -7,9 +7,10 @@ import os
 import signal
 import urllib.request
 from collections.abc import Callable
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from types import FrameType
 
 from sqlalchemy import Engine
@@ -38,6 +39,53 @@ def computation_enabled() -> bool:
 def _safe_failure(operation: str, exc: Exception) -> None:
     """Log only fixed operation names and exception types."""
     logger.error("reporting_worker_operation_failed operation=%s error_type=%s", operation, type(exc).__name__)
+
+
+class _Liveness:
+    """Liveness shared by the poll loop and the heartbeat thread, written once per change.
+
+    The poll loop used to write this singleton row on every 5 s iteration while the
+    heartbeat thread wrote the same row every 10 s. The thread alone already carries
+    worker liveness — it keeps beating while the loop is blocked inside a run — so the
+    per-poll write was pure duplication, and in production it dominated the database's
+    write volume.
+
+    The loop now records its observation in memory and writes only when
+    ``orchestrator_healthy`` actually changes, so a health transition still reaches the
+    status contract immediately rather than waiting for the next beat. Steady state
+    costs no extra writes. The spec-frozen 10 s heartbeat interval is unchanged.
+
+    Both threads touch this state, so every read and write is taken under the lock.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._last_progress_at: datetime | None = None
+        self._orchestrator_healthy: bool | None = None
+        self._written_orchestrator_healthy: bool | None = None
+
+    def observe(
+        self, engine: Engine, *, last_progress_at: datetime, orchestrator_healthy: bool
+    ) -> None:
+        """Record progress, writing through only on an orchestrator-health transition."""
+        with self._lock:
+            self._last_progress_at = last_progress_at
+            self._orchestrator_healthy = orchestrator_healthy
+            changed = orchestrator_healthy != self._written_orchestrator_healthy
+        if changed:
+            self.write(engine)
+
+    def write(self, engine: Engine) -> None:
+        """Persist the newest observation; None values preserve the stored row (COALESCE)."""
+        with self._lock:
+            last_progress_at = self._last_progress_at
+            orchestrator_healthy = self._orchestrator_healthy
+            self._written_orchestrator_healthy = orchestrator_healthy
+        record_worker_heartbeat(
+            engine,
+            last_progress_at=last_progress_at,
+            orchestrator_healthy=orchestrator_healthy,
+        )
 
 
 def _periodic(
@@ -93,6 +141,7 @@ def run_worker(
 ) -> None:
     """Poll serially while heartbeat and scheduling remain responsive."""
     health_check = prefect_is_healthy if orchestrator_health is None else orchestrator_health
+    liveness = _Liveness()
     background = (
         Thread(
             target=_periodic,
@@ -100,7 +149,7 @@ def run_worker(
                 "stop": stop,
                 "interval_seconds": heartbeat_interval_seconds,
                 "operation_name": "heartbeat",
-                "operation": lambda: record_worker_heartbeat(engine),
+                "operation": lambda: liveness.write(engine),
             },
             name="reporting-heartbeat",
         ),
@@ -130,10 +179,10 @@ def run_worker(
         while not stop.is_set():
             try:
                 healthy = health_check()
-                record_worker_heartbeat(
-                    engine,
-                    last_progress_at=utc_now(),
-                    orchestrator_healthy=healthy,
+                # Steady state is recorded in memory and persisted by the heartbeat
+                # thread; only a health transition writes through from here.
+                liveness.observe(
+                    engine, last_progress_at=utc_now(), orchestrator_healthy=healthy
                 )
                 if not healthy:
                     stop.wait(poll_interval_seconds)

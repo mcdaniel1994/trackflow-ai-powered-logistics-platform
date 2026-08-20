@@ -28,7 +28,9 @@ export function useAutoRefresh<T>(
   deps: React.DependencyList,
   options: { intervalMs?: number; mapError?: (error: unknown) => string } = {},
 ): AutoRefreshState<T> {
-  const { intervalMs = 5000, mapError } = options;
+  // 20 s: comfortably above the 15 s operations-feed tick, so every refresh still
+  // lands on new movements, at a quarter of the previous read load per open tab.
+  const { intervalMs = 20000, mapError } = options;
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
