@@ -139,12 +139,21 @@ describe("Back Office responsive layout", () => {
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
   });
 
-  it("no longer renders the Business/Technical view toggle and exposes an Ask AI button", () => {
+  it("keeps Ask AI visible in the compact mobile header and opens the chat panel", async () => {
     renderShell(<div>Shell content</div>);
     expect(screen.queryByRole("group", { name: /view mode/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^business$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /technical & agent os/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /ask ai/i })).toHaveAttribute("aria-expanded", "false");
+
+    const header = screen.getByRole("banner");
+    expect(within(header).getByText("Backoffice").parentElement).toHaveClass("hidden", "sm:block");
+
+    const askButton = within(header).getByRole("button", { name: /ask ai/i });
+    expect(askButton).toHaveClass("shrink-0", "whitespace-nowrap");
+    expect(askButton).toHaveAttribute("aria-expanded", "false");
+
+    await userEvent.click(askButton);
+    expect(askButton).toHaveAttribute("aria-expanded", "true");
   });
 
   it("uses one Inventory Management sidebar entry across every inventory route", () => {

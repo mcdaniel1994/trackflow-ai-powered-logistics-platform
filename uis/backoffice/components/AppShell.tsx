@@ -7,13 +7,13 @@ import { AccountMenu } from "@/components/account/AccountMenu";
 import { BackofficeNavigation } from "@/components/BackofficeNavigation";
 import { useChatPanel } from "@/lib/chat/panel-context";
 
-function BrandMark() {
+function BrandMark({ compactOnMobile = false }: { compactOnMobile?: boolean }) {
   return (
     <div className="flex min-w-0 items-center gap-3">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy text-white shadow-sm dark:bg-sky">
         <Warehouse className="h-5 w-5" aria-hidden="true" />
       </div>
-      <div className="min-w-0">
+      <div className={`min-w-0 ${compactOnMobile ? "hidden sm:block" : ""}`}>
         <p className="text-xs font-black uppercase tracking-[0.18em] text-coral">TrackFlow</p>
         <p className="truncate text-lg font-black text-navy-deep dark:text-neutral-100">Backoffice</p>
       </div>
@@ -34,7 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-neutral-50 dark:bg-ink-900">
       <header className="sticky top-0 z-20 border-b border-mist/90 bg-white/95 backdrop-blur dark:border-ink-600 dark:bg-ink-900/95">
         <div className="flex h-16 w-full max-w-[100vw] items-center justify-between gap-3 px-4 sm:px-6">
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setMobileNavOpen((current) => !current)}
@@ -45,15 +45,15 @@ export function AppShell({ children }: { children: ReactNode }) {
             >
               {mobileNavOpen ? <X className="h-5 w-5" aria-hidden="true" /> : <Menu className="h-5 w-5" aria-hidden="true" />}
             </button>
-            <BrandMark />
+            <BrandMark compactOnMobile />
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => openPanel()}
               aria-expanded={chatOpen}
-              className="inline-flex items-center gap-2 rounded-full border border-sky/60 bg-white px-4 py-2 text-sm font-black text-navy shadow-sm transition hover:border-sky hover:bg-ivory dark:border-sky/50 dark:bg-ink-800 dark:text-neutral-100 dark:hover:bg-ink-700"
+              className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-full border border-sky/60 bg-white px-4 py-2 text-sm font-black text-navy shadow-sm transition hover:border-sky hover:bg-ivory dark:border-sky/50 dark:bg-ink-800 dark:text-neutral-100 dark:hover:bg-ink-700"
             >
               <Sparkles className="h-4 w-4 text-sky" aria-hidden="true" />
               Ask AI
