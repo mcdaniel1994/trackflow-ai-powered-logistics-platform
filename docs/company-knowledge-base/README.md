@@ -10,6 +10,7 @@ section, and upserts the chunks into the Qdrant collection `trackflow`.
 | `trackflow-returns-policy.en.md` | Returns policy | `returns-policy` |
 | `trackflow-carrier-coverage.en.md` | Carrier coverage | `carrier-coverage` |
 | `trackflow-storage-pricing.en.md` | Storage pricing | `storage-pricing` |
+| `trackflow-service-pricing.en.md` | Service pricing (last-mile, returns, volume tiers) | `service-pricing` |
 
 Filenames and `source_document` slugs come from
 `docs/planning/remaining_planning/07_rag_knowledge_base/context.md` and must not be changed without

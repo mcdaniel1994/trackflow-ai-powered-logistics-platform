@@ -67,7 +67,7 @@ services:
       postgres: {condition: service_healthy}
     # This image bakes a HEALTHCHECK against :8000, which this command never binds.
     healthcheck: {disable: true}
-    command: ["/bin/sh", "-c", ".venv/bin/seed-inventory && .venv/bin/seed-suppliers"]
+    command: ["/bin/sh", "-c", ".venv/bin/seed-inventory && .venv/bin/seed-suppliers && .venv/bin/seed-demo-incidents"]
 
   central-api:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}

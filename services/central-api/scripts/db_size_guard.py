@@ -121,14 +121,16 @@ def _reset_source_tables(
         target_weeks,
         checkpoint_succeeded=checkpoint_succeeded,
     )
-    # stock_balances is derived from the ledger, so it must be cleared in the same
-    # statement. Leaving it behind would strand balances for movements that no
-    # longer exist, which reads as real stock. seed_inventory and backfill_history
-    # both rebuild it before this transaction's caller returns.
+    # stock_balances and stock_ledger_checkpoints are both derived from the ledger,
+    # so they must be cleared in the same statement. A stranded balance reads as
+    # real stock for movements that no longer exist, and a stranded checkpoint
+    # would add its base on top of the reseeded ledger. seed_inventory and
+    # backfill_history rebuild the balances before this transaction's caller returns.
     session.execute(
         text(
             "TRUNCATE inventory_discrepancies, stockout_events, "
-            "stock_exits, stock_entries, stock_balances RESTART IDENTITY"
+            "stock_exits, stock_entries, stock_balances, stock_ledger_checkpoints "
+            "RESTART IDENTITY"
         )
     )
     session.execute(

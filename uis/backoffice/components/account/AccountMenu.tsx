@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { KeyRound, LogOut, Moon, Sun, UserCog } from "lucide-react";
+import { Info, KeyRound, LogOut, Moon, Sun, UserCog } from "lucide-react";
 import { useAuth } from "@/lib/auth/context";
 import { useTheme } from "@/lib/theme/context";
 
@@ -87,6 +87,15 @@ export function AccountMenu() {
               {theme === "dark" ? <Sun className="h-4 w-4" aria-hidden="true" /> : <Moon className="h-4 w-4" aria-hidden="true" />}
               {theme === "dark" ? "Light mode" : "Dark mode"}
             </button>
+            <Link
+              href="/about"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-neutral-600 transition hover:bg-ivory hover:text-navy dark:text-neutral-300 dark:hover:bg-ink-700 dark:hover:text-neutral-100"
+            >
+              <Info className="h-4 w-4" aria-hidden="true" />
+              About &amp; disclaimers
+            </Link>
           </div>
           <div className="border-t border-mist py-1 dark:border-ink-600">
             <button

@@ -49,7 +49,7 @@ portfolio-production Back Office feeling like a real, moving operations platform
 | `TELEMETRY_ENABLED` | `true` (prod) | Enables best-effort diagnostic emission |
 | `TELEMETRY_OPERATIONAL_RETENTION_DAYS` | `7` | Operational telemetry window |
 | `TELEMETRY_SECURITY_RETENTION_DAYS` | `7` | Security telemetry window (portfolio deviation — see standard) |
-| `MOVEMENT_RETENTION_DAYS` | `30` | Ledger + business-event retention; refuses to run below 25 days (reporting recompute window) |
+| `MOVEMENT_RETENTION_DAYS` | `30` | Ledger + business-event retention; refuses below 25 days (reporting recompute window) and refuses while any balance is drifted |
 | `DB_SIZE_SOFT_LIMIT_MB` | `400` | Prune telemetry and pause the feed at/above this |
 | `DB_SIZE_HARD_LIMIT_MB` | `450` | Keep the feed paused; reset only with one-shot owner approval and a successful checkpoint |
 
@@ -68,7 +68,9 @@ The feed logs `operations_feed_paused` while disabled and resumes on the next ti
 ## Declarative maintenance worker
 
 `compose.coolify.yaml` deploys one always-on `maintenance-worker`; no Coolify cron is required.
-It runs the database-size guard every 15 minutes and, daily at 02:15 America/Chicago, prunes
+It reconciles the materialized stock balances at startup and on every 15-minute guard tick — the
+repair for deploy-rollover drift, logged at ERROR as `stock_balances=corrected` when it acts. It
+runs the database-size guard every 15 minutes and, daily at 02:15 America/Chicago, prunes
 telemetry, the movement ledger and its referencing business events (30 days, FK-ordered — see
 `docs/design/movement-ledger-retention.md`), agent memory and traces, chat history, and reporting
 logs. The container is read-only with only `/tmp` writable, uses the runtime

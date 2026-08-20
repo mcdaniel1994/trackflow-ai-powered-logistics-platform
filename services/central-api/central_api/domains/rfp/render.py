@@ -9,6 +9,7 @@ download is byte-stable across repeated calls for the same ticket.
 from __future__ import annotations
 
 from .models import RfpDepartmentSection, RfpFinalDocument, RfpTicket
+from .pricing import build_cost_breakdown, cost_summary_markdown
 
 # Fixed presentation order and human-readable names. Mirrors models.DEPARTMENT_VALUES but is declared
 # explicitly here so the rendered order is a documented decision, not an incidental one.
@@ -54,6 +55,14 @@ def render_final_document(
     lines.append(f"| Deadline | {deadline} |")
     lines.append(f"| Generated | {generated} |")
     lines.append(f"| Ticket | {ticket.id} |")
+    lines.append("")
+
+    # Deterministic commercial estimate. Computed rather than generated, so the
+    # figures cannot drift between renders or between the Markdown and the PDF.
+    breakdown = build_cost_breakdown(document.currency, ticket.monthly_volume)
+    lines.append("## Commercial Summary")
+    lines.append("")
+    lines.append(cost_summary_markdown(breakdown).rstrip())
     lines.append("")
 
     by_id = {section.department_id: section for section in sections}

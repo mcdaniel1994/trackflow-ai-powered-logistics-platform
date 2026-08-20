@@ -51,6 +51,10 @@ from sqlmodel import Session
 
 from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_engine
+from central_api.domains.inventory.balances import (
+    verify_stock_balances,
+    write_ledger_checkpoint,
+)
 
 logger = logging.getLogger("central_api.prune_movement_ledger")
 
@@ -68,6 +72,10 @@ MINIMUM_MOVEMENT_RETENTION_DAYS = 25
 
 class RetentionWindowTooShort(RuntimeError):
     """Configured retention would delete inside the reporting recompute window."""
+
+
+class BalancesDrifted(RuntimeError):
+    """Stored balances disagree with the ledger, so deletion is not safe."""
 
 
 @dataclass(frozen=True)
@@ -172,6 +180,30 @@ def prune_once(
     deadline = monotonic() + max_seconds
     deleted: dict[str, int] = {}
     with Session(get_engine()) as session:
+        # Deletion is irreversible and destroys the evidence needed to diagnose a
+        # drifting balance, so refuse while any disagreement exists. The
+        # maintenance worker reconciles on every guard tick, so a healthy system
+        # never reaches this; if it does, something is wrong with the incremental
+        # path and pruning would bury it.
+        drifted = verify_stock_balances(session)
+        if drifted:
+            logger.error(
+                "movement_ledger_prune_refused reason=balances_drifted drift_rows=%s",
+                len(drifted),
+            )
+            raise BalancesDrifted("stock balances disagree with the ledger")
+
+        # Checkpoint first and commit: the rows about to be deleted fall strictly
+        # below the cutoff, so an interrupted prune still leaves every balance
+        # derivable. Doing this after deletion would lose them permanently.
+        checkpointed = write_ledger_checkpoint(session, cutoff)
+        session.commit()
+        logger.info(
+            "movement_ledger_checkpoint_written rows=%s cutoff=%s",
+            checkpointed,
+            cutoff.isoformat(),
+        )
+
         for step in _STEPS:
             removed, finished = _delete_in_batches(
                 session,

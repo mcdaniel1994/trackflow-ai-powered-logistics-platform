@@ -156,6 +156,19 @@ describe("Back Office responsive layout", () => {
     expect(askButton).toHaveAttribute("aria-expanded", "true");
   });
 
+  it("offers About & disclaimers from the account menu", async () => {
+    renderShell(<div>Shell content</div>);
+
+    // The item lives behind the avatar menu, so it must not be reachable until
+    // the menu is opened.
+    expect(screen.queryByRole("menuitem", { name: /about & disclaimers/i })).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /account menu/i }));
+
+    const about = screen.getByRole("menuitem", { name: /about & disclaimers/i });
+    expect(about).toHaveAttribute("href", "/about");
+  });
+
   it("uses one Inventory Management sidebar entry across every inventory route", () => {
     authMocks.pathname = "/backoffice/inventory/orders/outbound";
 

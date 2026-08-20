@@ -40,10 +40,9 @@ Because the balance is carried forward incrementally, **deleting old movements d
 it.** The invariant that must hold is not "the ledger is complete" but "the balance equals the
 ledger's effect since the beginning of time", and the balance carries that history in a single row.
 
-`scripts/verify_stock_balances.py` re-derives every balance from the ledger read-only and exits
-non-zero on any disagreement. Run before and after the first prune, it is the evidence. **Note it
-can only prove agreement over the retained window once pruning has run** — which is why it must be
-run and recorded *before* the first prune, while the full ledger is still present.
+`scripts/verify_stock_balances.py` re-derives every balance read-only and exits non-zero on any
+disagreement. It stays meaningful after retention: derivation is based at the ledger checkpoint
+(below), not at a truncated ledger.
 
 ### Audit correctness is *not* fully preserved — stated plainly
 
@@ -60,6 +59,49 @@ The accepted trade is: TrackFlow is a portfolio deployment on a free tier where 
 ends in a silent feed pause. Bounded storage is worth more than unbounded per-movement audit
 history. **An installation with genuine audit obligations must not enable this job** — set
 `MOVEMENT_RETENTION_DAYS` high enough to be inert, or remove the job.
+
+## Surviving retention: the ledger checkpoint
+
+A materialized balance and a pruned ledger are in tension. Re-deriving from a 30-day ledger yields
+`(recent entries) - (recent exits)`, not real stock — so naively, the first prune would make the
+balance permanently unverifiable, and any repair attempt would overwrite correct stock with a far
+lower number.
+
+`stock_ledger_checkpoints` (migration `20260820_0021`) resolves it. Immediately before each delete,
+the pruner records each SKU's exact balance as of the cutoff. Every derivation is then:
+
+```
+checkpoint.quantity + (entries at/after checkpoint_at) - (exits at/after checkpoint_at)
+```
+
+With no checkpoint rows the base is zero and the watermark admits the whole ledger, which is
+precisely the pre-retention behaviour. Successive prunes chain: each checkpoint is computed from the
+previous one plus the movements between them, so no prune ever needs history it no longer has.
+
+Ordering makes an interrupted prune safe. The checkpoint is written and committed *before* any
+deletion, and every deleted row falls strictly below the watermark, so it never contributed to the
+sum. A crash at any point leaves every balance derivable.
+
+Two states are refused rather than guessed, because a wrong balance silently authorises dispatches
+against stock that does not exist:
+
+- **Checkpoints disagreeing on their instant** — an interrupted or hand-edited prune has no single
+  correct base.
+- **A checkpoint cutoff moving backwards** — it would double-count movements already folded in.
+
+## Deploy rollover and automatic reconciliation
+
+Deployment migrates the database, then swaps containers. Until the swap completes, the *previous*
+image keeps writing movements without maintaining `stock_balances`. This is not hypothetical: the
+2026-08-20 production deployment left six SKUs drifted, every one of them with the stored balance
+**higher** than the ledger, because the missed movements were net outbound. An over-stated balance
+lets the API approve dispatches the ledger cannot cover.
+
+`reconcile_stock_balances` closes the window. The maintenance worker runs it at startup — catching
+rollover drift as soon as the new image is live — and again on every 15-minute guard tick, because
+the startup pass can itself race a rollover still in progress. Corrections are logged at ERROR with
+the per-SKU delta: drift is never expected in steady state, so silent repair would hide a genuine
+defect in the incremental path.
 
 ## The window: 30 days
 
@@ -104,6 +146,9 @@ Order: `inventory_discrepancies` → `stockout_events` → `stock_exits` → `st
   children are still present, so a partial run is always resumable rather than leaving an
   impossible delete.
 - **Fails closed** on a window below the floor.
+- **Refuses to run while any balance is drifted.** Deleting movements destroys the evidence needed
+  to diagnose the drift, so the pruner stops rather than burying it. In a healthy system
+  reconciliation has already cleared it and this never triggers.
 
 ## What this does and does not do to disk usage
 
@@ -121,9 +166,10 @@ not part of this job, and is not needed to hold the ceiling.
 
 ## Rollout
 
-1. Record `scripts.verify_stock_balances` output **before** the first prune — the correctness
-   evidence, only obtainable while the full ledger exists.
-2. Deploy with `MOVEMENT_RETENTION_DAYS` unset (defaults to 30).
+1. Record `scripts.verify_stock_balances` output before the first prune. It remains valid
+   afterwards thanks to the checkpoint, but the pre-prune run is the cleanest baseline.
+2. Deploy with `MOVEMENT_RETENTION_DAYS` unset (defaults to 30). The maintenance worker reconciles
+   any rollover drift at startup, so no manual repair is needed.
 3. Watch the first few 02:15 runs for `movement_ledger_prune_complete` and
    `movement_ledger_prune_incomplete`; expect several nights of `incomplete` while the backlog
    clears.
@@ -132,6 +178,7 @@ not part of this job, and is not needed to hold the ceiling.
 
 ## Reversibility
 
-Not reversible. Deleted movements are unrecoverable — Supabase Free has no scheduled backups under
+The *balance* remains derivable and repairable indefinitely, via the checkpoint. The **movements**
+are not: deleted rows are unrecoverable — Supabase Free has no scheduled backups under
 the accepted disposable-data waiver. Setting `MOVEMENT_RETENTION_DAYS` very high stops further
 deletion but restores nothing.
