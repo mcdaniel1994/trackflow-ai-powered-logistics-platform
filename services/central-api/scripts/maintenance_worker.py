@@ -15,8 +15,8 @@ from zoneinfo import ZoneInfo
 from scripts.db_size_guard import guard_once
 from scripts.prune_agent_memory import prune_once as prune_agent_memory
 from scripts.prune_agent_traces import prune_once as prune_agent_traces
-from scripts.prune_business_events import prune_once as prune_business_events
 from scripts.prune_chat_history import prune_once as prune_chat_history
+from scripts.prune_movement_ledger import prune_once as prune_movement_ledger
 from scripts.prune_reporting_logs import prune_once as prune_reporting_logs
 from scripts.prune_telemetry_events import prune_once as prune_telemetry_events
 
@@ -69,7 +69,11 @@ def run_worker(
             results: dict[str, object] = {}
             operations: tuple[tuple[str, Callable[[], object]], ...] = (
                 ("telemetry_retention", prune_telemetry_events),
-                ("business_event_retention", prune_business_events),
+                # Owns the whole movement graph -- the ledger and the business events
+                # that hold RESTRICT foreign keys into it -- under one cutoff, in FK
+                # order. Splitting these across jobs lets the windows drift apart and
+                # makes the parent delete fail.
+                ("movement_ledger_retention", prune_movement_ledger),
                 ("agent_memory_retention", prune_agent_memory),
                 ("agent_trace_retention", prune_agent_traces),
                 ("chat_history_retention", prune_chat_history),
@@ -82,17 +86,20 @@ def run_worker(
                     _safe_failure(operation, exc)
             try:
                 telemetry = results.get("telemetry_retention")
-                business = results.get("business_event_retention")
+                ledger = results.get("movement_ledger_retention")
                 reporting_logs = results.get("reporting_log_retention")
                 logger.info(
                     "maintenance_prune_complete telemetry_operational=%s telemetry_security=%s "
-                    "business_discrepancies=%s business_stockouts=%s memory_proposals=%s agent_traces=%s "
+                    "ledger_entries=%s ledger_exits=%s ledger_discrepancies=%s ledger_stockouts=%s "
+                    "memory_proposals=%s agent_traces=%s "
                     "chat_sessions=%s "
                     "reporting_log_files=%s reporting_log_bytes=%s",
                     telemetry.get("operational") if isinstance(telemetry, dict) else None,
                     telemetry.get("security") if isinstance(telemetry, dict) else None,
-                    business.get("inventory_discrepancies") if isinstance(business, dict) else None,
-                    business.get("stockout_events") if isinstance(business, dict) else None,
+                    ledger.get("stock_entries") if isinstance(ledger, dict) else None,
+                    ledger.get("stock_exits") if isinstance(ledger, dict) else None,
+                    ledger.get("inventory_discrepancies") if isinstance(ledger, dict) else None,
+                    ledger.get("stockout_events") if isinstance(ledger, dict) else None,
                     results.get("agent_memory_retention"),
                     results.get("agent_trace_retention"),
                     results.get("chat_history_retention"),

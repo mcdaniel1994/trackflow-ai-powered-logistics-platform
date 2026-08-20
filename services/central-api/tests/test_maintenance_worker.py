@@ -44,17 +44,22 @@ def test_worker_runs_guard_and_both_prunes(monkeypatch: pytest.MonkeyPatch) -> N
         lambda: calls.append("reporting_logs") or {"files_deleted": 1, "bytes_deleted": 10},
     )
 
-    def prune_business() -> dict[str, int]:
-        calls.append("business")
+    def prune_ledger() -> dict[str, int]:
+        calls.append("ledger")
         stop.set()
-        return {"inventory_discrepancies": 3, "stockout_events": 4}
+        return {
+            "inventory_discrepancies": 3,
+            "stockout_events": 4,
+            "stock_exits": 5,
+            "stock_entries": 6,
+        }
 
-    monkeypatch.setattr(maintenance_worker, "prune_business_events", prune_business)
+    monkeypatch.setattr(maintenance_worker, "prune_movement_ledger", prune_ledger)
     monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 2)
     monkeypatch.setattr(maintenance_worker, "prune_agent_traces", lambda: calls.append("traces") or 6)
     monkeypatch.setattr(maintenance_worker, "prune_chat_history", lambda: calls.append("chat") or 7)
     maintenance_worker.run_worker(stop=stop, schedule=DueSchedule(), tick_seconds=0.01)  # type: ignore[arg-type]
-    assert calls == ["guard", "telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
+    assert calls == ["guard", "telemetry", "ledger", "memory", "traces", "chat", "reporting_logs"]
 
 
 def test_signal_handler_requests_shutdown() -> None:
@@ -104,8 +109,14 @@ def test_trace_retention_failure_does_not_suppress_other_maintenance(monkeypatch
     )
     monkeypatch.setattr(
         maintenance_worker,
-        "prune_business_events",
-        lambda: calls.append("business") or {"inventory_discrepancies": 0, "stockout_events": 0},
+        "prune_movement_ledger",
+        lambda: calls.append("ledger")
+        or {
+            "inventory_discrepancies": 0,
+            "stockout_events": 0,
+            "stock_exits": 0,
+            "stock_entries": 0,
+        },
     )
     monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 0)
 
@@ -122,7 +133,7 @@ def test_trace_retention_failure_does_not_suppress_other_maintenance(monkeypatch
     )
 
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
+    assert calls == ["telemetry", "ledger", "memory", "traces", "chat", "reporting_logs"]
 
 
 def test_chat_retention_failure_does_not_suppress_other_maintenance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -143,8 +154,14 @@ def test_chat_retention_failure_does_not_suppress_other_maintenance(monkeypatch:
     )
     monkeypatch.setattr(
         maintenance_worker,
-        "prune_business_events",
-        lambda: calls.append("business") or {"inventory_discrepancies": 0, "stockout_events": 0},
+        "prune_movement_ledger",
+        lambda: calls.append("ledger")
+        or {
+            "inventory_discrepancies": 0,
+            "stockout_events": 0,
+            "stock_exits": 0,
+            "stock_entries": 0,
+        },
     )
     monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 0)
     monkeypatch.setattr(maintenance_worker, "prune_agent_traces", lambda: calls.append("traces") or 0)
@@ -161,4 +178,4 @@ def test_chat_retention_failure_does_not_suppress_other_maintenance(monkeypatch:
     )
 
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
+    assert calls == ["telemetry", "ledger", "memory", "traces", "chat", "reporting_logs"]

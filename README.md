@@ -190,6 +190,12 @@ TrackFlow reflects real-world logistics challenges:
   and their dedicated database are removed from both Compose files, `direct_sql` is the only
   executor, and the evidence and waivers are recorded in
   [the retirement note](docs/archive/prefect-orchestration-retirement.md).
+- Stock is materialized in `stock_balances` (`20260820_0020`), maintained in-transaction under the
+  existing SKU lock, which removed the O(ledger) balance scan that dominated disk IO **and** made
+  30-day movement-ledger retention safe. The FK-ordered, micro-batched pruner runs at 02:15 with the
+  other retention jobs and gives the deployment a hard storage ceiling instead of a growth curve.
+  Per-movement audit history beyond 30 days is deliberately traded away; the `spec.md` §8.4 proof is
+  [the retention design](docs/design/movement-ledger-retention.md).
 - Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
   offline Random Forest baseline, five-fold chronological evaluation, and versioned
   metrics/model/report/chart artifacts.

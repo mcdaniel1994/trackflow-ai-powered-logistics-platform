@@ -4,7 +4,10 @@
 > and is preserved as a design record. Its Prefect-as-library execution layer and the R2
 > transformation cache were replaced by the in-process direct SQL executor under
 > specification §7.2 and removed entirely; see
-> `docs/archive/prefect-orchestration-retirement.md`. Everything else in this document —
+> `docs/archive/prefect-orchestration-retirement.md`. Its **26-week business-event retention**
+> (§3.3) was also superseded: business events now share the movement ledger's 30-day window,
+> because their `ON DELETE RESTRICT` foreign keys into `stock_exits` make the two windows
+> inseparable — see `docs/design/movement-ledger-retention.md`. Everything else in this document —
 > the PostgreSQL durable queue, lease/claim-token state machine, Dallas schedule,
 > transactional publication, and the business contract — remains current.
 

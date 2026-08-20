@@ -149,6 +149,13 @@
   the data lockfile, 59 out of Central API's), the R2 transformation cache, and the release guard
   chain are all removed, and `direct_sql` is the only executor. Deployment verification of the
   retirement is pending. See `docs/archive/prefect-orchestration-retirement.md`.
+  Stock was then materialized into `stock_balances` (`20260820_0020`) to remove the O(ledger)
+  `current_stock` scan that dominated production disk IO, which in turn made **30-day movement-ledger
+  retention** safe: computed stock no longer depends on full movement history. The pruner deletes
+  FK children by parent age before parents, in micro-batches with a time budget, and refuses any
+  window inside the 21-day reporting recompute range. It absorbed the former 26-week business-event
+  prune, whose `ON DELETE RESTRICT` keys made a shorter ledger window impossible. Per-movement audit
+  history beyond 30 days is deliberately given up; see `docs/design/movement-ledger-retention.md`.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
   always-on reporting and maintenance workers, fixes failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and

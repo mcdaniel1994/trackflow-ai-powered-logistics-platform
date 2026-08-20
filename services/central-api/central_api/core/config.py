@@ -37,7 +37,13 @@ class Settings(BaseSettings):
     # Automatic database-size guardrails for the Supabase Free tier (500 MB cap).
     db_size_soft_limit_mb: int = 400
     db_size_hard_limit_mb: int = 450
-    business_event_retention_weeks: int = 26
+    # One retention window for the whole movement graph: the ledger and the business
+    # events that reference it. They cannot diverge -- inventory_discrepancies and
+    # stockout_events hold ON DELETE RESTRICT foreign keys into stock_exits, so a
+    # shorter ledger window than theirs makes the parent DELETE fail outright.
+    # Must stay clear of the 3-week reporting recompute window; see
+    # MINIMUM_MOVEMENT_RETENTION_DAYS in scripts/prune_movement_ledger.py.
+    movement_retention_days: int = 30
     identity_jwt_public_key: str = ""
     identity_jwt_algorithm: str = "RS256"
     identity_jwt_issuer: str = "trackflow-identity"

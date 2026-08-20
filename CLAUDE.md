@@ -104,6 +104,13 @@ Then read the active engagement brief and the README for every folder being modi
   approval — six orchestration containers, their dedicated database, the runtime dependency, and
   the R2 transformation cache are gone, and `direct_sql` is the only executor. See
   `docs/archive/prefect-orchestration-retirement.md`.
+  **Stock is now materialized** in `stock_balances` (migration `20260820_0020`), maintained
+  in-transaction under the existing SKU lock, with `scripts/verify_stock_balances.py` as the drift
+  check. That decoupling is what permits **30-day movement-ledger retention**
+  (`scripts/prune_movement_ledger.py`, FK-ordered and micro-batched), which replaced the separate
+  26-week business-event prune — the `ON DELETE RESTRICT` keys into `stock_exits` make those two
+  windows inseparable. Design and its `spec.md` §8.4 proof:
+  `docs/design/movement-ledger-retention.md`.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

@@ -49,6 +49,7 @@ portfolio-production Back Office feeling like a real, moving operations platform
 | `TELEMETRY_ENABLED` | `true` (prod) | Enables best-effort diagnostic emission |
 | `TELEMETRY_OPERATIONAL_RETENTION_DAYS` | `7` | Operational telemetry window |
 | `TELEMETRY_SECURITY_RETENTION_DAYS` | `7` | Security telemetry window (portfolio deviation — see standard) |
+| `MOVEMENT_RETENTION_DAYS` | `30` | Ledger + business-event retention; refuses to run below 25 days (reporting recompute window) |
 | `DB_SIZE_SOFT_LIMIT_MB` | `400` | Prune telemetry and pause the feed at/above this |
 | `DB_SIZE_HARD_LIMIT_MB` | `450` | Keep the feed paused; reset only with one-shot owner approval and a successful checkpoint |
 
@@ -67,8 +68,10 @@ The feed logs `operations_feed_paused` while disabled and resumes on the next ti
 ## Declarative maintenance worker
 
 `compose.coolify.yaml` deploys one always-on `maintenance-worker`; no Coolify cron is required.
-It runs the database-size guard every 15 minutes and prunes telemetry plus business events daily
-at 02:15 America/Chicago. The container is read-only with only `/tmp` writable, uses the runtime
+It runs the database-size guard every 15 minutes and, daily at 02:15 America/Chicago, prunes
+telemetry, the movement ledger and its referencing business events (30 days, FK-ordered — see
+`docs/design/movement-ledger-retention.md`), agent memory and traces, chat history, and reporting
+logs. The container is read-only with only `/tmp` writable, uses the runtime
 database role, and restarts on failure. Remove any legacy Coolify scheduled tasks before rollout
 to prevent duplicate execution.
 
@@ -90,8 +93,8 @@ retain the 15-minute guard cadence and remeasure before changing either threshol
 ### Growth trajectory against the reset threshold (spec.md §7.4 item 5)
 
 Measured from the Supabase snapshot of 2026-08-20, at the 15 s feed interval, **with no ledger rows
-deleted** — the movement ledger is deliberately never pruned (`spec.md` line 696), so the guard
-thresholds, not retention, are what bound it.
+deleted** — this measurement predates the retention job, so it records the growth rate the guard
+thresholds alone had to contain.
 
 | Object | Size | Share |
 |---|---|---|
@@ -110,7 +113,16 @@ The ledger and its indexes are ~95% of the database. At a 15 s tick and a 1–4 
 (~2.5 average) the feed writes on the order of 14,000 movements/day; against the measured ~185 B
 per ledger row plus index, that is roughly **3 MB/day**.
 
-**That puts the 400 MB soft limit approximately six weeks out from the 2026-08-20 snapshot.**
+**Superseded by ledger retention (2026-08-20).** The trajectory below described the unbounded
+ledger. A 30-day retention job now runs at 02:15 alongside the other prunes, so the ledger
+plateaus instead of growing — see `docs/design/movement-ledger-retention.md`. Expect
+`pg_database_size` to level off near its current value rather than shrink: deleting the oldest
+rows frees pages at the front of the heap, which plain VACUUM cannot truncate. Reclaiming that
+space needs a one-off `VACUUM FULL` or `pg_repack` and is not required to hold the ceiling.
+
+The original unbounded projection, retained for reference:
+
+**Without retention, the 400 MB soft limit was approximately six weeks out from the 2026-08-20 snapshot.**
 Reaching it does not lose data and does not fill the disk — the guard prunes telemetry and
 **pauses the live feed**, and it does not auto-resume. The dashboards go static until an operator
 acts. Treat the soft limit as a scheduled demo outage, not a storage emergency.
