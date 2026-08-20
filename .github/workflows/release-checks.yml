@@ -6,6 +6,12 @@ on:
 permissions:
   contents: read
 
+# Every runtime image is python:3.11-slim. Without this, uv resolves the newest
+# interpreter it can find, so CI would type-check and test against a Python that
+# is never shipped -- and pull different transitive versions with it.
+env:
+  UV_PYTHON: "3.11"
+
 jobs:
   quality:
     name: ${{ matrix.label }}
