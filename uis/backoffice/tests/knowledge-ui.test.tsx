@@ -111,6 +111,42 @@ describe("Ask knowledge base", () => {
     expect(screen.getByText(/via knowledge base/i)).toBeInTheDocument();
   });
 
+  it("replaces streamed tokens with the server's authoritative answer", async () => {
+    // An output guardrail that fires mid-stream has already emitted the tokens
+    // preceding it. Without replacement the blocked content stays on screen with the
+    // refusal appended -- which is how a rate-disclosure guard ended up displaying
+    // the rate it was blocking.
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "what does delivery cost?");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    emit("token_chunk", { generation_id: "g9", token: "Standard costs 6.40", sequence: 1 });
+    expect(screen.getByText("Standard costs 6.40")).toBeInTheDocument();
+
+    emit("generation_completed", {
+      generation_id: "g9",
+      message_id: "answer-9",
+      route_taken: "reject",
+      answer: "I couldn't return that answer safely.",
+    });
+
+    expect(screen.getByText("I couldn't return that answer safely.")).toBeInTheDocument();
+    expect(screen.queryByText(/6\.40/)).not.toBeInTheDocument();
+  });
+
+  it("keeps streamed content when the server sends no authoritative answer", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    emit("token_chunk", { generation_id: "g8", token: "Streamed answer.", sequence: 1 });
+    emit("generation_completed", { generation_id: "g8", message_id: "answer-8", route_taken: "rag" });
+
+    expect(screen.getByText("Streamed answer.")).toBeInTheDocument();
+  });
+
   it("surfaces a safe server failure in the open chat panel", async () => {
     renderAsk();
     await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");

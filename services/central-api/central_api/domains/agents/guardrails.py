@@ -88,7 +88,26 @@ _SECRET_OUTPUT = re.compile(
 _ADDRESS_OUTPUT = re.compile(
     r"(?i)\b\d{1,6}\s+[a-z0-9 .'-]{2,45}\s(?:street|st|road|rd|avenue|ave|boulevard|blvd|lane|ln|calle|camino)\b"
 )
-_RATE_OUTPUT = re.compile(r"(?i)\b(?:usd|eur|\$|€)\s*\d|\d+(?:\.\d+)?\s*(?:usd|eur)\b")
+# A monetary amount, in either "USD 18" or "18 USD" / "$18" order.
+_MONEY = r"(?:(?:usd|eur|\$|€)\s*\d+(?:[.,]\d+)?|\d+(?:[.,]\d+)?\s*(?:usd|eur))"
+# Words that mark an amount as an internal or carrier-negotiated cost rather than
+# the published client price.
+_INTERNAL_COST = (
+    r"(?:negotiat\w*|internal|wholesale|buy[- ]rate|our\s+cost|cost\s+price|margin"
+    r"|carrier\s+(?:rate|price|cost)|rate\s+(?:with|from)\s+(?:the\s+)?carrier)"
+)
+_CARRIER_NAMES = r"(?:ups|fedex|dhl|usps|mrw|seur|correos|gls)"
+# Only an amount tied to a carrier or explicitly framed as an internal cost is a
+# disclosure. The business rule is "never reveal negotiated carrier rates -- quote
+# only the final price to the client", so published client pricing (storage,
+# last-mile, returns) must answer normally; blocking every currency figure made the
+# knowledge assistant unable to answer any pricing question at all.
+_RATE_OUTPUT = re.compile(
+    rf"(?i)(?:{_CARRIER_NAMES}\b.{{0,60}}?{_MONEY}"
+    rf"|{_MONEY}.{{0,60}}?\b{_CARRIER_NAMES}\b"
+    rf"|{_INTERNAL_COST}\b.{{0,60}}?{_MONEY}"
+    rf"|{_MONEY}.{{0,60}}?\b{_INTERNAL_COST})"
+)
 _PROMPT_OUTPUT = re.compile(r"(?i)\b(system prompt|developer message|hidden instruction|authority hierarchy)\b")
 _US_TERMS = re.compile(r"(?i)\b(united states|los angeles|california|ups|fedex)\b")
 _ES_TERMS = re.compile(r"(?i)\b(spain|zaragoza|arag[oó]n|madrid|mrw|seur)\b")

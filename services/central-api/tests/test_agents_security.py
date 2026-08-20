@@ -192,6 +192,38 @@ def test_output_validator_blocks_leakage_and_ungrounded_claims(answer: str, juri
     assert validate_output(answer, jurisdiction, authoritative_status=status) == rule
 
 
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "Standard last-mile delivery is 6.40 USD per shipment.",
+        "Storage is 18 USD per cubic meter per month in Los Angeles.",
+        "Returns processing is 3.50 EUR per unit.",
+        "The estimated monthly total is 28,606.00 EUR.",
+        "Express delivery costs $11.20 per shipment.",
+    ],
+)
+def test_output_validator_allows_published_client_pricing(answer: str) -> None:
+    """The rule forbids disclosing negotiated carrier rates, not quoting the client
+    price. Blocking every currency figure made the assistant unable to answer any
+    pricing question, including the storage rates published in the knowledge base."""
+    assert validate_output(answer, None) is None
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "The carrier rate is 12 EUR.",
+        "Our negotiated rate with UPS is 4.10 USD per parcel.",
+        "UPS charges us 4.10 USD per parcel.",
+        "Our rate with the carrier is 3.00 EUR.",
+        "Internal cost is 2.50 USD per parcel.",
+        "We pay MRW 1.90 EUR and bill 5.80 EUR.",
+    ],
+)
+def test_output_validator_still_blocks_carrier_and_internal_rates(answer: str) -> None:
+    assert validate_output(answer, None) == "carrier_rate_output"
+
+
 def test_output_validator_blocks_unsupported_policy_claim_without_evidence() -> None:
     assert (
         validate_output(

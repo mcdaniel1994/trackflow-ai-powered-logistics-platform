@@ -38,6 +38,9 @@ function routeLabel(route: string) {
 
 // The Engagement 10 chat client, relocated verbatim from AskKnowledgeBox and mounted once in the
 // protected layout so "Ask AI" opens it from any route. Opening creates no server state.
+// How far from the bottom the reader may be before auto-follow stops fighting them.
+const FOLLOW_THRESHOLD_PX = 80;
+
 export function ChatPanel() {
   const { open, seed, closePanel } = useChatPanel();
   const [panelQuestion, setPanelQuestion] = useState("");
@@ -54,6 +57,7 @@ export function ChatPanel() {
   const tokenSequencesRef = useRef<Record<string, number>>({});
   const seedNonceRef = useRef<number | null>(null);
   const openHandledRef = useRef(false);
+  const wasOpenRef = useRef(false);
 
   const refreshSessions = useCallback(async () => {
     try {
@@ -118,8 +122,13 @@ export function ChatPanel() {
       delete tokenSequencesRef.current[generationId];
       const messageId = typeof data.message_id === "string" ? data.message_id : draftId;
       const routeTaken = typeof data.route_taken === "string" ? data.route_taken : undefined;
+      // Prefer the server's stored answer over the accumulated deltas. An output
+      // guardrail that fires mid-stream has already emitted the tokens preceding it,
+      // so trusting the accumulation would leave the blocked content on screen with
+      // the refusal appended to it.
+      const authoritative = typeof data.answer === "string" ? data.answer : undefined;
       setMessages((current) => current.map((row) => row.message_id === draftId
-        ? { ...row, message_id: messageId, route_taken: routeTaken }
+        ? { ...row, message_id: messageId, route_taken: routeTaken, ...(authoritative ? { content: authoritative } : {}) }
         : row));
       setStatus("idle");
       void refreshSessions();
@@ -203,9 +212,23 @@ export function ChatPanel() {
   }, [activeSession, connectSession, route, status]);
 
   // Keep the transcript pinned to the latest message (on open, on new tokens, on session load).
+  //
+  // `messages` changes on every streamed token, so writing scrollTop directly here
+  // forced a synchronous layout on each one -- visible as jank while the agent
+  // responds. The write is now coalesced into one animation frame, and it is skipped
+  // when the reader has deliberately scrolled up, which previously yanked them back
+  // to the bottom token by token and made the transcript unreadable mid-stream.
   useEffect(() => {
     const node = messagesRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
+    const justOpened = open && !wasOpenRef.current;
+    wasOpenRef.current = open;
+    if (!node || !open) return;
+    const distanceFromBottom = node.scrollHeight - node.scrollTop - node.clientHeight;
+    if (!justOpened && distanceFromBottom > FOLLOW_THRESHOLD_PX) return;
+    const frame = window.requestAnimationFrame(() => {
+      node.scrollTop = node.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [messages, open]);
 
   // Focus the composer and wire Escape-to-close while the panel is open.

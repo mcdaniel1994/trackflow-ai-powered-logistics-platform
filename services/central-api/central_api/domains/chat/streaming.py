@@ -375,6 +375,12 @@ class ChatGenerationManager:
                     "generation_id": active.generation_id,
                     "message_id": message_id,
                     "route_taken": result.route_taken,
+                    # The authoritative answer, so the client replaces whatever it
+                    # accumulated from token_chunk rather than trusting it. An output
+                    # guardrail that fires mid-stream leaves already-emitted tokens on
+                    # screen; without this the blocked content stays visible with the
+                    # refusal appended to it.
+                    "answer": result.answer,
                 },
             )
         except GenerationCancelled:
