@@ -10,6 +10,7 @@ from sqlmodel import Session
 
 from central_api.domains.incidents.schemas import IncidentStatus, IncidentStatusUpdate
 from central_api.domains.incidents.service import IncidentError, IncidentService
+from central_api.domains.inventory.balances import verify_stock_balances
 from central_api.domains.inventory.schemas import ExitType, StockExitCreate, Warehouse
 from central_api.domains.inventory.service import InventoryError, InventoryService
 
@@ -54,6 +55,10 @@ def test_concurrent_outbound_requests_cannot_make_stock_negative(
 
     assert outcomes == [201, 400]
     assert client.get(f"/inventory/products/{sku_id}", headers=auth_headers).json()["current_stock"] == 3
+    # The materialized balance is read and written inside the same SKU lock as the
+    # movement, so a lost update here would silently resurrect the rejected 7.
+    with Session(engine) as session:
+        assert verify_stock_balances(session) == []
 
 
 def test_product_and_movement_lists_do_not_use_n_plus_one_queries(

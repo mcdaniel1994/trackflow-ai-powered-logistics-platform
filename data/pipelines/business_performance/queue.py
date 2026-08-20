@@ -191,19 +191,6 @@ def engine_from_environment() -> Engine:
     )
 
 
-def record_prefect_flow_run(engine: Engine, claim: RunClaim, flow_run_id: UUID) -> bool:
-    """Correlate Prefect state through the same claim-token CAS as every worker write."""
-    with engine.begin() as connection:
-        result = connection.execute(
-            text(
-                "UPDATE reporting.pipeline_runs SET prefect_flow_run_id = :flow_run_id "
-                "WHERE id = :id AND claim_token = :token AND status = 'running'"
-            ),
-            {"flow_run_id": flow_run_id, "id": claim.run_id, "token": claim.claim_token},
-        )
-    return result.rowcount == 1
-
-
 def record_stage(engine: Engine, claim: RunClaim, stage: str, *, now: datetime | None = None) -> bool:
     if stage not in {"extract", "transform", "load"}:
         raise QueueValidationError("unknown reporting stage")

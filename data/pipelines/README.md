@@ -7,18 +7,16 @@ Each subfolder or file under `data/pipelines/` should represent **one pipeline o
 - **Main purpose**: consolidate in one place the data movement and transformation logic that powers the company’s applications and analytics.
 - **Recommendation**: document pipelines as you add them—their goal, data sources and sinks, dependencies, and how to run them in development, testing, and production.
 
-Engagement 6 Phase 6 completes the local pipeline execution path under `business_performance/`:
-in-process Prefect extraction/transform/load/finalization flows, transactional publication, and a
-one-hour application-managed S3-compatible cache selected by the documented GATE-8a spike. The
-durable queue remains PostgreSQL-owned, KPI business logic remains in the pure `data/process/`
-layer, and absent R2 configuration safely disables caching.
-The production Compose stack runs one long-lived worker instead of separate Coolify cron jobs;
-its Prefect client targets the private dedicated Server/PostgreSQL pair. The TrackFlow PostgreSQL
-queue remains authoritative and the read-only worker keeps only temporary client files under `/tmp`.
-Phase 6.3 removes the raw Python/R2 transform from the active executor, atomically activates only
+Engagement 6 completes the pipeline execution path under `business_performance/`: direct SQL
+extraction, transformation, load, and finalization, with transactional publication. The durable
+queue remains PostgreSQL-owned and KPI business logic remains in the pure `data/process/` layer.
+The production Compose stack runs one long-lived worker instead of separate Coolify cron jobs. The
+TrackFlow PostgreSQL queue is authoritative and the read-only worker keeps only temporary files
+under `/tmp`.
+Phase 6.3 removed the raw Python transform from the active executor, atomically activates only
 exactly reconciled rollups, and serves completed history from weekly facts plus the current
-incomplete week from hourly facts. Cutover defaults off until the controlled production gate.
-Phase 6.4 adds an allowlisted `REPORTING_EXECUTOR` selector. Code and local Compose default to
-Prefect; the owner-approved production Compose path selects `direct_sql` without Prefect startup,
-health, or orphan-flow coupling. Prefect infrastructure remains present for rollback until a
-separate final removal approval.
+incomplete week from hourly facts.
+Phase 6.4 replaced the Prefect executor with `direct_sql`, which runs inside the reporting worker
+against PostgreSQL only. `REPORTING_EXECUTOR` remains an allowlisted selector that fails closed;
+`direct_sql` is its one accepted value. Prefect was retired in August 2026 — see
+`docs/archive/prefect-orchestration-retirement.md`.

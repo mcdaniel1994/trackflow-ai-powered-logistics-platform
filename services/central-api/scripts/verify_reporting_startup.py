@@ -1,12 +1,9 @@
-"""Prove the reporting worker entered its selected execution loop after a deploy.
+"""Prove the reporting worker entered its execution loop after a deploy.
 
-The retained Prefect mode enforces its startup guards inside the worker. Direct
-SQL has no Prefect runtime dependency and enters the same durable queue loop
-after allowlisted executor selection. In both modes, a live, healthy worker
-heartbeat after the deployment boundary is the observable startup proof.
-
-This replaces a hard-coded `PREFECT_GUARD_RESULT=passed` in the deploy workflow,
-which asserted the old Compose ordering rather than measuring anything.
+The worker enters the durable queue loop after allowlisted executor selection,
+and a live, healthy worker heartbeat past the deployment boundary is the
+observable startup proof. This measures that state rather than asserting a
+Compose ordering, as the retired Prefect guard chain did.
 
 A freshness window alone is not sufficient proof. The *previous* worker
 heartbeats until the moment it is replaced, so a heartbeat written seconds before

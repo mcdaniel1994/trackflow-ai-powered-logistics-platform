@@ -20,36 +20,34 @@ executed. On the same date the owner waived the Phase 6.4 48-hour steady-state s
 deployment resource study, all 48-hour post-change comparisons, and seven-day clean run; those
 gates are waived, not passed or executed. The owner separately approved the production swap to the
 direct SQL executor after same-day verification. The allowlisted worker selection and production
-Compose setting are prepared with no resource-limit change. Deployment verification remains
-pending, and final Prefect topology removal remains separately approval-gated.
+Compose setting are deployed with no resource-limit change. **The owner approved final Prefect
+removal on August 20, 2026 and it has been applied**: the six orchestration containers, the
+dedicated database and its volume, the runtime dependency, the R2 transformation cache, and the
+release guard chain are removed, and `direct_sql` is the only executor. Deployment verification of
+the retirement remains pending. See `docs/archive/prefect-orchestration-retirement.md`.
 Independent sales-forecasting Phases 6.5.a–b are complete and owner-accepted as an offline
 evaluation. Five chronological folds diagnose overfitting and unstable temporal validation; the
 offline artifact is not approved for serving or operational decisions.
 
-Dedicated Prefect production remediation Phases 0-4 are implemented and locally
-verified. A private digest-pinned Prefect 3.7.8 Server now uses a dedicated PostgreSQL 16 database;
-reporting and maintenance clients target it while `reporting.pipeline_runs` remains the sole
-dispatch authority. Continuous claim renewal, token-guarded Prefect correlation, stage progress,
-orchestrator health, orphan reconciliation, and a hard run watchdog are implemented through
-Alembic revision `20260716_0010`. Optional recovery-state persistence/backups, operator UX, and
-API-only run retention, optional R2 recovery results, and a pinned read-only Prefect database backup
-service are implemented; the absent-R2 path and an isolated scratch restore are locally verified.
-The API and Back Office expose six server-derived queue states, and the reporting worker gates its own
-startup on PostgreSQL state plus digest-mapped client/server compatibility.
+Production remediation Phases 0-4 are implemented and verified. `reporting.pipeline_runs` is the
+sole dispatch authority. Continuous claim renewal, token-guarded stage progress, and a hard run
+watchdog are implemented through Alembic revision `20260716_0010`. The API and Back Office expose
+six server-derived queue states, and the reporting worker gates its own startup on a fail-closed
+executor allowlist. The dedicated-Prefect infrastructure that originally carried this phase was
+retired in August 2026; the guarantees above live in PostgreSQL and the worker and are unaffected.
 The first production startup on July 15 exposed Coolify translating PostgreSQL init-file bind mounts
 as directories. The repository hotfix bakes those files into the pinned database image, runs an
-idempotent bootstrap against every existing volume before Prefect starts, and separates container
+idempotent bootstrap against every existing volume, and separates container
 liveness from dependency-aware readiness.
 The hotfix redeployment then ended as Coolify exit 255: `docker compose up -d` stays attached until
 every `service_completed_successfully` dependency exits, so gating the reporting worker on the
-one-shot Prefect guards charged the guard chain to Coolify's command boundary. Local measurement puts
+one-shot guards charged the guard chain to Coolify's command boundary. Local measurement puts
 the startup chain at 18s against ~3GB of per-deployment image pulls, and reproduces the production
-signature (guards in flight, worker left in `created`, command killed). The guards now report without
-gating startup, the worker enforces the identical conditions fail-closed in a bounded startup guard,
-every guard emits fixed success/failure tokens, and the release measures the guard outcome from live
-worker state instead of hard-coding it. The immutable July 28 deployment verified this path in
+signature (guards in flight, worker left in `created`, command killed). Enforcement moved into the
+worker as a fail-closed startup guard, and the release measures that outcome from live worker state
+instead of hard-coding it. The guard chain itself was removed with Prefect. The immutable July 28 deployment verified this path in
 production; controlled external acceptance remains pending.
-External soak, Prefect restore, 48-hour headroom, computation-disable, and image-rollback
+External soak, 48-hour headroom, computation-disable, and image-rollback
 acceptance gates remain owner-approved work. The earlier
 telemetry slice, live operations feed, durable weekly business-performance pipeline, Back Office
 reporting surface, declarative reporting/maintenance workers, production migration verifier,

@@ -95,12 +95,11 @@ jobs:
             docker buildx imagetools inspect "$image:$IMAGE_TAG" > /dev/null
           done
 
-      - name: Validate Prefect release contract
+      - name: Validate production compose file
         shell: bash
         run: |
           set -euo pipefail
           docker compose -f compose.coolify.yaml config --no-interpolate --quiet
-          python scripts/release/verify_prefect_contract.py
 
       - name: Run and verify production migrations
         if: env.DEPLOYMENT_MODE == 'release'
@@ -184,12 +183,11 @@ jobs:
           fi
           echo "SMOKE_RESULT=passed" >> "$GITHUB_ENV"
 
-      # Measures the guard outcome instead of asserting it. Compose no longer
-      # gates reporting-worker on the one-shot guards, so guard success is proven
-      # by the worker reaching its poll loop past its own fail-closed startup
-      # guard and heartbeating with a healthy orchestrator.
+      # Measures the startup outcome instead of asserting it: success is proven by
+      # the worker reaching its poll loop past its own fail-closed executor guard
+      # and heartbeating after the deployment boundary.
       - name: Verify reporting separately from core readiness
-        id: prefect_guard_verification
+        id: reporting_verification
         if: steps.release_verification.outcome == 'success'
         continue-on-error: true
         shell: bash
@@ -203,7 +201,7 @@ jobs:
             echo "Reporting verification returned HTTP $status; release remains deployed." >&2
             exit 1
           fi
-          output="$RUNNER_TEMP/prefect-guard.log"
+          output="$RUNNER_TEMP/reporting-startup.log"
           # The script owns its own bounded poll: the worker restarts on-failure and
           # needs a heartbeat interval or two past the boundary before a verdict.
           if ! docker run --rm --pull=always --read-only --tmpfs /tmp \
@@ -215,7 +213,7 @@ jobs:
             .venv/bin/python -m scripts.verify_reporting_startup > "$output" 2>&1
           then
             cat "$output"
-            echo "Reporting worker did not clear its Prefect startup guard." >&2
+            echo "Reporting worker did not reach a verified startup state." >&2
             exit 1
           fi
           cat "$output"
@@ -286,6 +284,6 @@ jobs:
             ${{ runner.temp }}/production-migration.log
             ${{ runner.temp }}/coolify-deploy.log
             ${{ runner.temp }}/reporting-verification.json
-            ${{ runner.temp }}/prefect-guard.log
+            ${{ runner.temp }}/reporting-startup.log
           if-no-files-found: ignore
           retention-days: 30

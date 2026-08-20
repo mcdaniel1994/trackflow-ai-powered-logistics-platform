@@ -124,36 +124,40 @@
   enabled with 7-day retention, a daily prune, and a `scripts/db_size_guard.py` size guard
   (400 MB soft / 450 MB hard, ledger-safe reset) that keeps Supabase Free bounded. Runbook:
   `docs/runbooks/operations-feed.md`; signal reference: `docs/runbooks/telemetry-inventory.md`.
-  The dedicated-Prefect remediation has completed repository Phases 0-4 locally: a private digest-pinned Prefect
-  3.7.8 Server stores orchestration state in its own PostgreSQL 16 volume, both reporting clients
-  target it, and a release guard proves Prefect tables live in PostgreSQL rather than fallback
-  SQLite. The worker now renews claims independently, records token-guarded Prefect run IDs and
-  stages, fails closed on orchestrator health, reconciles orphaned runs, and has a hard execution
-  watchdog with truthful readiness signals. `reporting.pipeline_runs` remains the sole dispatch
-  authority. Optional transformation recovery results use a distinct R2 prefix, the maintenance
-  worker prunes old terminal runs through the API only, and a pinned read-only backup service creates
-  daily custom-format dumps with distinct `PREFECT_BACKUP_R2_*` credentials. The absent-R2 path and
-  an isolated scratch restore are locally verified. The reporting API and Back Office now share six
-  server-derived queue states, and the reporting worker's own fail-closed startup guard blocks it on
-  SQLite fallback or incompatible server/client versions. The July 15 first production startup exposed
+  The reporting remediation completed repository Phases 0-4: the worker renews claims
+  independently, records token-guarded stages, and has a hard execution watchdog with truthful
+  readiness signals. `reporting.pipeline_runs` remains the sole dispatch
+  authority. The reporting API and Back Office share six
+  server-derived queue states, and the worker's fail-closed startup guard blocks it on an
+  unsupported executor. The July 15 first production startup exposed
   Coolify translating PostgreSQL init-file bind mounts into directories; the hotfix now bakes those
   files into the pinned database image, repairs existing volumes through an idempotent one-shot
   bootstrap, and keeps Central API container liveness independent of reporting readiness. The hotfix
   redeployment then ended as Coolify exit 255 — the SSH command boundary, not a guard rejection
   (a real guard failure exits 1 in ~13s). `up -d` stays attached until every
   `service_completed_successfully` dependency exits, so gating the worker on the one-shot guards put
-  them on the deploy critical path. The guards now report without gating startup, enforcement moved
-  into the worker, guards emit fixed tokens, and `scripts/release/measure_compose_startup.sh` makes
+  them on the deploy critical path. Enforcement moved
+  into the worker, and `scripts/release/measure_compose_startup.sh` makes
   the attach time measurable (18s chain against ~3GB of per-deployment pulls). Approved
   redeployment is complete. The Phase 6.3 control-plane outage/restore drill passed; its
   computation-disable and seven-day gates were waived by owner exception. The owner also waived
   Phase 6.4's 48-hour steady-state/deployment/post-change studies and seven-day clean run, recording
   them as waived rather than passed or executed. The production direct-SQL executor swap is
   separately approved and prepared after same-day queue/recovery/parity/2×-volume verification,
-  with no resource-limit change. Deployment verification is pending. Final Prefect topology
-  removal remains separately approval-gated.
+  with no resource-limit change. **Prefect was retired in August 2026** under owner approval: the
+  six orchestration containers, the `prefect-db` volume, the runtime dependency (71 packages out of
+  the data lockfile, 59 out of Central API's), the R2 transformation cache, and the release guard
+  chain are all removed, and `direct_sql` is the only executor. Deployment verification of the
+  retirement is pending. See `docs/archive/prefect-orchestration-retirement.md`.
+  Stock was then materialized into `stock_balances` (`20260820_0020`) to remove the O(ledger)
+  `current_stock` scan that dominated production disk IO, which in turn made **30-day movement-ledger
+  retention** safe: computed stock no longer depends on full movement history. The pruner deletes
+  FK children by parent age before parents, in micro-batches with a time budget, and refuses any
+  window inside the 21-day reporting recompute range. It absorbed the former 26-week business-event
+  prune, whose `ON DELETE RESTRICT` keys made a shorter ledger window impossible. Per-movement audit
+  history beyond 30 days is deliberately given up; see `docs/design/movement-ledger-retention.md`.
   The earlier production-hardening slice replaces manual reporting recovery and Coolify cron jobs with
-  always-on reporting and maintenance workers, fixes Prefect failure propagation, exposes worker
+  always-on reporting and maintenance workers, fixes failure propagation, exposes worker
   health, adds fail-closed migration/grant verification, introduces `/health/live` and
   `/health/ready`, and automatically restores the previous immutable image after deploy or
   readiness failure. The GitHub Production secret is configured; credential rotation remains an
@@ -178,8 +182,8 @@
   reachable: a deterministic Markdown renderer (`domains/rfp/render.py`), a `GET
   /rfp/tickets/{id}/document/download` route, BFF allowlist + client `downloadRfpDocument`, and a
   `CompletedProposal` UI in the RFP Desk. (2.3) The Business Reporting Run now / Force refresh triggers
-  were removed as a product/demo decision (not a Prefect consequence — Prefect is still deployed;
-  the buttons drove real direct-SQL work) and replaced with hand-rolled inline-SVG charts (KPI tiles,
+  were removed as a product/demo decision (the buttons drove real direct-SQL work) and replaced
+  with hand-rolled inline-SVG charts (KPI tiles,
   grouped bars, discrepancy-rate bars, a 6-week trend line) on a validated palette, keeping the precise
   table. (2.4) "Ask AI" now opens the chat slide-over from any route: the Engagement 10 chat client was
   relocated verbatim into `components/knowledge/ChatPanel.tsx`, mounted once in the protected layout via
@@ -222,8 +226,8 @@ implementing any of the items below.
   Phase 6.3 by explicit exception on 2026-07-28, waiving rollback drill two and the seven-day
   observation without executing them. Phase 6.4's time gates are likewise waived, not passed or
   executed. Its direct SQL executor, allowlisted selection, and same-day verification are complete;
-  the production swap is approved/prepared, with deployment verification and separately approved
-  final Prefect removal still open.
+  the production swap is deployed and Prefect was retired in August 2026 under owner approval;
+  deployment verification of the retirement is still open.
 - Engagement 6.5 - sales forecasting. Owner-approved specification:
   `docs/planning/remaining_planning/spec-6.5-sales-forecasting.md`. Independent of
   6.1-6.4 and runs in parallel with it, not after. Phases 6.5.a–b are complete and owner-accepted
@@ -269,12 +273,13 @@ implementing any of the items below.
   `main` builds proceed to an approval-gated, SHA-pinned Coolify deployment.
   The Coolify `4.1.2` and GitHub Production environment prerequisites are
   configured. Broad PR CI, browser E2E, and dependency/secret scanning remain
-  follow-ups; the first live automated deployment exposed the documented Prefect startup defect,
+  follow-ups; the first live automated deployment exposed the documented orchestration startup defect,
   while the July 28 immutable deployment verified its hotfix and Phase 6.1. The owner omitted the
   remaining Phase 6.1 exercises. Phase 6.3 rollback drill one ran successfully; the owner later
   waived drill two and the seven-day observation and accepted the phase by explicit exception.
-  The Phase 6.4 direct-SQL production swap and time-gate waivers are approved; deployment
-  verification remains open, with resource-limit changes and final Prefect removal unapproved.
+  The Phase 6.4 direct-SQL production swap and time-gate waivers are approved and Prefect removal
+  was approved and applied in August 2026; deployment verification of the retirement remains open,
+  with resource-limit changes unapproved.
 - Supabase Free and the Identity volume have no scheduled backups under the
   accepted disposable-data waiver; meaningful production data requires
   revisiting backup and restore requirements first.

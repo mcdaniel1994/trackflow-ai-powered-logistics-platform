@@ -8,13 +8,11 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from prefect.testing.utilities import prefect_test_harness
 from sqlalchemy import Engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
-from pipelines.business_performance import direct_executor, flows
+from pipelines.business_performance import direct_executor
 from pipelines.business_performance.direct_executor import direct_sql_executor
-from pipelines.business_performance.flows import prefect_executor
 from pipelines.business_performance.queue import (
     LeaseLostError,
     RunClaim,
@@ -24,8 +22,6 @@ from pipelines.business_performance.queue import (
 from pipelines.business_performance.rollups import capture_rollup_window
 from pipelines.business_performance.runner import (
     PipelineStageError,
-    RunnerStatus,
-    run_once,
 )
 
 WEEK = date(2026, 7, 13)
@@ -102,7 +98,7 @@ def _snapshot(engine: Engine) -> tuple[list[tuple[object, ...]], list[tuple[obje
     return [tuple(row) for row in hourly], [tuple(row) for row in weekly]
 
 
-def test_direct_executor_records_all_stages_without_prefect_context(
+def test_direct_executor_records_all_stages_unconditionally(
     pipeline_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -311,50 +307,3 @@ def test_direct_executor_maps_stage_failures_without_details(
     assert raised.value.stage == failing_stage
     assert raised.value.error_code == expected_code
     assert "private" not in str(raised.value)
-
-
-def test_prefect_and_direct_executors_publish_identical_fixed_cutoff_rollups(
-    pipeline_engine: Engine,
-    database_url: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("DATABASE_URL", database_url)
-    monkeypatch.setenv("REPORTING_ROLLUP_CUTOVER_ENABLED", "true")
-    _seed_activity(pipeline_engine)
-
-    monkeypatch.setattr(
-        flows,
-        "capture_rollup_window",
-        lambda engine, claim: capture_rollup_window(
-            engine,
-            claim,
-            now=FIXED_CUTOFF,
-        ),
-    )
-    enqueue_cli(
-        pipeline_engine,
-        requested_week_start=WEEK,
-        now=FIXED_CUTOFF - timedelta(seconds=1),
-    )
-    with prefect_test_harness():
-        prefect_result = run_once(pipeline_engine, prefect_executor)
-    assert prefect_result.status == RunnerStatus.SUCCEEDED
-    prefect_snapshot = _snapshot(pipeline_engine)
-
-    monkeypatch.setattr(
-        direct_executor,
-        "capture_rollup_window",
-        lambda engine, claim: capture_rollup_window(
-            engine,
-            claim,
-            now=FIXED_CUTOFF,
-        ),
-    )
-    enqueue_cli(
-        pipeline_engine,
-        requested_week_start=WEEK,
-        now=FIXED_CUTOFF + timedelta(seconds=1),
-    )
-    direct_result = run_once(pipeline_engine, direct_sql_executor)
-    assert direct_result.status == RunnerStatus.SUCCEEDED
-    assert _snapshot(pipeline_engine) == prefect_snapshot

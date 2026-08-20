@@ -6,14 +6,13 @@ import pytest
 
 from pipelines.business_performance import executor_selection
 from pipelines.business_performance.direct_executor import direct_sql_executor
-from pipelines.business_performance.flows import prefect_executor
 
 
-def test_executor_defaults_to_prefect(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_executor_defaults_to_direct_sql(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("REPORTING_EXECUTOR", raising=False)
     assert executor_selection.executor_from_environment() == (
-        "prefect",
-        prefect_executor,
+        "direct_sql",
+        direct_sql_executor,
     )
 
 
@@ -23,6 +22,13 @@ def test_executor_selects_direct_sql(monkeypatch: pytest.MonkeyPatch) -> None:
         "direct_sql",
         direct_sql_executor,
     )
+
+
+def test_executor_rejects_retired_prefect_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A deployment left pinned to the retired orchestrator must fail closed, not fall back."""
+    monkeypatch.setenv("REPORTING_EXECUTOR", "prefect")
+    with pytest.raises(ValueError, match=r"^unsupported reporting executor$"):
+        executor_selection.executor_from_environment()
 
 
 def test_executor_rejects_unknown_value_without_echoing_it(

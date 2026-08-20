@@ -11,19 +11,14 @@ Data engineering assets for the TrackFlow platform.
 
 Engagement 6 establishes an isolated `trackflow-data-pipelines` uv project. Phase 5 adds a durable
 PostgreSQL queue, America/Chicago dispatcher, lease/CAS state machine, and advisory-lock-protected
-runner lifecycle alongside the pure weekly KPI transforms. Phase 6 supplies the in-process Prefect
-ETL executor and an optional one-hour S3-compatible cache. The July 15 owner-approved amendment
-adds a private Prefect Server backed by dedicated PostgreSQL for stable orchestration state without
-adding work-pool dispatch; absent cache configuration preserves full correctness.
+runner lifecycle alongside the pure weekly KPI transforms. Phase 6 supplies the in-process
+ETL executor.
 Production hardening adds the always-on `business_performance.worker`: it polls every five
 seconds, heartbeats every ten seconds, checks the Dallas schedule every minute, and continues to
 use PostgreSQL leases, claim tokens, idempotency, and advisory locking. The second remediation
-phase adds independent continuous lease renewal, token-CAS flow-run/stage correlation, fail-closed
-Prefect health, startup orphan reconciliation, bounded I/O timeouts, and a hard run watchdog. Phase 3
-adds optional Prefect recovery results under `prefect-results/recovery`, API-only terminal-run
-retention, and an isolated read-only PostgreSQL backup service with a distinct R2 token. Phase 4
-adds shared server-derived queue/readiness states and startup gates that verify Prefect PostgreSQL
-state plus the digest-mapped server/client version contract before the worker can claim work.
+phase adds independent continuous lease renewal, token-CAS stage correlation, bounded I/O
+timeouts, and a hard run watchdog. Phase 4 adds shared server-derived queue/readiness states and a
+fail-closed executor gate before the worker can claim work.
 Reporting-reliability Phase 6.1 adds durable per-attempt history, bounded status evidence, fixed
 timeouts, exact-once failure accounting, and owner-approved persistent-log defaults; it is deployed
 and closed by documented owner exception. Phase 6.2 adds off-by-default durable hourly SQL rollups,
@@ -35,11 +30,11 @@ verified and deployed through `20260728_0013`. Rollback drill one passed; the ow
 6.3 by explicit exception and waived drill two and the seven-day observation without executing
 them. The Phase 6.4 time gates were explicitly waived rather than passed or executed, and the
 production direct-executor swap was separately approved. The implementation adds a direct SQL
-executor with unconditional stage CAS,
-transient-only bounded retries, abort handling, and fixed-cutoff Prefect/direct parity coverage.
-The shared SQL path also passes the disposable 2.12-million-row budget gate. Production Compose
-selects it; Prefect remains the code/local default and a rollback topology pending separate final
-removal approval. Evidence: `docs/planning/engagement-6.4-phase-review-2026-07-28.md`.
+executor with unconditional stage CAS, transient-only bounded retries, and abort handling, verified
+against the Prefect path on identical fixed-cutoff rollups before the swap. The SQL path also passes
+the disposable 2.12-million-row budget gate. Prefect was retired in August 2026 and `direct_sql` is
+now the only executor — see `docs/archive/prefect-orchestration-retirement.md`. Evidence:
+`docs/planning/engagement-6.4-phase-review-2026-07-28.md`.
 
 Independent sales-forecasting Phases 6.5.a–b live under `process/sales_forecasting/`. They consume the
 generated, deterministic 120-month dataset in `raw/trackflow_sales.csv` only in an explicit offline

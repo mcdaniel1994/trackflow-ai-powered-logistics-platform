@@ -57,7 +57,7 @@ def test_direct_cli_returns_failure_and_validates_monday(monkeypatch: pytest.Mon
         pipeline._week_start("2026-07-14")
 
 
-def test_runner_main_uses_prefect_executor_and_disposes(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_main_uses_selected_executor_and_disposes(monkeypatch: pytest.MonkeyPatch) -> None:
     engine = _Engine()
     called: list[Any] = []
     monkeypatch.setattr(runner, "engine_from_environment", lambda: engine)

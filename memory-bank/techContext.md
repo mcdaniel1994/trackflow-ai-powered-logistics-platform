@@ -11,9 +11,8 @@
   incidents, and suppliers, with SQLModel, Alembic, and PostgreSQL; it verifies
   Identity tokens through `trackflow_auth` and never opens Identity's TinyDB.
 - `compose.yaml` and `compose.coolify.yaml` define separate local and production
-  paths for Identity, Central API, Back Office, a private digest-pinned Prefect 3.7.8 Server,
-  dedicated PostgreSQL 16 orchestration state, an image-baked idempotent database bootstrap,
-  reporting/maintenance workers, and an isolated read-only Prefect database backup service.
+  paths for Identity, Central API, Back Office, Qdrant, the MCP server, the operations feed,
+  and the reporting/maintenance workers.
 - The production stack is verified on Coolify at
   `https://backoffice.forgehub.cloud`. Back Office is the only public service;
   Identity and Central API remain private on the Coolify network. Supabase uses
@@ -25,19 +24,20 @@
   publishes Linux AMD64 commit-pinned images to GHCR.
 - `.github/workflows/deploy-production.yml` is the reusable and manually
   dispatchable, GitHub-Environment-gated path that preflights all three
-  immutable images, runs approval-gated migrations for releases, verifies the static Prefect
-  contract, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, polls readiness, and automatically
+  immutable images, runs approval-gated migrations for releases, validates the production Compose
+  file, updates only Coolify's `TRACKFLOW_IMAGE_TAG`, polls readiness, and automatically
   restores the prior app image on failure without downgrading databases. Image rollback does not
   restore an older Compose topology, so Compose failures require a reviewed forward fix or an
   explicitly approved prior-revision deployment. Coolify
   `4.1.2` and the GitHub Production environment are configured for this path;
-  its first live approved run exposed the July 15 Prefect init-mount defect; the repository hotfix
-  and Phase 6.1 were deployed successfully on July 28. The owner omitted the remaining controlled
+  its first live approved run exposed the July 15 orchestration init-mount defect; the repository
+  hotfix and Phase 6.1 were deployed successfully on July 28. The owner omitted the remaining controlled
   Phase 6.1 exercises. Phase 6.3 control-plane/safe-stale rollback drill one passed. The owner then
   accepted Phase 6.3 by explicit exception and waived its computation-disable drill and seven-day
-  observation without executing them. Phase 6.4 is approved to begin; production executor swap,
-  resource-limit mutations, final Prefect removal, and the immutable-image rollback drill remain
-  separately owner-gated.
+  observation without executing them. Phase 6.4's production executor swap was approved and
+  deployed, and Prefect was retired in August 2026
+  (`docs/archive/prefect-orchestration-retirement.md`). Resource-limit mutations and the
+  immutable-image rollback drill remain separately owner-gated.
 - `packages/trackflow_incidents/` - shared Python incident enums, privacy-safe
   legacy CSV validation, and normalization used by Central API.
 
@@ -92,25 +92,21 @@ trackflow/
 - Public pages must comply with `docs/standards/visibility.md` sections 1-6 before merge.
 - Junecoast is the active visual palette across current TrackFlow UIs.
 - Engagement 6 business reporting uses TrackFlow PostgreSQL `reporting.pipeline_runs` as its sole
-  dispatch authority. Prefect has no work pool and owns only orchestration history/recovery state in
-  a separate database. The worker renews leases independently, records token-CAS correlation/stage
-  progress, fails closed on Prefect health, and is bounded by a hard watchdog. Optional R2 recovery
-  results and backups are non-authoritative and separately credentialed.
-- Phase 6.2 adds `reporting.hourly_activity_rollups` and singleton `rollup_state`. Its Prefect-owned
+  dispatch authority. The worker renews leases independently, records token-CAS stage progress, and
+  is bounded by a hard watchdog.
+- Phase 6.2 adds `reporting.hourly_activity_rollups` and singleton `rollup_state`. Its
   executor captures completed-hour UTC cutoffs, independently aggregates raw sources in SQL,
   recomputes a trailing 72 hours, and publishes under claim verification. Phase 6.3 activated the
   reconciled rollup path in production and removed the legacy transform from active execution.
-- Phase 6.4 local work adds an unselected direct SQL executor under the same engine/claim/abort
-  contract. It records stages under unconditional claim-token CAS, preserves transient-only bounded
-  retries and publication verification, and has fixed-cutoff parity coverage. The production worker
-  still selects Prefect pending separate approval.
+- Phase 6.4 replaced the Prefect executor with a direct SQL executor under the same
+  engine/claim/abort contract. It records stages under unconditional claim-token CAS and preserves
+  transient-only bounded retries and publication verification. It was verified against the Prefect
+  path on identical fixed-cutoff rollups before the swap, and Prefect was retired in August 2026
+  (`docs/archive/prefect-orchestration-retirement.md`). `REPORTING_EXECUTOR` remains a fail-closed
+  allowlist whose one accepted value is `direct_sql`.
 - Reporting readiness and the API share one six-state derivation (`idle`, `processing`, `queued`,
-  `retrying`, `stuck`, `unavailable`). One-shot Compose guards prove Prefect tables live in
-  PostgreSQL and the digest-pinned server is compatible with the locked client before worker startup.
-- Prefect PostgreSQL init files are copied into a digest-pinned custom image rather than mounted
-  from relative repository paths. A one-shot idempotent bootstrap runs after database liveness on
-  every deployment, repairs missing prerequisites on existing volumes, and gates Prefect Server and
-  backups. Central API container health uses `/health/live`; dependency-aware `/health/ready`
+  `retrying`, `stuck`, `unavailable`).
+- Central API container health uses `/health/live`; dependency-aware `/health/ready`
   remains a release-level check after the full service graph starts.
 
 ## Folder Boundaries

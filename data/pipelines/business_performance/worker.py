@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 import os
 import signal
-import urllib.request
 from collections.abc import Callable
+from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from types import FrameType
 
 from sqlalchemy import Engine
@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 POLL_INTERVAL_SECONDS = 5.0
 HEARTBEAT_INTERVAL_SECONDS = 10.0
 DISPATCH_INTERVAL_SECONDS = 60.0
-PREFECT_HEALTH_TIMEOUT_SECONDS = 5.0
 DEFAULT_RUN_TIMEOUT_SECONDS = 1800.0
 DEFAULT_LOG_MAX_BYTES = 10 * 1024 * 1024
 DEFAULT_LOG_BACKUP_COUNT = 9
@@ -40,6 +39,53 @@ def _safe_failure(operation: str, exc: Exception) -> None:
     logger.error("reporting_worker_operation_failed operation=%s error_type=%s", operation, type(exc).__name__)
 
 
+class _Liveness:
+    """Liveness shared by the poll loop and the heartbeat thread, written once per change.
+
+    The poll loop used to write this singleton row on every 5 s iteration while the
+    heartbeat thread wrote the same row every 10 s. The thread alone already carries
+    worker liveness — it keeps beating while the loop is blocked inside a run — so the
+    per-poll write was pure duplication, and in production it dominated the database's
+    write volume.
+
+    The loop now records its observation in memory and writes only when
+    ``orchestrator_healthy`` actually changes, so a health transition still reaches the
+    status contract immediately rather than waiting for the next beat. Steady state
+    costs no extra writes. The spec-frozen 10 s heartbeat interval is unchanged.
+
+    Both threads touch this state, so every read and write is taken under the lock.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._last_progress_at: datetime | None = None
+        self._orchestrator_healthy: bool | None = None
+        self._written_orchestrator_healthy: bool | None = None
+
+    def observe(
+        self, engine: Engine, *, last_progress_at: datetime, orchestrator_healthy: bool
+    ) -> None:
+        """Record progress, writing through only on an orchestrator-health transition."""
+        with self._lock:
+            self._last_progress_at = last_progress_at
+            self._orchestrator_healthy = orchestrator_healthy
+            changed = orchestrator_healthy != self._written_orchestrator_healthy
+        if changed:
+            self.write(engine)
+
+    def write(self, engine: Engine) -> None:
+        """Persist the newest observation; None values preserve the stored row (COALESCE)."""
+        with self._lock:
+            last_progress_at = self._last_progress_at
+            orchestrator_healthy = self._orchestrator_healthy
+            self._written_orchestrator_healthy = orchestrator_healthy
+        record_worker_heartbeat(
+            engine,
+            last_progress_at=last_progress_at,
+            orchestrator_healthy=orchestrator_healthy,
+        )
+
+
 def _periodic(
     stop: Event,
     *,
@@ -54,17 +100,6 @@ def _periodic(
         except Exception as exc:
             _safe_failure(operation_name, exc)
         stop.wait(interval_seconds)
-
-
-def prefect_is_healthy() -> bool:
-    api_url = os.environ.get("PREFECT_API_URL", "").rstrip("/")
-    if not api_url:
-        return False
-    try:
-        with urllib.request.urlopen(f"{api_url}/health", timeout=PREFECT_HEALTH_TIMEOUT_SECONDS) as response:
-            return bool(response.status == 200)
-    except (OSError, ValueError):
-        return False
 
 
 def _run_watchdog(done: Event, timeout_seconds: float, run_id: str, attempt: int) -> None:
@@ -85,14 +120,12 @@ def run_worker(
     executor: RunExecutor,
     *,
     stop: Event,
-    orchestrator_health: Callable[[], bool] | None = None,
-    reconcile_prefect_runs: bool = True,
     poll_interval_seconds: float = POLL_INTERVAL_SECONDS,
     heartbeat_interval_seconds: float = HEARTBEAT_INTERVAL_SECONDS,
     dispatch_interval_seconds: float = DISPATCH_INTERVAL_SECONDS,
 ) -> None:
     """Poll serially while heartbeat and scheduling remain responsive."""
-    health_check = prefect_is_healthy if orchestrator_health is None else orchestrator_health
+    liveness = _Liveness()
     background = (
         Thread(
             target=_periodic,
@@ -100,7 +133,7 @@ def run_worker(
                 "stop": stop,
                 "interval_seconds": heartbeat_interval_seconds,
                 "operation_name": "heartbeat",
-                "operation": lambda: record_worker_heartbeat(engine),
+                "operation": lambda: liveness.write(engine),
             },
             name="reporting-heartbeat",
         ),
@@ -118,26 +151,17 @@ def run_worker(
     for thread in background:
         thread.start()
 
-    if reconcile_prefect_runs:
-        from .flows import reconcile_orphaned_flow_runs
-
-        try:
-            reconcile_orphaned_flow_runs(engine)
-        except Exception as exc:
-            _safe_failure("orphan_reconciliation", exc)
     logger.info("reporting_worker_started")
     try:
         while not stop.is_set():
             try:
-                healthy = health_check()
-                record_worker_heartbeat(
-                    engine,
-                    last_progress_at=utc_now(),
-                    orchestrator_healthy=healthy,
+                # Direct SQL executes in this process, so the worker is its own
+                # orchestrator: a beating worker is a healthy one. Steady state is
+                # recorded in memory and persisted by the heartbeat thread; only a
+                # transition writes through from here.
+                liveness.observe(
+                    engine, last_progress_at=utc_now(), orchestrator_healthy=True
                 )
-                if not healthy:
-                    stop.wait(poll_interval_seconds)
-                    continue
                 if not computation_enabled():
                     stop.wait(poll_interval_seconds)
                     continue
@@ -200,25 +224,17 @@ def _configure_persisted_log() -> None:
 def main() -> None:
     """Run one single-concurrency worker until SIGTERM or SIGINT."""
     from .executor_selection import executor_from_environment
-    from .startup_guard import StartupGuardFailure, verify_startup_contract
 
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s", force=True)
     _configure_persisted_log()
 
+    # Direct SQL runs inside this container against PostgreSQL only: there is no
+    # external orchestrator to probe, so the executor allowlist is the whole
+    # startup contract and it still fails closed on an unrecognised value.
     try:
         executor_name, executor = executor_from_environment()
     except ValueError:
         logger.critical("reporting_worker_startup_guard=failed reason=unsupported_executor")
-        raise SystemExit(1) from None
-
-    # The Prefect rollback path keeps its original fail-closed startup contract.
-    # Direct SQL has no Prefect runtime contract, so it must not be gated on a
-    # service that is outside its execution path.
-    try:
-        if executor_name == "prefect":
-            verify_startup_contract()
-    except StartupGuardFailure as failure:
-        logger.critical("reporting_worker_startup_guard=failed reason=%s", failure.reason)
         raise SystemExit(1) from None
     logger.info(
         "reporting_worker_startup_guard=complete executor=%s",
@@ -230,15 +246,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _stop(stop))
     engine = engine_from_environment()
     try:
-        run_worker(
-            engine,
-            executor,
-            stop=stop,
-            orchestrator_health=(
-                prefect_is_healthy if executor_name == "prefect" else lambda: True
-            ),
-            reconcile_prefect_runs=executor_name == "prefect",
-        )
+        run_worker(engine, executor, stop=stop)
     finally:
         engine.dispose()
 

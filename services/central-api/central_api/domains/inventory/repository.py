@@ -15,13 +15,15 @@ from sqlalchemy import (
 from sqlalchemy import (
     select as sa_select,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.engine import Row
 from sqlmodel import Session, select
 
-from .models import SKU, Client, InventoryDiscrepancy, StockEntry, StockExit, StockoutEvent
+from .models import SKU, Client, InventoryDiscrepancy, StockBalance, StockEntry, StockExit, StockoutEvent
 
 # SQLModel supplies SQLAlchemy tables dynamically; the casts expose their typed columns.
 sku_table = cast(Table, SKU.__table__)  # type: ignore[attr-defined]
+balance_table = cast(Table, StockBalance.__table__)  # type: ignore[attr-defined]
 entry_table = cast(Table, StockEntry.__table__)  # type: ignore[attr-defined]
 exit_table = cast(Table, StockExit.__table__)  # type: ignore[attr-defined]
 client_table = cast(Table, Client.__table__)  # type: ignore[attr-defined]
@@ -53,44 +55,36 @@ class InventoryRepository:
         self.session = session
 
     @staticmethod
-    def _stock_parts() -> tuple[Any, Any, Any]:
-        """Build reusable aggregate subqueries for entry-minus-exit stock."""
-        entries = (
-            sa_select(
-                entry_table.c.sku_id.label("sku_id"),
-                entry_table.c.warehouse.label("warehouse"),
-                func.sum(entry_table.c.quantity).label("received"),
-            )
-            .group_by(entry_table.c.sku_id, entry_table.c.warehouse)
-            .subquery()
-        )
-        exits = (
-            sa_select(
-                exit_table.c.sku_id.label("sku_id"),
-                exit_table.c.warehouse.label("warehouse"),
-                func.sum(exit_table.c.quantity).label("dispatched"),
-            )
-            .group_by(exit_table.c.sku_id, exit_table.c.warehouse)
-            .subquery()
-        )
-        current_stock = (func.coalesce(entries.c.received, 0) - func.coalesce(exits.c.dispatched, 0)).label(
-            "current_stock"
-        )
-        return entries, exits, current_stock
+    def _stock_parts() -> tuple[Any, Any]:
+        """Project the materialized balance for join-based product reads.
+
+        This used to build two full-table `GROUP BY` aggregates over the entire
+        movement ledger on every product list or detail read. It is now a lookup
+        against `stock_balances`, which the migration seeded from exactly that
+        aggregation and which the write paths maintain in-transaction.
+
+        The outer join and `COALESCE` are retained even though the migration
+        gives every SKU a row: a SKU created after this read began, or one
+        inserted by a path that has not yet written its balance, must read as 0
+        rather than vanishing from the listing.
+        """
+        balances = sa_select(
+            balance_table.c.sku_id.label("sku_id"),
+            balance_table.c.warehouse.label("warehouse"),
+            balance_table.c.quantity.label("quantity"),
+        ).subquery()
+        current_stock = func.coalesce(balances.c.quantity, 0).label("current_stock")
+        return balances, current_stock
 
     def list_products(self, *, limit: int, offset: int) -> tuple[list[tuple[SKU, str, int]], int]:
-        """Load each SKU and its location-specific stock in one aggregate query."""
-        entries, exits, current_stock = self._stock_parts()
+        """Load each SKU and its location-specific stock in one indexed query."""
+        balances, current_stock = self._stock_parts()
         statement = (
             sa_select(SKU, client_table.c.display_name, current_stock)
             .join(client_table, client_table.c.id == sku_table.c.client_id)
             .outerjoin(
-                entries,
-                (entries.c.sku_id == sku_table.c.id) & (entries.c.warehouse == sku_table.c.warehouse),
-            )
-            .outerjoin(
-                exits,
-                (exits.c.sku_id == sku_table.c.id) & (exits.c.warehouse == sku_table.c.warehouse),
+                balances,
+                (balances.c.sku_id == sku_table.c.id) & (balances.c.warehouse == sku_table.c.warehouse),
             )
             .order_by(sku_table.c.id)
             .limit(limit)
@@ -101,18 +95,14 @@ class InventoryRepository:
         return [(cast(SKU, row[0]), str(row[1]), int(row[2])) for row in rows], total
 
     def get_product(self, sku_id: int) -> tuple[SKU, str, int] | None:
-        """Load one SKU and its computed warehouse balance."""
-        entries, exits, current_stock = self._stock_parts()
+        """Load one SKU and its materialized warehouse balance."""
+        balances, current_stock = self._stock_parts()
         statement = (
             sa_select(SKU, client_table.c.display_name, current_stock)
             .join(client_table, client_table.c.id == sku_table.c.client_id)
             .outerjoin(
-                entries,
-                (entries.c.sku_id == sku_table.c.id) & (entries.c.warehouse == sku_table.c.warehouse),
-            )
-            .outerjoin(
-                exits,
-                (exits.c.sku_id == sku_table.c.id) & (exits.c.warehouse == sku_table.c.warehouse),
+                balances,
+                (balances.c.sku_id == sku_table.c.id) & (balances.c.warehouse == sku_table.c.warehouse),
             )
             .where(sku_table.c.id == sku_id)
         )
@@ -126,18 +116,38 @@ class InventoryRepository:
         return self.session.exec(select(SKU).where(sku_table.c.id == sku_id).with_for_update()).one_or_none()
 
     def current_stock(self, sku_id: int, warehouse: str) -> int:
-        """Compute a balance inside the same transaction that holds the SKU lock."""
-        received = (
-            sa_select(func.coalesce(func.sum(entry_table.c.quantity), 0))
-            .where(entry_table.c.sku_id == sku_id, entry_table.c.warehouse == warehouse)
-            .scalar_subquery()
+        """Read the materialized balance, inside the transaction holding the SKU lock.
+
+        Callers rely on this being the authoritative pre-write balance, so it must
+        be read under the same `get_sku_for_update` lock that serializes the
+        matching `apply_balance_delta`.
+        """
+        quantity = self.session.scalar(
+            sa_select(balance_table.c.quantity).where(
+                balance_table.c.sku_id == sku_id,
+                balance_table.c.warehouse == warehouse,
+            )
         )
-        dispatched = (
-            sa_select(func.coalesce(func.sum(exit_table.c.quantity), 0))
-            .where(exit_table.c.sku_id == sku_id, exit_table.c.warehouse == warehouse)
-            .scalar_subquery()
+        return int(quantity or 0)
+
+    def apply_balance_delta(self, sku_id: int, warehouse: str, delta: int, *, now: datetime) -> None:
+        """Move the materialized balance by `delta` in the caller's transaction.
+
+        Upserts so a SKU whose balance row is somehow absent still converges
+        instead of silently dropping the movement. The caller must already hold
+        the SKU lock, which is what makes the read-then-write sequence safe.
+        """
+        self.session.execute(
+            pg_insert(balance_table)
+            .values(sku_id=sku_id, warehouse=warehouse, quantity=delta, updated_at=now)
+            .on_conflict_do_update(
+                index_elements=["sku_id", "warehouse"],
+                set_={
+                    "quantity": balance_table.c.quantity + delta,
+                    "updated_at": now,
+                },
+            )
         )
-        return int(self.session.scalar(sa_select(received - dispatched)) or 0)
 
     def add_sku(self, sku: SKU) -> None:
         """Queue a new SKU inside the caller-owned transaction."""

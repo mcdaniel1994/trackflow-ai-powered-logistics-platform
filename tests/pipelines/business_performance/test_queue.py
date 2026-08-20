@@ -24,7 +24,6 @@ from pipelines.business_performance.queue import (
     finalize_failure,
     finalize_success,
     heartbeat,
-    record_prefect_flow_run,
     record_stage,
     record_worker_heartbeat,
     recover_stale_runs,
@@ -530,29 +529,27 @@ def test_worker_heartbeat_is_a_single_upserted_row(pipeline_engine: Engine) -> N
     assert row == ("reporting", BASE_TIME + timedelta(seconds=10), BASE_TIME, True)
 
 
-def test_prefect_correlation_and_stage_updates_are_claim_token_guarded(
+def test_stage_updates_are_claim_token_guarded(
     pipeline_engine: Engine,
 ) -> None:
     claim = _claim_requested(pipeline_engine)
-    flow_run_id = uuid4()
-    assert record_prefect_flow_run(pipeline_engine, claim, flow_run_id)
     assert record_stage(
         pipeline_engine, claim, "extract", now=BASE_TIME + timedelta(seconds=1)
     )
     with pipeline_engine.connect() as connection:
         row = connection.execute(
             text(
-                "SELECT prefect_flow_run_id, current_stage, stage_started_at "
+                "SELECT current_stage, stage_started_at "
                 "FROM reporting.pipeline_runs WHERE id = :id"
             ),
             {"id": claim.run_id},
         ).one()
-    assert row == (flow_run_id, "extract", BASE_TIME + timedelta(seconds=1))
+    assert row == ("extract", BASE_TIME + timedelta(seconds=1))
     assert (
         recover_stale_runs(pipeline_engine, now=BASE_TIME + timedelta(minutes=16)) == 1
     )
+    # The reclaimed run rejects any further write from the lost claim token.
     assert record_stage(pipeline_engine, claim, "load") is False
-    assert record_prefect_flow_run(pipeline_engine, claim, uuid4()) is False
 
 
 def test_claim_renewal_runs_independently_of_executor_progress(

@@ -12,6 +12,7 @@ import html
 import re
 import sys
 from datetime import UTC
+from typing import cast
 
 from .models import RfpDepartmentSection, RfpFinalDocument, RfpTicket
 from .render import _DEPARTMENT_NAMES, _ordered_departments  # reuse the canonical order + names
@@ -145,7 +146,7 @@ def build_proposal_html(
 
     body = "\n".join(
         f'<section class="dept"><h2>{html.escape(_DEPARTMENT_NAMES.get(dept, dept))}</h2>'
-        f"{_markdown_to_html(str(stored.get(dept, "")))}</section>"
+        f"{_markdown_to_html(str(stored.get(dept) or ''))}</section>"
         for dept in _ordered_departments(list(stored.keys()))
     )
 
@@ -218,4 +219,6 @@ def render_final_document_pdf(
     _ensure_native_libs_discoverable()
     from weasyprint import HTML  # imported lazily so the module loads without the native libs
 
-    return HTML(string=build_proposal_html(ticket, document, sections)).write_pdf()
+    # WeasyPrint ships no type information, so `write_pdf()` is Any; the cast keeps
+    # this function's declared return type meaningful to callers.
+    return cast(bytes, HTML(string=build_proposal_html(ticket, document, sections)).write_pdf())

@@ -82,12 +82,12 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/runbooks/telemetry-inventory.md`.
   Production hardening lives in `data/pipelines/business_performance/worker.py`,
   `services/central-api/scripts/{maintenance_worker,production_migrate}.py`, the root Compose
-  files, and `.github/workflows/deploy-production.yml`. The dedicated-Prefect remediation has
-  private Prefect Server/PostgreSQL wiring, a SQLite-fallback guard, independent claim renewal,
+  files, and `.github/workflows/deploy-production.yml`. The reporting remediation has
+  independent claim renewal,
   token-guarded run/stage correlation, fail-closed orchestrator health, orphan reconciliation,
   a hard run watchdog, optional R2 recovery results, API-only retention, an isolated read-only
   database backup service, six server-derived operator states, and release startup guards.
-  **The weekly business report is live in production**: the reporting worker, Prefect, and
+  **The weekly business report is live in production**: the reporting worker and
   reconciled hourly/weekly rollup path are healthy, and the Back Office serves the first verified
   six-row snapshot. Phase 6.1 is deployed as immutable image
   `13bba2e` through revision `20260728_0011` and closed by a documented owner exception after the
@@ -100,7 +100,17 @@ Then read the active engagement brief and the README for every folder being modi
   seven-day clean run were also waived, not passed or executed. The
   production direct-SQL executor swap is separately owner-approved and prepared after same-day
   queue/recovery/parity/volume verification, with no resource-limit change. Deployment
-  verification and final Prefect removal remain open; removal requires separate approval.
+  verification of that swap remains open. **Prefect was retired in August 2026** under owner
+  approval — six orchestration containers, their dedicated database, the runtime dependency, and
+  the R2 transformation cache are gone, and `direct_sql` is the only executor. See
+  `docs/archive/prefect-orchestration-retirement.md`.
+  **Stock is now materialized** in `stock_balances` (migration `20260820_0020`), maintained
+  in-transaction under the existing SKU lock, with `scripts/verify_stock_balances.py` as the drift
+  check. That decoupling is what permits **30-day movement-ledger retention**
+  (`scripts/prune_movement_ledger.py`, FK-ordered and micro-batched), which replaced the separate
+  26-week business-event prune — the `ON DELETE RESTRICT` keys into `stock_exits` make those two
+  windows inseparable. Design and its `spec.md` §8.4 proof:
+  `docs/design/movement-ledger-retention.md`.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;
@@ -202,7 +212,7 @@ Then read the active engagement brief and the README for every folder being modi
   produced end-to-end (RFP token/cost accounting, restored output previews under
   `AGENTS_STORE_CONTENT`); a new RFP final-document Markdown download route
   (`domains/rfp/render.py` + `GET /rfp/tickets/{id}/document/download`); Business Reporting manual
-  trigger controls removed (product/demo decision, not a Prefect consequence) and inline-SVG charts
+  trigger controls removed (product/demo decision) and inline-SVG charts
   added; "Ask AI" opens the relocated chat panel (`components/knowledge/ChatPanel.tsx` +
   `lib/chat/panel-context.tsx`) from any route; the top Business/Technical view toggle and
   `TechnicalOverview` were removed.

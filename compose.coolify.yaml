@@ -8,144 +8,6 @@ x-runtime: &runtime
     options: {max-size: "10m", max-file: "5"}
 
 services:
-  prefect-postgres:
-    build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
-    restart: unless-stopped
-    security_opt: ["no-new-privileges:true"]
-    environment:
-      POSTGRES_DB: prefect
-      POSTGRES_USER: prefect
-      POSTGRES_PASSWORD: ${PREFECT_DB_PASSWORD:?required}
-      PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
-      PREFECT_GUARD_DB_PASSWORD: ${PREFECT_GUARD_DB_PASSWORD:?required}
-    volumes:
-      - prefect-db:/var/lib/postgresql/data
-    read_only: true
-    tmpfs: ["/tmp", "/var/run/postgresql"]
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U prefect -d prefect"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-    logging:
-      driver: json-file
-      options: {max-size: "10m", max-file: "5"}
-    deploy:
-      resources:
-        limits: {cpus: "0.25", memory: 256M}
-
-  # Idempotent deployment bootstrap repairs prerequisites on existing volumes.
-  prefect-postgres-bootstrap:
-    build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
-    environment:
-      PGHOST: prefect-postgres
-      PGPORT: "5432"
-      PGPASSWORD: ${PREFECT_DB_PASSWORD:?required}
-      POSTGRES_USER: prefect
-      POSTGRES_DB: prefect
-      PREFECT_BACKUP_DB_PASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
-      PREFECT_GUARD_DB_PASSWORD: ${PREFECT_GUARD_DB_PASSWORD:?required}
-    depends_on:
-      prefect-postgres: {condition: service_healthy}
-    read_only: true
-    tmpfs: ["/tmp"]
-    security_opt: ["no-new-privileges:true"]
-    restart: "no"
-    command: ["/usr/local/bin/prefect-postgres-bootstrap"]
-
-  prefect-server:
-    <<: *runtime
-    image: ${PREFECT_SERVER_IMAGE:?required}
-    pull_policy: always
-    environment:
-      PREFECT_API_DATABASE_CONNECTION_URL: postgresql+asyncpg://prefect:${PREFECT_DB_PASSWORD:?required}@prefect-postgres:5432/prefect
-      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
-      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
-      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
-      PREFECT_HOME: /tmp/prefect
-      DO_NOT_TRACK: "1"
-    depends_on:
-      prefect-postgres-bootstrap: {condition: service_completed_successfully}
-    read_only: true
-    tmpfs: ["/tmp"]
-    command: ["prefect", "server", "start", "--host", "0.0.0.0", "--port", "4200"]
-    # start_period covers the first-boot Alembic migration, measured at ~10s
-    # locally and slower under this service's 0.50 CPU limit. Without it, migration
-    # time burns retries as failures.
-    # `up -d` blocks here on behalf of reporting-worker, so this healthcheck is on
-    # the deploy critical path. Measured success path: ~18s for the whole chain
-    # with images already local. The 150s worst case (start_period + interval x
-    # retries) is the ceiling before Docker declares this unhealthy — it is NOT a
-    # guarantee of fitting Coolify's boundary, because image pull/build runs before
-    # any of this and is charged to the same command.
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4200/api/health', timeout=5).read()"]
-      interval: 5s
-      timeout: 6s
-      retries: 18
-      start_period: 60s
-    deploy:
-      resources:
-        limits: {cpus: "0.50", memory: 512M}
-
-  # Deployment-visible release guard. A missing table proves Prefect fell back
-  # from PostgreSQL. Nothing depends on this service, so it reports without
-  # gating `up -d`; reporting-worker enforces the same conditions fail-closed at
-  # its own startup. It retries internally because prefect-server reports healthy
-  # as soon as its API binds, which does not prove `flow_run` exists yet.
-  prefect-postgres-guard:
-    build: {context: ., dockerfile: docker/prefect-postgres.Dockerfile}
-    security_opt: ["no-new-privileges:true"]
-    environment:
-      PGUSER: prefect_guard
-      PGPASSWORD: ${PREFECT_GUARD_DB_PASSWORD:?required}
-      PREFECT_GUARD_TIMEOUT_SECONDS: ${PREFECT_GUARD_TIMEOUT_SECONDS:-60}
-    depends_on:
-      prefect-server: {condition: service_healthy}
-    read_only: true
-    tmpfs: ["/tmp"]
-    restart: "no"
-    command: ["/usr/local/bin/prefect-postgres-guard"]
-
-  # Static check: compares the pinned server image digest to the installed client
-  # version. It never contacts prefect-server, so it must not wait on one.
-  prefect-version-guard:
-    image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
-    pull_policy: always
-    security_opt: ["no-new-privileges:true"]
-    cap_drop: ["ALL"]
-    environment:
-      PREFECT_SERVER_IMAGE_REF: ${PREFECT_SERVER_IMAGE:?required}
-    read_only: true
-    tmpfs: ["/tmp"]
-    restart: "no"
-    # This image bakes a HEALTHCHECK against :8000, which this command never binds.
-    healthcheck: {disable: true}
-    command: [".venv/bin/python", "-m", "scripts.prefect_version_guard"]
-
-  prefect-db-backup:
-    <<: *runtime
-    build: {context: ., dockerfile: docker/prefect-db-backup.Dockerfile}
-    environment:
-      PGHOST: prefect-postgres
-      PGPORT: "5432"
-      PGDATABASE: prefect
-      PGUSER: prefect_backup
-      PGPASSWORD: ${PREFECT_BACKUP_DB_PASSWORD:?required}
-      PREFECT_BACKUP_R2_BUCKET: ${PREFECT_BACKUP_R2_BUCKET:-}
-      PREFECT_BACKUP_R2_ENDPOINT: ${PREFECT_BACKUP_R2_ENDPOINT:-}
-      PREFECT_BACKUP_R2_ACCESS_KEY_ID: ${PREFECT_BACKUP_R2_ACCESS_KEY_ID:-}
-      PREFECT_BACKUP_R2_SECRET_ACCESS_KEY: ${PREFECT_BACKUP_R2_SECRET_ACCESS_KEY:-}
-      PREFECT_BACKUP_RETENTION_DAYS: ${PREFECT_BACKUP_RETENTION_DAYS:-7}
-      PREFECT_DB_DISK_WARNING_MB: ${PREFECT_DB_DISK_WARNING_MB:-1024}
-    depends_on:
-      prefect-postgres-bootstrap: {condition: service_completed_successfully}
-    read_only: true
-    tmpfs: ["/tmp"]
-    deploy:
-      resources:
-        limits: {cpus: "0.15", memory: 128M}
-
   # Qdrant vector store for the RAG knowledge base (Engagement 7).
   qdrant:
     <<: *runtime
@@ -339,19 +201,6 @@ services:
       DATABASE_URL: ${DATABASE_URL:?required}
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       HOME: /tmp/trackflow
-      PREFECT_HOME: /tmp/trackflow/prefect
-      PREFECT_API_URL: http://prefect-server:4200/api
-      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
-      # Startup guard only, via a dedicated CONNECT-only role that cannot read
-      # Prefect state. Passed as discrete parts, never a URL: a password
-      # containing @ : / + or = would corrupt an interpolated DSN.
-      PREFECT_GUARD_DB_HOST: prefect-postgres
-      PREFECT_GUARD_DB_PORT: "5432"
-      PREFECT_GUARD_DB_NAME: prefect
-      PREFECT_GUARD_DB_USER: prefect_guard
-      PREFECT_GUARD_DB_PASSWORD: ${PREFECT_GUARD_DB_PASSWORD:?required}
-      PREFECT_SERVER_IMAGE_REF: ${PREFECT_SERVER_IMAGE:?required}
-      PREFECT_GUARD_TIMEOUT_SECONDS: ${PREFECT_GUARD_TIMEOUT_SECONDS:-60}
       DATABASE_STATEMENT_TIMEOUT_MS: "15000"
       REPORTING_HEARTBEAT_SECONDS: "60"
       REPORTING_RUN_TIMEOUT_SECONDS: "1800"
@@ -361,22 +210,11 @@ services:
       REPORTING_HOURLY_ROLLUPS_ENABLED: ${REPORTING_HOURLY_ROLLUPS_ENABLED:-false}
       REPORTING_ROLLUP_CUTOVER_ENABLED: ${REPORTING_ROLLUP_CUTOVER_ENABLED:-false}
       REPORTING_COMPUTATION_ENABLED: ${REPORTING_COMPUTATION_ENABLED:-true}
-      # Owner-approved Phase 6.4 production swap. Prefect remains deployed only
-      # as a separately removable rollback path until final retirement approval.
       REPORTING_EXECUTOR: direct_sql
       REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
       REPORTING_LOG_MAX_BYTES: "10485760"
       REPORTING_LOG_BACKUP_COUNT: "9"
-      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
-      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
-      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
       DO_NOT_TRACK: "1"
-      REPORTING_R2_BUCKET: ${REPORTING_R2_BUCKET:-}
-      REPORTING_R2_ENDPOINT: ${REPORTING_R2_ENDPOINT:-}
-      REPORTING_R2_ACCESS_KEY_ID: ${REPORTING_R2_ACCESS_KEY_ID:-}
-      REPORTING_R2_SECRET_ACCESS_KEY: ${REPORTING_R2_SECRET_ACCESS_KEY:-}
-    # Direct SQL does not depend on Prefect readiness. The retained Prefect
-    # services are rollback-only pending separate final removal approval.
     read_only: true
     tmpfs: ["/tmp"]
     volumes:
@@ -387,7 +225,7 @@ services:
       [
         "/bin/sh",
         "-c",
-        "mkdir -p /tmp/trackflow/prefect /tmp/trackflow/.prefect && exec .venv/bin/python -m pipelines.business_performance.worker",
+        "mkdir -p /tmp/trackflow && exec .venv/bin/python -m pipelines.business_performance.worker",
       ]
     deploy:
       replicas: 1
@@ -410,20 +248,13 @@ services:
       DB_SIZE_HARD_LIMIT_MB: ${DB_SIZE_HARD_LIMIT_MB:-450}
       TELEMETRY_OPERATIONAL_RETENTION_DAYS: ${TELEMETRY_OPERATIONAL_RETENTION_DAYS:-7}
       TELEMETRY_SECURITY_RETENTION_DAYS: ${TELEMETRY_SECURITY_RETENTION_DAYS:-7}
-      BUSINESS_EVENT_RETENTION_WEEKS: ${BUSINESS_EVENT_RETENTION_WEEKS:-26}
+      MOVEMENT_RETENTION_DAYS: ${MOVEMENT_RETENTION_DAYS:-30}
       HOME: /tmp/trackflow
-      PREFECT_HOME: /tmp/trackflow/prefect
-      PREFECT_API_URL: http://prefect-server:4200/api
-      PREFECT_API_REQUEST_TIMEOUT: ${PREFECT_API_REQUEST_TIMEOUT:-30}
-      PREFECT_RUN_RETENTION_DAYS: ${PREFECT_RUN_RETENTION_DAYS:-30}
       REPORTING_LOG_PATH: /var/log/trackflow/reporting/reporting-worker.log
       REPORTING_LOG_RETENTION_DAYS: "14"
       REPORTING_LOG_TOTAL_BYTES: "262144000"
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       DATABASE_STATEMENT_TIMEOUT_MS: "15000"
-      PREFECT_SERVER_ANALYTICS_ENABLED: "false"
-      PREFECT_CLOUD_ENABLE_ORCHESTRATION_TELEMETRY: "false"
-      PREFECT_TELEMETRY_ENABLE_RESOURCE_METRICS: "false"
       DO_NOT_TRACK: "1"
     read_only: true
     tmpfs: ["/tmp"]
@@ -435,7 +266,7 @@ services:
       [
         "/bin/sh",
         "-c",
-        "mkdir -p /tmp/trackflow/prefect /tmp/trackflow/.prefect && exec .venv/bin/python -m scripts.maintenance_worker",
+        "mkdir -p /tmp/trackflow && exec .venv/bin/python -m scripts.maintenance_worker",
       ]
     deploy:
       replicas: 1
@@ -482,6 +313,5 @@ services:
 
 volumes:
   identity-data:
-  prefect-db:
   reporting-logs:
   qdrant-storage:

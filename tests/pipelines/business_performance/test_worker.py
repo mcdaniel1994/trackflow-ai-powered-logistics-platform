@@ -32,11 +32,6 @@ def test_worker_heartbeats_dispatches_polls_and_stops(
         worker, "record_worker_heartbeat", lambda _engine, **_kwargs: count("heartbeat")
     )
     monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: count("dispatch"))
-    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: True)
-    monkeypatch.setattr(
-        "pipelines.business_performance.flows.reconcile_orphaned_flow_runs",
-        lambda _engine: 0,
-    )
 
     def poll(_engine: Any) -> None:
         count("poll")
@@ -61,6 +56,50 @@ def test_worker_heartbeats_dispatches_polls_and_stops(
     assert calls["heartbeat"] >= 1
     assert calls["dispatch"] >= 1
     assert calls["poll"] >= 1
+
+
+def test_steady_state_polling_does_not_write_a_heartbeat_per_poll(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Polling must not write the heartbeat row.
+
+    The per-poll heartbeat write was the single largest source of database write
+    volume in production. Only the periodic beat and a genuine orchestrator-health
+    transition may write the row.
+    """
+    stop = Event()
+    writes: list[dict[str, object]] = []
+    polls = 0
+
+    monkeypatch.setattr(
+        worker, "record_worker_heartbeat", lambda _engine, **kwargs: writes.append(kwargs)
+    )
+    monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
+
+    def poll(_engine: Any) -> None:
+        nonlocal polls
+        polls += 1
+        if polls >= 25:
+            stop.set()
+        return None
+
+    monkeypatch.setattr(worker, "claim_next", poll)
+    worker.run_worker(
+        object(),
+        lambda *_args: None,
+        stop=stop,
+        poll_interval_seconds=0.0,
+        # Long enough that no periodic beat fires during the polling burst, so any
+        # write observed here came from the poll loop itself.
+        heartbeat_interval_seconds=30.0,
+        dispatch_interval_seconds=30.0,
+    )
+
+    assert polls >= 25
+    # At most two writes: the thread's opening beat, and the first health verdict
+    # written through as a transition from "unknown". Never one per poll.
+    assert len(writes) <= 2, f"{len(writes)} writes for {polls} polls"
+    assert any(item.get("orchestrator_healthy") is True for item in writes)
 
 
 def test_worker_logs_only_safe_exception_type(
@@ -99,87 +138,12 @@ def test_watchdog_uses_fixed_log_and_process_exit(
     assert exits == [1]
 
 
-def test_prefect_health_fails_closed_without_api_url(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.delenv("PREFECT_API_URL", raising=False)
-    assert worker.prefect_is_healthy() is False
-
-
-def test_prefect_health_accepts_only_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    class Response:
-        status = 200
-
-        def __enter__(self) -> Response:
-            return self
-
-        def __exit__(self, *_args: object) -> None:
-            return None
-
-    monkeypatch.setenv("PREFECT_API_URL", "http://prefect-server:4200/api")
-    monkeypatch.setattr(
-        worker.urllib.request, "urlopen", lambda *_args, **_kwargs: Response()
-    )
-    assert worker.prefect_is_healthy() is True
-
-
-def test_prefect_health_fails_closed_on_transport_error(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("PREFECT_API_URL", "http://prefect-server:4200/api")
-    monkeypatch.setattr(
-        worker.urllib.request,
-        "urlopen",
-        lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError("unavailable")),
-    )
-    assert worker.prefect_is_healthy() is False
-
-
-def test_worker_skips_claim_when_prefect_is_unhealthy(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    stop = Event()
-    heartbeats: list[dict[str, object]] = []
-    monkeypatch.setattr(
-        "pipelines.business_performance.flows.reconcile_orphaned_flow_runs",
-        lambda _engine: 0,
-    )
-    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: False)
-    monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
-
-    def record(_engine: object, **kwargs: object) -> None:
-        heartbeats.append(kwargs)
-        if "orchestrator_healthy" in kwargs:
-            stop.set()
-
-    monkeypatch.setattr(worker, "record_worker_heartbeat", record)
-    monkeypatch.setattr(
-        worker,
-        "claim_next",
-        lambda _engine: pytest.fail("unhealthy worker claimed work"),
-    )
-    worker.run_worker(
-        object(),
-        lambda *_args: None,
-        stop=stop,
-        poll_interval_seconds=0.001,
-        heartbeat_interval_seconds=0.001,
-        dispatch_interval_seconds=0.001,
-    )
-    assert any(item.get("orchestrator_healthy") is False for item in heartbeats)
-
-
 def test_worker_kill_switch_keeps_heartbeat_but_skips_claim(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stop = Event()
     heartbeats = 0
     monkeypatch.setenv("REPORTING_COMPUTATION_ENABLED", "false")
-    monkeypatch.setattr(
-        "pipelines.business_performance.flows.reconcile_orphaned_flow_runs",
-        lambda _engine: 0,
-    )
-    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: True)
     monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
 
     def record(_engine: object, **_kwargs: object) -> None:
@@ -213,11 +177,6 @@ def test_worker_drives_explicit_claim_lifecycle(
         uuid4(), uuid4(), "cli", date(2026, 7, 13), (date(2026, 7, 13),), 1
     )
     monkeypatch.setattr(
-        "pipelines.business_performance.flows.reconcile_orphaned_flow_runs",
-        lambda _engine: 0,
-    )
-    monkeypatch.setattr(worker, "prefect_is_healthy", lambda: True)
-    monkeypatch.setattr(
         worker, "record_worker_heartbeat", lambda *_args, **_kwargs: None
     )
     monkeypatch.setattr(worker, "dispatch_tick", lambda _engine: None)
@@ -244,7 +203,7 @@ def test_worker_drives_explicit_claim_lifecycle(
     assert stop.is_set()
 
 
-def test_direct_worker_claims_without_prefect_health_or_reconciliation(
+def test_worker_claims_and_finalizes_one_run(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     stop = Event()
@@ -274,8 +233,6 @@ def test_direct_worker_claims_without_prefect_health_or_reconciliation(
         object(),
         lambda *_args: None,
         stop=stop,
-        orchestrator_health=lambda: True,
-        reconcile_prefect_runs=False,
         poll_interval_seconds=0.001,
         heartbeat_interval_seconds=0.001,
         dispatch_interval_seconds=0.001,

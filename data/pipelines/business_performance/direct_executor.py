@@ -37,7 +37,7 @@ T = TypeVar("T")
 
 
 def _ensure_owned(engine: Engine, claim: RunClaim, abort: Event | None) -> None:
-    """Enforce abort and claim-token ownership without relying on Prefect context."""
+    """Enforce abort and claim-token ownership from PostgreSQL state alone."""
     if abort is not None and abort.is_set():
         raise LeaseLostError("pipeline run lease is no longer owned")
     if not claim_is_owned(engine, claim):

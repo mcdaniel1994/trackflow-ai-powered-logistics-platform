@@ -8,8 +8,6 @@ requires-python = ">=3.11"
 dependencies = [
   "boto3>=1.40",
   "openai>=1.54",
-  "prefect>=3",
-  "prefect-aws",
   "psycopg[binary]",
   "qdrant-client>=1.12",
   "sqlalchemy>=2",
