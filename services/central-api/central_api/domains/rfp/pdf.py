@@ -15,6 +15,7 @@ from datetime import UTC
 from typing import cast
 
 from .models import RfpDepartmentSection, RfpFinalDocument, RfpTicket
+from .pricing import build_cost_breakdown, cost_summary_markdown
 from .render import _DEPARTMENT_NAMES, _ordered_departments  # reuse the canonical order + names
 
 _COUNTRY_NAMES = {"US": "United States", "ES": "Spain"}
@@ -150,6 +151,14 @@ def build_proposal_html(
         for dept in _ordered_departments(list(stored.keys()))
     )
 
+    # Same pure computation the Markdown renderer uses, so the two documents can
+    # never quote different figures for the same ticket.
+    breakdown = build_cost_breakdown(document.currency, ticket.monthly_volume)
+    cost_section = (
+        '<section class="dept"><h2>Commercial Summary</h2>'
+        f"{_markdown_to_html(cost_summary_markdown(breakdown))}</section>"
+    )
+
     return f"""<!doctype html><html lang="en"><head><meta charset="utf-8" />
 <title>TrackFlow Proposal — {client}</title><style>{_STYLE}</style></head><body>
   <header class="brand">
@@ -167,6 +176,7 @@ def build_proposal_html(
     <tr><td class="k">Requested deadline</td><td>{deadline}</td>
         <td class="k">Prepared on</td><td>{date_label}</td></tr>
   </table></div>
+  {cost_section}
   {body}
   <div class="approved">Every section of this proposal was reviewed and approved by a TrackFlow
     account manager.</div>

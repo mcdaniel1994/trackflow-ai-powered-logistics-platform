@@ -94,3 +94,40 @@ def test_build_proposal_html_escapes_section_content() -> None:
     html = build_proposal_html(_ticket(), document, [_section("warehouse")])
     assert "<script>alert(1)</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+def test_markdown_carries_the_deterministic_commercial_summary() -> None:
+    """A proposal is read as a quote; it must state a price, and the same price
+    every time it is rendered."""
+    markdown = render_final_document(_ticket(), _document({"warehouse": "Draft"}), [])
+
+    assert "## Commercial Summary" in markdown
+    assert "| Service | Volume | Unit price | Monthly cost |" in markdown
+    # 5,000 shipments at $6.40 for a US ticket.
+    assert "$32,000.00" in markdown
+    assert "not a binding quotation" in markdown
+    # The summary precedes the department sections.
+    assert markdown.index("## Commercial Summary") < markdown.index("## Warehouse & Storage")
+
+
+def test_pdf_and_markdown_quote_the_same_figures() -> None:
+    """Two independent renderers reading one ticket must never disagree on price."""
+    ticket, document = _ticket(), _document({"warehouse": "Draft"})
+    markdown = render_final_document(ticket, document, [])
+    rendered_html = build_proposal_html(ticket, document, [])
+
+    assert "Commercial Summary" in rendered_html
+    for amount in ("$32,000.00", "$1,170.00", "$1,080.00"):
+        assert amount in markdown
+        assert amount in rendered_html
+
+
+def test_commercial_summary_follows_the_document_currency() -> None:
+    ticket = _ticket()
+    ticket.client_country = "ES"
+    document = _document({"warehouse": "Draft"})
+    document.currency = "EUR"
+
+    markdown = render_final_document(ticket, document, [])
+    assert "€29,000.00" in markdown
+    assert "$" not in markdown

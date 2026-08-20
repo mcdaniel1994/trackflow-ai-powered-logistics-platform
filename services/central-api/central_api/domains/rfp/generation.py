@@ -29,6 +29,7 @@ from ..agents.pricing import ModelUsage, combine_usage, usage_from_counters
 from ..agents.recorder import persist_run
 from .evaluators import evaluate_section
 from .models import RfpDepartmentSection, RfpTicket, utc_now
+from .pricing import build_cost_breakdown, format_amount
 from .repository import RfpRepository
 
 logger = logging.getLogger(__name__)
@@ -116,16 +117,46 @@ def draft_section(
     system_prompt = _DRAFTING_SYSTEM_PROMPT.format(
         currency=currency_code, symbol=_CURRENCY_SYMBOL.get(currency_code, "$")
     )
+    # The proposal's cost table is computed, not generated. Handing the model the
+    # same figures keeps its prose consistent with the table a client will read
+    # beside it, instead of inventing a second, conflicting set of numbers.
+    costing = _costing_context(currency_code, volume)
     user_content = (
         f"Draft the {department_id} section of a TrackFlow logistics pricing proposal.\n"
         f"{context}\n\n"
         f"Follow these rules exactly: {_GUIDELINES}{fix}\n\n"
+        f"<approved_cost_estimate>\n{costing}\n</approved_cost_estimate>\n\n"
         f"<trackflow_policy_context>\n{grounding}\n</trackflow_policy_context>"
     )
     generated = complete_with_usage(system_prompt, user_content, rag_config)
     usage = usage_from_counters(generated.usage, rag_config.generation_model)
     return str(generated.answer), usage
 
+
+def _costing_context(currency: str, volume: int | None) -> str:
+    """Render the computed estimate for the prompt.
+
+    Presented as already-approved figures the model must reuse verbatim: the same
+    numbers are rendered deterministically into the final document, so any figure
+    the model invents here would visibly contradict the table.
+    """
+    breakdown = build_cost_breakdown(currency, volume)
+    lines = [
+        f"{line.label}: {line.quantity:,.2f} {line.unit} at "
+        f"{format_amount(breakdown, line.unit_price)} = "
+        f"{format_amount(breakdown, line.line_total)} per month"
+        for line in breakdown.lines
+    ]
+    lines.append(
+        f"Volume discount tier: {breakdown.discount_tier_label} at "
+        f"{breakdown.discount_rate:.0%} (last-mile and returns only)"
+    )
+    lines.append(f"Estimated monthly total: {format_amount(breakdown, breakdown.total)}")
+    lines.append(
+        "Use these exact figures where the section mentions price. Do not invent or "
+        "recalculate any amount."
+    )
+    return "\n".join(lines)
 
 def _format_grounding(chunks: list[dict[str, object]]) -> str:
     if not chunks:

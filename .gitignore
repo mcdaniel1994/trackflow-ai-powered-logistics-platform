@@ -64,3 +64,6 @@ __pycache__/
 
 # AI tooling state
 .claude/
+
+# Local screenshots dropped in the repo root during review
+/Screenshot*.png

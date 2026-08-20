@@ -128,6 +128,25 @@ jobs:
           echo "MIGRATION_BEFORE=$before" >> "$GITHUB_ENV"
           echo "MIGRATION_AFTER=$after" >> "$GITHUB_ENV"
 
+      # Demo data for the Incidents dashboard, which starts empty in production
+      # because the legacy CSV importer carries real customer reports and is
+      # barred from here. Idempotent: it no-ops once the table holds real rows.
+      # continue-on-error is deliberate -- demo data must never fail a release.
+      - name: Seed demo incidents
+        if: env.DEPLOYMENT_MODE == 'release'
+        id: demo_incidents
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DEMO_INCIDENTS_RESULT=failed" >> "$GITHUB_ENV"
+          docker run --rm --pull=always --read-only --tmpfs /tmp \
+            --env APP_ENV=production \
+            --env DATABASE_URL="$MIGRATION_DATABASE_URL" \
+            "ghcr.io/mcdaniel1994/trackflow-central-api:$IMAGE_TAG" \
+            .venv/bin/seed-demo-incidents
+          echo "DEMO_INCIDENTS_RESULT=passed" >> "$GITHUB_ENV"
+
       - name: Deploy immutable SHA through Coolify
         id: coolify_deploy
         continue-on-error: true
@@ -269,6 +288,8 @@ jobs:
             echo "Smoke tests: \`$SMOKE_RESULT\`"
             echo
             echo "Reporting verification (non-rollback): \`$REPORTING_VERIFICATION_RESULT\`"
+            echo
+            echo "Demo incident seed (non-rollback): \`${DEMO_INCIDENTS_RESULT:-not-run}\`"
             echo
             echo "Image rollback: \`$ROLLBACK_RESULT\`"
             echo
