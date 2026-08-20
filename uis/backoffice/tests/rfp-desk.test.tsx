@@ -6,6 +6,9 @@ import type { RfpTicketDetail, RfpTicketSummary } from "@/lib/rfp/types";
 const mocks = vi.hoisted(() => ({
   getRfpTickets: vi.fn(),
   getRfpTicket: vi.fn(),
+  getRfpDocument: vi.fn(),
+  downloadRfpDocument: vi.fn(),
+  downloadRfpPdf: vi.fn(),
   uploadRfp: vi.fn(),
   decideDepartment: vi.fn(),
   useRfpTicketStream: vi.fn(),
@@ -16,6 +19,9 @@ vi.mock("@/lib/rfp/api", async () => {
     ...actual,
     getRfpTickets: mocks.getRfpTickets,
     getRfpTicket: mocks.getRfpTicket,
+    getRfpDocument: mocks.getRfpDocument,
+    downloadRfpDocument: mocks.downloadRfpDocument,
+    downloadRfpPdf: mocks.downloadRfpPdf,
     uploadRfp: mocks.uploadRfp,
     decideDepartment: mocks.decideDepartment,
   };
@@ -80,6 +86,14 @@ describe("RFP Desk", () => {
     vi.clearAllMocks();
     mocks.getRfpTickets.mockResolvedValue([summary]);
     mocks.getRfpTicket.mockResolvedValue(detail());
+    mocks.getRfpDocument.mockResolvedValue({
+      ticket_id: "t1",
+      currency: "USD",
+      sections: { warehouse: "Warehouse section body.", lastmile: "Last-mile section body." },
+      generated_at: "2026-08-05T12:00:00Z",
+    });
+    mocks.downloadRfpDocument.mockResolvedValue(undefined);
+    mocks.downloadRfpPdf.mockResolvedValue(undefined);
     streamTickets([summary]);
   });
 
@@ -142,10 +156,28 @@ describe("RFP Desk", () => {
     await waitFor(() => expect(mocks.decideDepartment).toHaveBeenCalledWith("t1", "warehouse", "approve"));
   });
 
-  it("shows the completion banner when the proposal is done", async () => {
+  it("shows the completion banner and working download controls when the proposal is done", async () => {
     streamTickets([{ ...summary, status: "done" }]);
     mocks.getRfpTicket.mockResolvedValue(detail({ status: "done" }));
     render(<RfpDesk />);
+
     expect(await screen.findByText(/Proposal complete/)).toBeInTheDocument();
+    // Renders the consolidated proposal fetched via getRfpDocument.
+    expect(await screen.findByText("Warehouse & Storage")).toBeInTheDocument();
+
+    // Primary control downloads a real, server-generated PDF.
+    await userEvent.click(await screen.findByRole("button", { name: /Download proposal \(PDF\)/ }));
+    await waitFor(() => expect(mocks.downloadRfpPdf).toHaveBeenCalledWith("t1"));
+
+    // Secondary control downloads the raw Markdown.
+    await userEvent.click(screen.getByRole("button", { name: /^Markdown$/ }));
+    await waitFor(() => expect(mocks.downloadRfpDocument).toHaveBeenCalledWith("t1"));
+  });
+
+  it("shows no download control until the proposal is done", async () => {
+    render(<RfpDesk />);
+    await screen.findByRole("listbox", { name: "RFP tickets" });
+    expect(screen.queryByRole("button", { name: /Download proposal/ })).not.toBeInTheDocument();
+    expect(mocks.getRfpDocument).not.toHaveBeenCalled();
   });
 });

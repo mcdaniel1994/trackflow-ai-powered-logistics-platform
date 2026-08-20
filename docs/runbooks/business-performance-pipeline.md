@@ -1,5 +1,13 @@
 # Business Performance Pipeline Operations
 
+> **Back Office trigger controls removed (final-polish 2.3, UI decision — not a Prefect
+> consequence).** The Back Office no longer exposes "Run now" / "Force refresh"; the BFF no longer
+> allowlists `POST /reporting/pipeline-runs`. Triggering is now scheduled and CLI/operational only.
+> The Central API `POST /reporting/pipeline-runs` endpoint and the `reporting.pipeline_runs` queue are
+> unchanged and remain the dispatch authority. The buttons were removed because they mutated real
+> reporting state from a recorded/demoed UI, **not** because Prefect is unused — Prefect is still
+> deployed, and in direct-SQL mode those buttons drove real `reporting-worker` refreshes.
+
 ## Status and safety boundary
 
 Reporting-reliability Phase 6.1 is deployed through Alembic `20260728_0011`. It preserves a

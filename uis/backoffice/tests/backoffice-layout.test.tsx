@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminUsersView } from "@/components/admin/AdminUsersView";
 import { AppShell } from "@/components/AppShell";
-import { BackofficeViewProvider } from "@/lib/backoffice/view-context";
+import { ChatPanelProvider } from "@/lib/chat/panel-context";
 import { ThemeProvider } from "@/lib/theme/context";
 import { createUser, listUsers, updateUserJurisdiction } from "@/lib/auth/api";
 import type { AuthUser, CreatedUser } from "@/lib/auth/types";
@@ -12,9 +12,9 @@ import type { AuthUser, CreatedUser } from "@/lib/auth/types";
 function renderShell(children: ReactNode) {
   return render(
     <ThemeProvider>
-      <BackofficeViewProvider>
+      <ChatPanelProvider>
         <AppShell>{children}</AppShell>
-      </BackofficeViewProvider>
+      </ChatPanelProvider>
     </ThemeProvider>,
   );
 }
@@ -137,6 +137,14 @@ describe("Back Office responsive layout", () => {
     suppliersLink.addEventListener("click", (event) => event.preventDefault(), { once: true });
     await userEvent.click(suppliersLink);
     expect(document.getElementById("mobile-backoffice-navigation")).not.toBeInTheDocument();
+  });
+
+  it("no longer renders the Business/Technical view toggle and exposes an Ask AI button", () => {
+    renderShell(<div>Shell content</div>);
+    expect(screen.queryByRole("group", { name: /view mode/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^business$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /technical & agent os/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /ask ai/i })).toHaveAttribute("aria-expanded", "false");
   });
 
   it("uses one Inventory Management sidebar entry across every inventory route", () => {

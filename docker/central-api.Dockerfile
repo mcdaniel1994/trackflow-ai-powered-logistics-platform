@@ -1,6 +1,15 @@
 FROM ghcr.io/astral-sh/uv:0.8.22 AS uv
 FROM python:3.11-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
+# tini for PID 1; the rest are WeasyPrint runtime libs (Pango/cairo/gdk-pixbuf/ffi) + base fonts
+# for RFP proposal PDF rendering.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      tini \
+      libpango-1.0-0 \
+      libpangoft2-1.0-0 \
+      libgdk-pixbuf-2.0-0 \
+      libffi8 \
+      fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=uv /uv /usr/local/bin/uv
 WORKDIR /app
 COPY packages/trackflow_auth packages/trackflow_auth

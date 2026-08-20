@@ -12,6 +12,7 @@ from sqlmodel import Session, select
 
 from central_api.core.config import Settings, get_settings
 from central_api.domains.agents.models import AgentRun
+from central_api.domains.agents.pricing import ModelUsage
 from central_api.domains.rfp import graph as rfp_graph
 from central_api.domains.rfp import intake as rfp_intake
 from central_api.domains.rfp import service as rfp_service
@@ -30,15 +31,19 @@ def _patch_graph_agents(
     is_rfp: bool = True,
     reason: str = "ok",
     services: list[str] | None = None,
+    usage: ModelUsage | None = None,
 ) -> None:
+    # The intake agents now return (result, usage); the graph nodes unpack the usage onto the trace.
     services = ["warehousing", "lastmile"] if services is None else services
-    monkeypatch.setattr(rfp_graph, "classify_document", lambda _md, _c: ClassificationResult(is_rfp, reason))
+    monkeypatch.setattr(
+        rfp_graph, "classify_document", lambda _md, _c: (ClassificationResult(is_rfp, reason), usage)
+    )
     monkeypatch.setattr(
         rfp_graph,
         "extract_metadata",
-        lambda _md, _c: MetadataResult("Luna", "US", services, 5000, 20, None),
+        lambda _md, _c: (MetadataResult("Luna", "US", services, 5000, 20, None), usage),
     )
-    monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: [f"{dept}-aspect"])
+    monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: ([f"{dept}-aspect"], usage))
 
 
 # --------------------------------------------------------------------------- graph
@@ -166,6 +171,22 @@ def test_runner_error_leaves_ticket_analyzing(engine: Engine, monkeypatch: pytes
 def test_runner_missing_ticket_is_noop(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(rfp_intake, "run_intake", lambda _md, _c: _outcome("routed"))
     rfp_intake.run_intake_for_ticket("does-not-exist", CFG, env="test")  # must not raise
+
+
+def test_runner_records_token_usage_from_agents(engine: Engine, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Real intake graph with agents returning priced usage: the persisted run carries non-null tokens.
+    ticket_id = _seed_ticket(engine)
+    usage = ModelUsage(input_tokens=10, output_tokens=5, total_tokens=15, cost_usd=0.001)
+    _patch_graph_agents(monkeypatch, usage=usage)
+
+    rfp_intake.run_intake_for_ticket(ticket_id, CFG, env="test")
+
+    with Session(engine) as session:
+        runs = session.exec(select(AgentRun).where(AgentRun.agent_name == "trackflow-rfp-intake")).all()
+        assert len(runs) == 1
+        assert runs[0].total_tokens is not None and runs[0].total_tokens > 0
+        assert runs[0].total_cost_usd is not None  # the stubbed usage carries a priced cost
+        assert runs[0].input_summary is None  # intake stays content-free
 
 
 # --------------------------------------------------------------------------- upload endpoint

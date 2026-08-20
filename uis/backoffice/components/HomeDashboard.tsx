@@ -2,16 +2,13 @@
 
 import { AskKnowledgeBox } from "@/components/knowledge/AskKnowledgeBox";
 import { OperationsOverview } from "@/components/OperationsOverview";
-import { TechnicalOverview } from "@/components/TechnicalOverview";
-import { useBackofficeView } from "@/lib/backoffice/view-context";
 
 /**
- * The Back Office landing page. The query interface sits at the top; the overview below it
- * follows the top-center toggle — business operations, or the technical & Agent-OS surface.
+ * The Back Office landing page: the query interface sits at the top, with the live Operations
+ * Overview below it (the Engagement 6 landing decision). The top-center view toggle was removed;
+ * the sidebar is the sole navigation.
  */
 export function HomeDashboard() {
-  const { view } = useBackofficeView();
-
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-8">
       <div>
@@ -20,7 +17,7 @@ export function HomeDashboard() {
         </h1>
         <AskKnowledgeBox />
       </div>
-      {view === "business" ? <OperationsOverview /> : <TechnicalOverview />}
+      <OperationsOverview />
     </div>
   );
 }

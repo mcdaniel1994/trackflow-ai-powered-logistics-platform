@@ -6,7 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from central_api.domains.agents.pricing import usage_from_counters, usage_from_message
+from central_api.domains.agents.pricing import (
+    ModelUsage,
+    combine_usage,
+    usage_from_counters,
+    usage_from_message,
+)
 
 
 def _message(usage: object = None, response_metadata: object = None) -> object:
@@ -108,3 +113,27 @@ def test_usage_from_counters_rejects_none_and_inconsistent_totals() -> None:
         )
         is None
     )
+
+
+def test_combine_usage_sums_tokens_and_costs_when_all_priced() -> None:
+    a = ModelUsage(input_tokens=100, output_tokens=50, total_tokens=150, cost_usd=0.001)
+    b = ModelUsage(input_tokens=40, output_tokens=10, total_tokens=50, cost_usd=0.0005)
+    tokens, cost = combine_usage([a, b])
+    assert tokens == 200
+    assert cost == pytest.approx(0.0015)
+
+
+def test_combine_usage_drops_cost_when_any_call_is_unpriced() -> None:
+    priced = ModelUsage(input_tokens=100, output_tokens=50, total_tokens=150, cost_usd=0.001)
+    unpriced = ModelUsage(input_tokens=40, output_tokens=10, total_tokens=50, cost_usd=None)
+    tokens, cost = combine_usage([priced, unpriced])
+    assert tokens == 200  # tokens still sum
+    assert cost is None  # never a partial cost
+
+
+def test_combine_usage_ignores_missing_usage() -> None:
+    only = ModelUsage(input_tokens=100, output_tokens=50, total_tokens=150, cost_usd=0.001)
+    tokens, cost = combine_usage([None, only, None])
+    assert tokens == 150
+    assert cost == pytest.approx(0.001)
+    assert combine_usage([None, None]) == (None, None)

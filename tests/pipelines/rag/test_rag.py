@@ -398,6 +398,31 @@ def test_complete_uses_caller_system_prompt_and_returns_text(
     assert stub.received["messages"][1]["content"] == "Draft the warehouse section."
 
 
+def test_complete_with_usage_returns_answer_and_counters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """complete_with_usage() surfaces the drafting call's numeric token counters (no content)."""
+    usage = SimpleNamespace(prompt_tokens=120, completion_tokens=48, total_tokens=168)
+    stub = _StubChat("A drafted proposal section.", usage=usage)
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+
+    result = rag.complete_with_usage("You are a proposal writer.", "Draft the section.", _config())
+
+    assert isinstance(result, rag.GenerationResult)
+    assert result.answer == "A drafted proposal section."
+    assert result.memory_candidate is None
+    assert result.usage == {"prompt_tokens": 120, "completion_tokens": 48, "total_tokens": 168}
+
+
+def test_complete_stays_a_plain_string_wrapper(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression guard: existing callers of complete() still receive a bare str, not a result object."""
+    usage = SimpleNamespace(prompt_tokens=10, completion_tokens=4, total_tokens=14)
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: _StubChat("Plain text.", usage=usage))
+
+    result = rag.complete("sys", "user", _config())
+
+    assert result == "Plain text."
+    assert isinstance(result, str)
+
+
 def test_complete_wraps_provider_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     class _Boom:
         def __init__(self) -> None:

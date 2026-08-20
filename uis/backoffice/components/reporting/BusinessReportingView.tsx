@@ -1,16 +1,14 @@
 "use client";
 
-import { BarChart3, CalendarClock, CircleCheck, Play, RefreshCw, TriangleAlert } from "lucide-react";
+import { BarChart3, CalendarClock, CircleCheck, TriangleAlert } from "lucide-react";
 import { useState } from "react";
+import { DiscrepancyRateChart } from "@/components/reporting/charts/DiscrepancyRateChart";
+import { GroupedBarChart } from "@/components/reporting/charts/GroupedBarChart";
+import { KpiTiles } from "@/components/reporting/charts/KpiTiles";
+import { TrendLineChart } from "@/components/reporting/charts/TrendLineChart";
 import { LiveIndicator } from "@/components/telemetry/LiveIndicator";
-import { useAuth } from "@/lib/auth/context";
 import { useAutoRefresh } from "@/lib/hooks/useAutoRefresh";
-import {
-  getPipelineRunsStatus,
-  getWeeklyPerformance,
-  reportingError,
-  requestPipelineRun,
-} from "@/lib/reporting/api";
+import { getPipelineRunsStatus, getWeeklyPerformance, reportingError } from "@/lib/reporting/api";
 import type {
   PipelineRunsStatus,
   ReportWarehouse,
@@ -167,14 +165,9 @@ function PipelineStatusStrip({ status, now }: { status: PipelineRunsStatus; now:
 }
 
 export function BusinessReportingView() {
-  const { user } = useAuth();
   const [selectedWeek, setSelectedWeek] = useState("");
   const [draftWeek, setDraftWeek] = useState("");
   const [weekError, setWeekError] = useState("");
-  const [runMessage, setRunMessage] = useState("");
-  const [runError, setRunError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const { data, error, loading, lastUpdated } = useAutoRefresh<{
     report: WeeklyPerformanceReport | null;
@@ -194,7 +187,7 @@ export function BusinessReportingView() {
         status: statusResult.value,
       };
     },
-    [selectedWeek, refreshKey],
+    [selectedWeek],
     { mapError: (caught) => reportingError(caught).message },
   );
 
@@ -206,28 +199,6 @@ export function BusinessReportingView() {
     }
     setWeekError("");
     setSelectedWeek(nextWeek);
-  }
-
-  async function trigger(forceRefresh: boolean) {
-    const explanation = forceRefresh
-      ? "Force refresh creates distinct rollup work from the durable source ledger. Continue?"
-      : "Run now queues a durable refresh. An identical pending request may be reused. Continue?";
-    if (!window.confirm(explanation)) return;
-    setSubmitting(true);
-    setRunError("");
-    setRunMessage("");
-    try {
-      const accepted = await requestPipelineRun({
-        ...(selectedWeek ? { week_start: selectedWeek } : {}),
-        force_refresh: forceRefresh,
-      });
-      setRunMessage(`Run ${accepted.run_id} queued.`);
-      setRefreshKey((value) => value + 1);
-    } catch (caught) {
-      setRunError(reportingError(caught).message);
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   const report = data?.report ?? null;
@@ -256,20 +227,8 @@ export function BusinessReportingView() {
           </div>
           {weekError ? <p role="alert" className="mt-2 text-xs font-bold text-rose-700">{weekError}</p> : null}
         </div>
-        {user.role === "admin" ? (
-          <div className="flex flex-wrap gap-2" aria-label="Administrator reporting controls">
-            <button type="button" disabled={submitting} onClick={() => void trigger(false)} className="inline-flex items-center gap-2 rounded-lg border border-navy bg-white px-4 py-2 text-sm font-black text-navy disabled:opacity-50">
-              <Play className="h-4 w-4" aria-hidden="true" /> Run now
-            </button>
-            <button type="button" disabled={submitting} onClick={() => void trigger(true)} className="inline-flex items-center gap-2 rounded-lg border border-coral bg-coral px-4 py-2 text-sm font-black text-white disabled:opacity-50">
-              <RefreshCw className="h-4 w-4" aria-hidden="true" /> Force refresh
-            </button>
-          </div>
-        ) : null}
       </div>
 
-      {runMessage ? <p role="status" className="rounded-lg border border-teal/40 bg-teal/10 p-3 text-sm font-bold text-navy">{runMessage}</p> : null}
-      {runError ? <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{runError}</p> : null}
       {error || data?.reportError ? (
         <p role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
           {error || data?.reportError}
@@ -311,6 +270,18 @@ export function BusinessReportingView() {
         <div className="rounded-xl border border-dashed border-mist bg-white p-8 text-center">
           <BarChart3 className="mx-auto h-8 w-8 text-sky" aria-hidden="true" />
           <p className="mt-3 font-black text-navy-deep">No report computed yet for this week</p>
+        </div>
+      ) : null}
+
+      {report?.entries.length ? (
+        <div className="space-y-6">
+          <KpiTiles entries={report.entries} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            <GroupedBarChart title="Outbound orders by client" entries={report.entries} metric="outbound_orders_count" />
+            <GroupedBarChart title="Inbound units by client" entries={report.entries} metric="inbound_units_count" />
+          </div>
+          <DiscrepancyRateChart entries={report.entries} />
+          {report.week_start ? <TrendLineChart key={report.week_start} weekStart={report.week_start} /> : null}
         </div>
       ) : null}
 

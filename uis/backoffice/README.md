@@ -6,6 +6,8 @@ Next.js + TypeScript internal backoffice shell for TrackFlow.
 
 This Engagement 4 app establishes the forward-looking home for internal company tools. The first view shows inventory and carrier scoring using `@repo/shared-types` through npm workspaces.
 
+The chat slide-over ("Ask AI") is mounted once in the protected layout (`components/knowledge/ChatPanel.tsx` + `lib/chat/panel-context.tsx`) and opens from the header on any route; the home hero box (`AskKnowledgeBox`) seeds it. Business Reporting (`/backoffice/reporting`) is read-only — no manual pipeline triggers — and leads with hand-rolled inline-SVG charts (`components/reporting/charts/`) above the precise table. Completed RFP tickets expose a Markdown download in the RFP Desk. There is no top-center Business/Technical view toggle; the sidebar is the sole navigation and the home always shows the live Operations Overview.
+
 The Centralized Incident Manager adds an internal operations route at `/incidents`.
 It registers incidents through Central API, filters them by operational context,
 enforces lifecycle transitions, and shows summary metrics. The former CSV

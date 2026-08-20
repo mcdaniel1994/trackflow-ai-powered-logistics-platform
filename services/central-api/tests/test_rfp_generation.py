@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pipelines.rag import RagPipelineError  # type: ignore[import-untyped]
+from pipelines.rag import GenerationResult, RagPipelineError  # type: ignore[import-untyped]
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
@@ -27,6 +27,13 @@ DRAFT_OK = (
     "gives lower prices at higher volumes."
 )
 DRAFT_BAD = "Our warehouse handles storage in USD. Returns finish in 24 hours."
+
+# The DeepSeek drafting model (deepseek-chat) is unpriced, so these counters yield tokens with cost=None.
+_COUNTERS = {"prompt_tokens": 100, "completion_tokens": 50, "total_tokens": 150}
+
+
+def _result(answer: str, counters: dict[str, int] | None = _COUNTERS) -> GenerationResult:
+    return GenerationResult(answer, None, counters)
 
 
 @pytest.fixture(autouse=True)
@@ -69,9 +76,12 @@ def _rag(settings: Settings) -> object:
 
 
 def test_generate_section_uses_generator(monkeypatch: pytest.MonkeyPatch, settings: Settings) -> None:
-    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: "a draft")
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result("a draft"))
     ticket = RfpTicket(rfp_id="x", status="drafting", owner_user_uuid=OWNER, currency="USD")
-    assert generate_section("warehouse", ticket, ["storage"], [], _rag(settings)) == "a draft"  # type: ignore[arg-type]
+    draft, usage = generate_section("warehouse", ticket, ["storage"], [], _rag(settings))  # type: ignore[arg-type]
+    assert draft == "a draft"
+    assert usage is not None and usage.total_tokens == 150
+    assert usage.cost_usd is None  # deepseek-chat is unpriced
 
 
 # --------------------------------------------------------------------------- loop
@@ -81,7 +91,7 @@ def test_generation_passes_and_advances_ticket(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ticket_id = _seed_drafting(engine)
-    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_OK)
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result(DRAFT_OK))
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -96,6 +106,8 @@ def test_generation_passes_and_advances_ticket(
         assert section.iteration_count == 1
         runs = session.exec(select(AgentRun).where(AgentRun.agent_name == "trackflow-rfp-generation")).all()
         assert len(runs) == 1 and runs[0].route_taken == "generate"
+        # The generation step captured the drafting model's tokens (cost None: deepseek-chat unpriced).
+        assert runs[0].total_tokens == 150 and runs[0].total_cost_usd is None
 
 
 def test_generation_retries_then_passes(
@@ -103,7 +115,7 @@ def test_generation_retries_then_passes(
 ) -> None:
     ticket_id = _seed_drafting(engine)
     drafts = iter([DRAFT_BAD, DRAFT_OK])
-    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: next(drafts))
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result(next(drafts)))
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -113,13 +125,16 @@ def test_generation_retries_then_passes(
         ).one()
         assert section.iteration_count == 2
         assert section.evaluation_results is not None and section.evaluation_results["passed"] is True
+        runs = session.exec(select(AgentRun).where(AgentRun.agent_name == "trackflow-rfp-generation")).all()
+        # Two drafting calls in the loop: tokens sum across iterations, cost stays None (unpriced).
+        assert runs[0].total_tokens == 300 and runs[0].total_cost_usd is None
 
 
 def test_generation_stops_at_iteration_cap(
     engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     ticket_id = _seed_drafting(engine)
-    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_BAD)
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result(DRAFT_BAD))
 
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
@@ -138,10 +153,10 @@ def test_generation_handles_provider_error(
 ) -> None:
     ticket_id = _seed_drafting(engine)
 
-    def boom(_sys: str, _user: str, _cfg: object) -> str:
+    def boom(_sys: str, _user: str, _cfg: object) -> GenerationResult:
         raise RagPipelineError("provider down")
 
-    monkeypatch.setattr(rfp_generation, "complete", boom)
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", boom)
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
 
     with Session(engine) as session:
@@ -163,12 +178,12 @@ def test_generation_skips_non_drafting_ticket(
         ticket_id = ticket.id
     called = False
 
-    def spy(_sys: str, _user: str, _cfg: object) -> str:
+    def spy(_sys: str, _user: str, _cfg: object) -> GenerationResult:
         nonlocal called
         called = True
-        return DRAFT_OK
+        return _result(DRAFT_OK)
 
-    monkeypatch.setattr(rfp_generation, "complete", spy)
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", spy)
     run_generation_for_ticket(ticket_id, _rag(settings), 2, env="test")  # type: ignore[arg-type]
     assert called is False  # idempotency guard: only drafting tickets are generated
 
@@ -198,12 +213,14 @@ def test_upload_chains_into_generation(
 ) -> None:
     _enable_generation(app, settings)
     monkeypatch.setattr(rfp_service, "pdf_to_markdown", lambda _data: "converted markdown")
-    monkeypatch.setattr(rfp_graph, "classify_document", lambda _md, _c: ClassificationResult(True, "ok"))
+    monkeypatch.setattr(rfp_graph, "classify_document", lambda _md, _c: (ClassificationResult(True, "ok"), None))
     monkeypatch.setattr(
-        rfp_graph, "extract_metadata", lambda _md, _c: MetadataResult("Luna", "US", ["warehousing"], 5000, 20, None)
+        rfp_graph,
+        "extract_metadata",
+        lambda _md, _c: (MetadataResult("Luna", "US", ["warehousing"], 5000, 20, None), None),
     )
-    monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: [f"{dept}-aspect"])
-    monkeypatch.setattr(rfp_generation, "complete", lambda _sys, _user, _cfg: DRAFT_OK)
+    monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: ([f"{dept}-aspect"], None))
+    monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result(DRAFT_OK))
 
     created = client.post(
         "/rfp/tickets", files={"file": ("rfp.pdf", b"%PDF-1.4", "application/pdf")}, headers=auth_headers

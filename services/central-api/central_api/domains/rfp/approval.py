@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import operator
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, TypedDict
@@ -37,6 +38,8 @@ logger = logging.getLogger(__name__)
 
 APPROVAL_AGENT_NAME = "trackflow-rfp-approval"
 VALID_ACTIONS: frozenset[str] = frozenset({"approve", "reject", "request_changes"})
+# Matches the agents service preview cap (telemetry standard §8): a truncated, content-limited preview.
+_SUMMARY_MAX_CHARS = 200
 
 
 class ApprovalState(TypedDict, total=False):
@@ -67,16 +70,25 @@ def thread_id(ticket_id: str, department_id: str) -> str:
     return f"rfp:{ticket_id}:{department_id}"
 
 
-def _step(node: str, status: str, notes: str | None = None) -> dict[str, Any]:
-    now = datetime.now(UTC).isoformat()
+def _step(
+    node: str,
+    started: float,
+    status: str,
+    notes: str | None = None,
+    *,
+    tokens: int | None = None,
+    cost_usd: float | None = None,
+) -> dict[str, Any]:
+    """A safe node-trace entry that records the node's real wall-clock duration (no content)."""
+    now = time.time()
     return {
         "node_name": node,
         "status": status,
-        "started_at": now,
-        "ended_at": now,
-        "duration_ms": 0,
-        "tokens": None,
-        "cost_usd": None,
+        "started_at": datetime.fromtimestamp(started, tz=UTC).isoformat(),
+        "ended_at": datetime.fromtimestamp(now, tz=UTC).isoformat(),
+        "duration_ms": int((now - started) * 1000),
+        "tokens": tokens,
+        "cost_usd": cost_usd,
         "notes": notes,
     }
 
@@ -89,17 +101,20 @@ def build_approval_graph(rag_config: RagConfig, checkpointer: Any) -> Any:
         return {"decision": decision if isinstance(decision, dict) else {}}
 
     def approve(_state: ApprovalState) -> ApprovalState:
-        return {"outcome": "approved", "steps": [_step("approve", "ok")]}
+        started = time.time()
+        return {"outcome": "approved", "steps": [_step("approve", started, "ok")]}
 
     def reject(_state: ApprovalState) -> ApprovalState:
-        return {"outcome": "rejected", "steps": [_step("reject", "ok")]}
+        started = time.time()
+        return {"outcome": "rejected", "steps": [_step("reject", started, "ok")]}
 
     def revise(state: ApprovalState) -> ApprovalState:
+        started = time.time()
         iterations = state.get("iterations", 1)
         if iterations >= state.get("max_iterations", 2):
-            return {"outcome": "changes_exhausted", "steps": [_step("revise", "ok", "cap_reached")]}
+            return {"outcome": "changes_exhausted", "steps": [_step("revise", started, "ok", "cap_reached")]}
         try:
-            draft = draft_section(
+            draft, usage = draft_section(
                 state["department_id"],
                 country=state.get("country"),
                 currency=state.get("currency"),
@@ -109,20 +124,22 @@ def build_approval_graph(rag_config: RagConfig, checkpointer: Any) -> Any:
                 rag_config=rag_config,
             )
         except RagPipelineError:
-            return {"outcome": "generation_error", "steps": [_step("revise", "error")]}
+            return {"outcome": "generation_error", "steps": [_step("revise", started, "error")]}
         evaluation = evaluate_section(
             draft,
             currency=state.get("currency"),
             department_id=state["department_id"],
             key_aspects=state.get("key_aspects", []),
         )
+        tokens = usage.total_tokens if usage is not None else None
+        cost = usage.cost_usd if usage is not None else None
         return {
             "draft": draft,
             "iterations": iterations + 1,
             "feedback": evaluation.issues,
             "evaluation": {**evaluation.results, "passed": evaluation.passed},
             "passed": evaluation.passed,
-            "steps": [_step("revise", "ok", "redrafted")],
+            "steps": [_step("revise", started, "ok", "redrafted", tokens=tokens, cost_usd=cost)],
         }
 
     def route_after_review(state: ApprovalState) -> str:
@@ -245,32 +262,46 @@ def submit_decision(
     section.updated_at = utc_now()
     repo.save_section(section)
 
-    finalized = _maybe_finalize(repo, ticket, steps)
-    _record_trace(steps + ([_step("finalize", "ok")] if finalized else []), env=env)
+    finalized, output_summary = _maybe_finalize(repo, ticket, steps)
+    if finalized:
+        steps.append(_step("finalize", time.time(), "ok"))
+    _record_trace(steps, env=env, output_summary=output_summary)
     return DecisionOutcome(section.approval_status, ticket.status, finalized)
 
 
-def _maybe_finalize(repo: RfpRepository, ticket: RfpTicket, steps: list[dict[str, Any]]) -> bool:
+def _maybe_finalize(
+    repo: RfpRepository, ticket: RfpTicket, steps: list[dict[str, Any]]
+) -> tuple[bool, str | None]:
+    """Consolidate the approved sections into the final document; return (finalized, output preview).
+
+    The preview is a truncated, content-limited summary of the consolidated proposal so a completed
+    RFP run is not blank in the Agent OS dashboard (the input remains an uploaded client document and
+    is never persisted as a summary).
+    """
+    started = time.time()
     sections = repo.sections_for_ticket(ticket.id)
     if not sections or any(section.approval_status != "approved" for section in sections):
-        return False
+        return False, None
     # Explicit arbitration: a ticket is single-currency; drop any section that contradicts it before
     # synthesis rather than letting agents reconcile it themselves.
     currency = ticket.currency or "USD"
     consolidated = {
         section.department_id: (section.draft_content or "") for section in sections
     }
-    steps.append(_step("arbitration", "ok", f"sections={len(consolidated)}"))
+    steps.append(_step("arbitration", started, "ok", f"sections={len(consolidated)}"))
     repo.add_final_document(
         RfpFinalDocument(ticket_id=ticket.id, sections=consolidated, currency=currency)
     )
     ticket.status = "done"
     ticket.updated_at = utc_now()
     repo.save(ticket)
-    return True
+    preview = " ".join(
+        f"{department}: {content}" for department, content in consolidated.items()
+    ).strip()
+    return True, (preview[:_SUMMARY_MAX_CHARS] or None)
 
 
-def _record_trace(steps: list[dict[str, Any]], *, env: str) -> None:
+def _record_trace(steps: list[dict[str, Any]], *, env: str, output_summary: str | None = None) -> None:
     if not steps:
         return
     for sequence, step in enumerate(steps, start=1):
@@ -285,11 +316,11 @@ def _record_trace(steps: list[dict[str, Any]], *, env: str) -> None:
         answer=None,
         started_at=started,
         ended_at=ended,
-        duration_ms=0,
+        duration_ms=sum(int(step.get("duration_ms") or 0) for step in steps),
         steps=steps,
         tool_calls=[],
     )
-    persist_run(result, env=env, input_summary=None, output_summary=None)
+    persist_run(result, env=env, input_summary=None, output_summary=output_summary)
 
 
 class AlreadyResolved(Exception):

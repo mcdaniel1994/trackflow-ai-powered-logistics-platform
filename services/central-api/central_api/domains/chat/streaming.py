@@ -122,6 +122,10 @@ def _prepare_turn(
         )
 
 
+# Matches the agents service preview cap (telemetry standard §8): truncated, content-limited previews.
+_SUMMARY_MAX_CHARS = 200
+
+
 def _complete_turn(
     *,
     session_id: str,
@@ -129,6 +133,7 @@ def _complete_turn(
     question: str,
     result: AgentRunResult,
     env: str,
+    settings: Settings,
 ) -> str:
     with Session(get_engine()) as session:
         repository = ChatRepository(session)
@@ -169,7 +174,13 @@ def _complete_turn(
         session.add(chat_session)
         session.commit()
         session.refresh(message)
-    persist_run(result, env=env, input_summary=None, output_summary=None)
+    # Store truncated previews only when content capture is enabled and no guardrail fired
+    # (telemetry standard §8). Mirrors the /agent/query path in domains/agents/service.py; chat
+    # content is already persisted in chat_messages under the approved Engagement 10 exception.
+    store = settings.agents_store_content and not result.guardrail_events
+    input_summary = question[:_SUMMARY_MAX_CHARS] if store else None
+    output_summary = result.answer[:_SUMMARY_MAX_CHARS] if (store and result.answer) else None
+    persist_run(result, env=env, input_summary=input_summary, output_summary=output_summary)
     return message.message_id
 
 
@@ -354,6 +365,7 @@ class ChatGenerationManager:
                 question=question,
                 result=result,
                 env=settings.app_env,
+                settings=settings,
             )
             self.bus.publish(
                 topic,

@@ -27,3 +27,19 @@ body {
 .hero-copy-shadow {
   text-shadow: 0 2px 24px rgba(18, 28, 42, 0.42);
 }
+
+/* The hero background video loops indefinitely, so it is moving content longer
+   than 5s (WCAG 2.2.2). Under reduced-motion, hold the still poster instead. */
+.hero-video-fallback {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-video {
+    display: none;
+  }
+
+  .hero-video-fallback {
+    display: block;
+  }
+}

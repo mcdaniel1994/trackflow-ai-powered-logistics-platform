@@ -6,10 +6,12 @@ type RouteContext = {
   params: Promise<{ path?: string[] }>;
 };
 
+// Read-only. Manual pipeline triggering was removed from the Back Office (final-polish 2.3):
+// it mutates real reporting state from a recorded/demoed UI. Scheduled and CLI dispatch keep the
+// Central API POST /reporting/pipeline-runs endpoint; the Back Office simply no longer exposes it.
 const ALLOWED_ROUTES = new Map([
   ["GET weekly-warehouse-client-performance", "/reporting/weekly-warehouse-client-performance"],
   ["GET pipeline-runs/latest", "/reporting/pipeline-runs/latest"],
-  ["POST pipeline-runs", "/reporting/pipeline-runs"],
 ]);
 
 function allowlistedPath(method: string, path: string[]) {
@@ -33,4 +35,3 @@ async function handler(request: NextRequest, context: RouteContext) {
 }
 
 export const GET = handler;
-export const POST = handler;

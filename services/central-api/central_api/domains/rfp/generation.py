@@ -15,11 +15,17 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import uuid4
 
-from pipelines.rag import RagConfig, RagPipelineError, complete, retrieve  # type: ignore[import-untyped]
+from pipelines.rag import (  # type: ignore[import-untyped]
+    RagConfig,
+    RagPipelineError,
+    complete_with_usage,
+    retrieve,
+)
 from sqlmodel import Session
 
 from ...db.session import get_engine
 from ..agents.graph import AgentRunResult
+from ..agents.pricing import ModelUsage, combine_usage, usage_from_counters
 from ..agents.recorder import persist_run
 from .evaluators import evaluate_section
 from .models import RfpDepartmentSection, RfpTicket, utc_now
@@ -93,8 +99,12 @@ def draft_section(
     key_aspects: list[str],
     feedback: list[str],
     rag_config: RagConfig,
-) -> str:
-    """Draft one department's section from explicit fields (usable by intake and the approval loop)."""
+) -> tuple[str, ModelUsage | None]:
+    """Draft one department's section from explicit fields (usable by intake and the approval loop).
+
+    Returns the drafted text plus the generation call's priced token usage (``None`` when the model
+    is unpriced or reported no counters), so the caller can account tokens/cost on the trace step.
+    """
     context = (
         f"Client country: {country or 'unknown'}. Currency: {currency or 'unknown'}. "
         f"Monthly volume: {volume or 'unknown'}. Key aspects: {', '.join(key_aspects) or 'none'}."
@@ -112,7 +122,9 @@ def draft_section(
         f"Follow these rules exactly: {_GUIDELINES}{fix}\n\n"
         f"<trackflow_policy_context>\n{grounding}\n</trackflow_policy_context>"
     )
-    return str(complete(system_prompt, user_content, rag_config))
+    generated = complete_with_usage(system_prompt, user_content, rag_config)
+    usage = usage_from_counters(generated.usage, rag_config.generation_model)
+    return str(generated.answer), usage
 
 
 def _format_grounding(chunks: list[dict[str, object]]) -> str:
@@ -133,7 +145,7 @@ def generate_section(
     key_aspects: list[str],
     feedback: list[str],
     rag_config: RagConfig,
-) -> str:
+) -> tuple[str, ModelUsage | None]:
     """Draft one department's proposal section for a ticket with the DeepSeek generator."""
     return draft_section(
         department_id,
@@ -183,14 +195,18 @@ def _generate_one(
     draft = ""
     passed = False
     iteration = 0
+    # A section can be drafted several times in this loop; sum the token usage across every
+    # contributing call and price it only when all were priced (combine_usage handles both).
+    usages: list[ModelUsage | None] = []
     for iteration in range(1, max(1, max_iterations) + 1):
         try:
-            draft = generate_section(section.department_id, ticket, aspects, feedback, rag_config)
+            draft, usage = generate_section(section.department_id, ticket, aspects, feedback, rag_config)
         except RagPipelineError:
             section.draft_content = None
             section.evaluation_results = {"error": True}
             section.iteration_count = iteration
             return _step(f"generate:{section.department_id}", started, "error")
+        usages.append(usage)
         evaluation = evaluate_section(
             draft, currency=ticket.currency, department_id=section.department_id, key_aspects=aspects
         )
@@ -203,10 +219,19 @@ def _generate_one(
     section.draft_content = draft
     section.iteration_count = iteration
     notes = "passed" if passed else "needs_human"
-    return _step(f"generate:{section.department_id}", started, "ok", notes)
+    tokens, cost = combine_usage(usages)
+    return _step(f"generate:{section.department_id}", started, "ok", notes, tokens=tokens, cost_usd=cost)
 
 
-def _step(node: str, started: float, status: str, notes: str | None = None) -> dict[str, Any]:
+def _step(
+    node: str,
+    started: float,
+    status: str,
+    notes: str | None = None,
+    *,
+    tokens: int | None = None,
+    cost_usd: float | None = None,
+) -> dict[str, Any]:
     now = time.time()
     return {
         "node_name": node,
@@ -214,8 +239,8 @@ def _step(node: str, started: float, status: str, notes: str | None = None) -> d
         "started_at": datetime.fromtimestamp(started, tz=UTC).isoformat(),
         "ended_at": datetime.fromtimestamp(now, tz=UTC).isoformat(),
         "duration_ms": int((now - started) * 1000),
-        "tokens": None,
-        "cost_usd": None,
+        "tokens": tokens,
+        "cost_usd": cost_usd,
         "notes": notes,
     }
 

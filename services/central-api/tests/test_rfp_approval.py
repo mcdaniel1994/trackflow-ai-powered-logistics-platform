@@ -13,6 +13,7 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from central_api.core.config import Settings, get_settings
+from central_api.domains.agents.models import AgentNodeStep, AgentRun
 from central_api.domains.rag.config import build_rag_config
 from central_api.domains.rfp import approval as rfp_approval
 from central_api.domains.rfp.approval import start_ticket_approval
@@ -105,6 +106,25 @@ def test_approve_single_section_finalizes(engine: Engine, settings: Settings) ->
         assert document.currency == "USD" and "warehouse" in document.sections
 
 
+def test_approval_run_reports_summed_duration_and_output_preview(
+    engine: Engine, settings: Settings
+) -> None:
+    cfg = _configured(settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])
+    _start(ticket_id, cfg)
+    _decide(engine, cfg, ticket_id, "warehouse", "approve")
+
+    with Session(engine) as session:
+        run = session.exec(
+            select(AgentRun).where(AgentRun.agent_name == "trackflow-rfp-approval")
+        ).one()
+        steps = session.exec(select(AgentNodeStep).where(AgentNodeStep.run_id == run.id)).all()
+        # (F) The run duration is the sum of step durations, not a hardcoded 0.
+        assert run.duration_ms == sum(int(step.duration_ms or 0) for step in steps)
+        # A completed run carries a truncated consolidated-document preview (D1), never blank.
+        assert run.output_summary and "warehouse" in run.output_summary
+
+
 def test_approval_is_branch_scoped(engine: Engine, settings: Settings) -> None:
     cfg = _configured(settings)
     ticket_id = _seed_under_eval(engine, departments=["warehouse", "lastmile"])
@@ -150,7 +170,7 @@ def test_request_changes_regenerates_then_approves(
     cfg = _configured(settings)
     ticket_id = _seed_under_eval(engine, departments=["warehouse"], iteration=1)
     _start(ticket_id, cfg)
-    monkeypatch.setattr(rfp_approval, "draft_section", lambda *a, **k: "Revised. " + COMPLIANT)
+    monkeypatch.setattr(rfp_approval, "draft_section", lambda *a, **k: ("Revised. " + COMPLIANT, None))
 
     _decide(engine, cfg, ticket_id, "warehouse", "request_changes")
     with Session(engine) as session:
@@ -249,6 +269,96 @@ def test_decision_endpoint_completes_and_serves_document(
     document = client.get(f"/rfp/tickets/{ticket_id}/document", headers=auth_headers)
     assert document.status_code == 200
     assert document.json()["currency"] == "USD"
+
+
+def test_document_download_returns_markdown_attachment(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    engine: Engine,
+    auth_headers: dict[str, str],
+) -> None:
+    cfg = _enable(app, settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])
+    _start(ticket_id, cfg)
+    client.post(
+        f"/rfp/tickets/{ticket_id}/departments/warehouse/decision",
+        json={"action": "approve"},
+        headers=auth_headers,
+    )
+
+    response = client.get(f"/rfp/tickets/{ticket_id}/document/download", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("attachment; filename=")
+    assert ".md" in disposition
+    assert response.text.startswith("# RFP Proposal")
+
+
+def test_document_pdf_returns_pdf_attachment(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    engine: Engine,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cfg = _enable(app, settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])
+    _start(ticket_id, cfg)
+    client.post(
+        f"/rfp/tickets/{ticket_id}/departments/warehouse/decision",
+        json={"action": "approve"},
+        headers=auth_headers,
+    )
+    # Mock WeasyPrint rendering so the test never needs the native Pango/cairo libraries.
+    from central_api.domains.rfp import service as rfp_service
+
+    monkeypatch.setattr(rfp_service, "render_final_document_pdf", lambda *_a, **_k: b"%PDF-1.7 mock")
+
+    response = client.get(f"/rfp/tickets/{ticket_id}/document/pdf", headers=auth_headers)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    disposition = response.headers["content-disposition"]
+    assert disposition.startswith("attachment; filename=") and disposition.endswith('.pdf"')
+    assert response.content.startswith(b"%PDF-")
+
+
+def test_document_pdf_not_ready_is_404(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    engine: Engine,
+    auth_headers: dict[str, str],
+) -> None:
+    _enable(app, settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])  # never finalized
+    assert client.get(f"/rfp/tickets/{ticket_id}/document/pdf", headers=auth_headers).status_code == 404
+
+
+def test_document_download_not_ready_is_404(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    engine: Engine,
+    auth_headers: dict[str, str],
+) -> None:
+    _enable(app, settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])  # never finalized
+    response = client.get(f"/rfp/tickets/{ticket_id}/document/download", headers=auth_headers)
+    assert response.status_code == 404
+
+
+def test_document_download_other_owner_is_404(engine: Engine, settings: Settings) -> None:
+    cfg = _configured(settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"], owner=OTHER)
+    _start(ticket_id, cfg)
+    with Session(engine) as session, pytest.raises(RfpError) as exc:
+        RfpService(cfg, session).get_document_markdown(ticket_id, OWNER)
+    assert exc.value.status_code == 404
 
 
 def test_decision_endpoint_requires_authentication(client: TestClient) -> None:

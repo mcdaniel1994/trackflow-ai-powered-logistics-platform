@@ -1,7 +1,5 @@
 import { fetchWithAuth } from "@/lib/auth/client-http";
 import type {
-  PipelineRunAccepted,
-  PipelineRunRequest,
   PipelineRunsStatus,
   ReportingAPIError,
   WeeklyPerformanceReport,
@@ -56,13 +54,6 @@ export function getWeeklyPerformance(weekStart?: string) {
 
 export function getPipelineRunsStatus() {
   return request<PipelineRunsStatus>("/pipeline-runs/latest");
-}
-
-export function requestPipelineRun(input: PipelineRunRequest) {
-  return request<PipelineRunAccepted>("/pipeline-runs", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
 }
 
 export function reportingError(error: unknown): ReportingAPIError {

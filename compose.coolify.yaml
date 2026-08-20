@@ -217,6 +217,11 @@ services:
       # Engagement 8: the LangGraph agent (and the home Ask-AI box that routes to it) stay off
       # until the owner enables it. Requires RAG + the MCP OAuth credentials above.
       AGENTS_ENABLED: ${AGENTS_ENABLED:-false}
+      # Final-polish (D1): store truncated prompt/answer previews for the Agent OS dashboard.
+      # Guardrail-blocked content is never stored (telemetry standard §8). Engagement 10 already
+      # persists full chat content under the approved exception, so a truncated preview adds no new
+      # category of stored data.
+      AGENTS_STORE_CONTENT: ${AGENTS_STORE_CONTENT:-false}
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
       DATABASE_STATEMENT_TIMEOUT_MS: "15000"
       DATABASE_LOCK_TIMEOUT_MS: "5000"

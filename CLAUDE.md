@@ -195,6 +195,18 @@ Then read the active engagement brief and the README for every folder being modi
   accepted the implementation as complete on 2026-08-18. Phase 6 production rollout and feature
   enablement are deferred; the feature remains off by default and production is unchanged.
 
+- **Final polish pass** - `docs/planning/remaining_planning/spec-11-final-polish.md`
+  Corrective/presentational pass across delivered surfaces (branch `feature/final-polish-spec-11`).
+  Website: header hamburger dropdown replaces the bottom `MobileNav`; the hero is a looping muted
+  background video with a reduced-motion still fallback. Back Office: Agent OS telemetry is now
+  produced end-to-end (RFP token/cost accounting, restored output previews under
+  `AGENTS_STORE_CONTENT`); a new RFP final-document Markdown download route
+  (`domains/rfp/render.py` + `GET /rfp/tickets/{id}/document/download`); Business Reporting manual
+  trigger controls removed (product/demo decision, not a Prefect consequence) and inline-SVG charts
+  added; "Ask AI" opens the relocated chat panel (`components/knowledge/ChatPanel.tsx` +
+  `lib/chat/panel-context.tsx`) from any route; the top Business/Technical view toggle and
+  `TechnicalOverview` were removed.
+
 - **Engagement 11+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are

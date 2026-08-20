@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { LocaleProvider } from "@/components/layout/LocaleProvider";
-import { MobileNav } from "@/components/layout/MobileNav";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SkipToContent } from "@/components/layout/SkipToContent";
@@ -37,13 +36,12 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body className="pb-12 md:pb-0">
+      <body>
         <LocaleProvider>
           <SkipToContent />
           <SiteHeader />
           {children}
           <SiteFooter />
-          <MobileNav />
         </LocaleProvider>
         <JsonLd data={organizationSchema()} />
         <Analytics />
