@@ -11,28 +11,23 @@ import logging
 from dataclasses import dataclass
 from uuid import uuid4
 
-from fastapi import BackgroundTasks
+from kombu.exceptions import OperationalError
 from sqlmodel import Session
 
 from ...core.config import Settings
 from ..rag.config import build_rag_config
 from ..realtime.bus import RealtimeBus, rfp_ticket_topic
 from ..realtime.schemas import RfpTicketCreatedEvent
+from ..tasks.dispatcher import enqueue_rfp_processing
 from .approval import AlreadyResolved, submit_decision
-from .config import (
-    build_rfp_config,
-    is_rfp_configured,
-    is_rfp_generation_configured,
-    is_rfp_intake_configured,
-)
+from .config import is_rfp_configured, is_rfp_generation_configured, is_rfp_intake_configured
 from .document import DocumentError, pdf_to_markdown
-from .intake import run_intake_for_ticket
 from .models import RfpFinalDocument, RfpTicket
 from .pdf import render_final_document_pdf
 from .readability import readability_dict
 from .render import render_final_document
 from .repository import RfpRepository
-from .schemas import RfpDepartmentSectionRead, RfpFinalDocumentRead, RfpTicketDetail, RfpTicketSummary
+from .schemas import RfpDepartmentSectionRead, RfpFinalDocumentRead, RfpTaskAccepted, RfpTicketDetail, RfpTicketSummary
 
 _PDF_CONTENT_TYPES = {"application/pdf", "application/x-pdf"}
 logger = logging.getLogger(__name__)
@@ -91,9 +86,8 @@ class RfpService:
         filename: str | None,
         content_type: str | None,
         data: bytes,
-        background_tasks: BackgroundTasks,
-    ) -> RfpTicketSummary:
-        """Convert an uploaded PDF, create an analyzing ticket, and schedule background intake."""
+    ) -> RfpTaskAccepted:
+        """Convert an uploaded PDF, create an analyzing ticket, and enqueue independent intake."""
         if not is_rfp_intake_configured(self.settings):
             raise RfpError(503, "The RFP workflow is not available right now.")
         is_pdf = (content_type in _PDF_CONTENT_TYPES) or bool(filename and filename.lower().endswith(".pdf"))
@@ -116,20 +110,14 @@ class RfpService:
                 readability_metrics=dict(metrics),
             )
         )
+        try:
+            enqueue_rfp_processing(ticket.id)
+        except (OperationalError, OSError):
+            self.repository.delete_ticket(ticket)
+            raise RfpError(503, "The RFP task queue is unavailable right now.") from None
         self._publish_ticket_created(ticket)
-        config = build_rfp_config(self.settings)
-        # When generation is configured, chain Phase 2 drafting and the Phase 3 approval pause.
-        generate = is_rfp_generation_configured(self.settings)
-        rag_config = build_rag_config(self.settings) if generate else None
-        background_tasks.add_task(
-            run_intake_for_ticket,
-            ticket.id,
-            config,
-            env=self.settings.app_env,
-            rag_config=rag_config,
-            settings=self.settings if generate else None,
-        )
-        return RfpTicketSummary.model_validate(ticket)
+        summary = RfpTicketSummary.model_validate(ticket)
+        return RfpTaskAccepted(**summary.model_dump(), task_id=ticket.id)
 
     def decide(
         self,

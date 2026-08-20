@@ -18,6 +18,7 @@ from central_api.domains.rfp import service as rfp_service
 from central_api.domains.rfp.agents import ClassificationResult, MetadataResult
 from central_api.domains.rfp.generation import generate_section, run_generation_for_ticket
 from central_api.domains.rfp.models import RfpDepartmentSection, RfpTicket
+from central_api.domains.rfp.processor import process_rfp_ticket
 
 OWNER = "11111111-1111-4111-8111-111111111111"
 
@@ -211,7 +212,7 @@ def test_upload_chains_into_generation(
     auth_headers: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _enable_generation(app, settings)
+    configured = _enable_generation(app, settings)
     monkeypatch.setattr(rfp_service, "pdf_to_markdown", lambda _data: "converted markdown")
     monkeypatch.setattr(rfp_graph, "classify_document", lambda _md, _c: (ClassificationResult(True, "ok"), None))
     monkeypatch.setattr(
@@ -221,14 +222,17 @@ def test_upload_chains_into_generation(
     )
     monkeypatch.setattr(rfp_graph, "extract_key_aspects", lambda dept, _md, _c: ([f"{dept}-aspect"], None))
     monkeypatch.setattr(rfp_generation, "complete_with_usage", lambda _sys, _user, _cfg: _result(DRAFT_OK))
+    queued: list[str] = []
+    monkeypatch.setattr(rfp_service, "enqueue_rfp_processing", queued.append)
 
     created = client.post(
         "/rfp/tickets", files={"file": ("rfp.pdf", b"%PDF-1.4", "application/pdf")}, headers=auth_headers
     )
     assert created.status_code == 202
     ticket_id = created.json()["id"]
+    assert queued == [ticket_id]
 
-    # With generation configured, the chain continues through Phase 3's approval pause.
+    assert process_rfp_ticket(ticket_id, configured) == "waiting_for_approval"
     detail = client.get(f"/rfp/tickets/{ticket_id}", headers=auth_headers).json()
     assert detail["status"] == "waiting_for_approval"
     section = detail["sections"][0]

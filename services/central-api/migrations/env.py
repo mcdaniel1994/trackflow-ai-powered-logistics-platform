@@ -15,6 +15,7 @@ from central_api.domains.operations import models as operations_models  # noqa: 
 from central_api.domains.reporting import models as reporting_models  # noqa: F401
 from central_api.domains.rfp import models as rfp_models  # noqa: F401
 from central_api.domains.suppliers import models as supplier_models  # noqa: F401
+from central_api.domains.tasks import models as task_models  # noqa: F401
 from central_api.domains.telemetry import models as telemetry_models  # noqa: F401
 
 config = context.config

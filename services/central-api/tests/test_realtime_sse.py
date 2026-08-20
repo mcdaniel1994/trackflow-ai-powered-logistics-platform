@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fastapi import BackgroundTasks
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 from trackflow_auth import ACCESS_COOKIE_NAME  # type: ignore[import-untyped]
@@ -139,47 +138,52 @@ def test_stream_emits_keepalive_and_closes_at_token_expiry(settings: Settings, t
     asyncio.run(scenario())
 
 
-def test_ticket_publication_occurs_after_commit_and_before_background_work(
+def test_ticket_publication_occurs_after_commit_and_enqueue(
     settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     committed = False
+    sequence: list[str] = []
     published: list[tuple[str, str, dict[str, object]]] = []
 
     class Repository:
         def add_ticket(self, ticket: RfpTicket) -> RfpTicket:
             nonlocal committed
             committed = True
+            sequence.append("persisted")
             return ticket
 
     class RecordingBus:
         def publish(self, topic: str, event: str, data: dict[str, object]) -> RealtimeEvent:
             assert committed is True
+            sequence.append("published")
             published.append((topic, event, data))
             return RealtimeEvent(event_id=1, event=event, data=data)
 
     monkeypatch.setattr("central_api.domains.rfp.service.pdf_to_markdown", lambda _data: "Readable proposal text.")
+    monkeypatch.setattr(
+        "central_api.domains.rfp.service.enqueue_rfp_processing",
+        lambda _ticket_id: sequence.append("enqueued"),
+    )
     configured = settings.model_copy(update={"rfp_enabled": True, "openai_api_key": "configured-for-gate-only"})
     service = RfpService(configured, object(), realtime_bus=RecordingBus())  # type: ignore[arg-type]
     service.repository = Repository()  # type: ignore[assignment]
-    background = BackgroundTasks()
-
     result = service.create_from_upload(
         owner_user_uuid="owner-1",
         operator_jurisdiction="US",
         filename="rfp.pdf",
         content_type="application/pdf",
         data=b"%PDF",
-        background_tasks=background,
     )
 
     assert result.status == "analyzing"
+    assert result.task_id == result.id
+    assert sequence == ["persisted", "enqueued", "published"]
     assert published[0][0] == "rfp.tickets.owner-1"
     assert published[0][1] == "rfp_ticket_created"
     assert published[0][2]["client_name"] is None
     assert published[0][2]["client_country"] is None
     assert published[0][2]["services_requested"] == []
-    assert len(background.tasks) == 1
 
 
 def test_realtime_notification_package_has_no_model_rag_or_agent_dependency() -> None:

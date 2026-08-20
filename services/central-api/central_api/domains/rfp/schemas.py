@@ -52,6 +52,12 @@ class RfpTicketSummary(BaseModel):
     updated_at: datetime
 
 
+class RfpTaskAccepted(RfpTicketSummary):
+    """RFP ticket plus the Celery identifier used to follow background work."""
+
+    task_id: str
+
+
 class RfpTicketDetail(RfpTicketSummary):
     """Full ticket view, including per-department sections and safe intake metadata."""
 

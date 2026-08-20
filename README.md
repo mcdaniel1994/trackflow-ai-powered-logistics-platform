@@ -12,6 +12,11 @@ TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza
 
 ## ✅ Current Status
 
+> **DEV-55 coursework branch:** `codex/async-tasks-dev55` adds a local-only Celery/Redis/Flower
+> implementation for submission evidence. It is explicitly **DO NOT MERGE**, does not change
+> production Compose, and is not Engagement 11. See
+> [`docs/DEV-55-async-tasks.md`](docs/DEV-55-async-tasks.md).
+
 **Engagement 4** delivered the AI-driven engineering infrastructure: persistent project memory in `memory-bank/`, the cross-agent operating guide in `AGENTS.md`, scoped coding-agent rules and the `start-engagement` skill under `.agents/`, the forward-looking Next.js + TypeScript UI workspace (`uis/website/`, `uis/backoffice/`), and the reserved `services/` boundary. See `AGENTS.md` for how `.agents/` (coding-agent infrastructure) differs from the customer-facing product agents in `agents/`.
 
 **Engagement 5** delivered Backend Inventory Management: the FastAPI Central API,
@@ -317,7 +322,8 @@ TrackFlow reflects real-world logistics challenges:
 
 ### 🚢 Dockerization & Deployment Architecture *(deployed subproject)*
 
-- Local Docker Compose stack for Identity, Central API, Back Office, and disposable PostgreSQL
+- Local Docker Compose stack for Identity, Central API, Back Office, disposable PostgreSQL, and—on
+  this submission-only branch—Redis, a Celery worker, and persistent Flower monitoring
 - Separate Coolify Compose stack with private backends and explicit migration/seed profiles
 - GitHub Actions builds Linux AMD64 images and publishes commit-pinned GHCR tags
   so the VPS only pulls and runs containers

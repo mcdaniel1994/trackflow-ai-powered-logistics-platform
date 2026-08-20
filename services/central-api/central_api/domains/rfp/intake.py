@@ -1,10 +1,4 @@
-"""Background intake runner: convert-outcome → ticket state, then record a safe trace.
-
-Runs off the request path (FastAPI ``BackgroundTasks``) in its own short-lived session, mirroring the
-Engagement 8 recorder. It applies the graph ``IntakeOutcome`` to the ticket and its department
-sections, then persists a node trace to the Engagement 8 trace store. Every failure is swallowed so a
-trace-store or DB hiccup never crashes a background worker; the ticket simply stays where it is.
-"""
+"""RFP intake stage: convert a graph outcome into durable ticket state and a safe trace."""
 
 from __future__ import annotations
 
@@ -21,6 +15,7 @@ from ..agents.graph import AgentRunResult
 from ..agents.recorder import persist_run
 from .approval import start_ticket_approval
 from .config import RfpConfig
+from .errors import RetryableRfpProcessingError
 from .generation import run_generation_for_ticket
 from .graph import IntakeOutcome, run_intake
 from .models import RfpDepartmentSection, RfpTicket, utc_now
@@ -38,8 +33,10 @@ def run_intake_for_ticket(
     env: str,
     rag_config: RagConfig | None = None,
     settings: Settings | None = None,
+    chain: bool = True,
+    raise_errors: bool = False,
 ) -> None:
-    """Convert intake results into ticket state and a safe trace. Never raises.
+    """Convert intake results into ticket state and a safe trace.
 
     When ``rag_config`` and ``settings`` are provided (generation is configured), a routed ticket
     flows straight through Phase 2 section generation and into a paused Phase 3 approval thread per
@@ -55,11 +52,15 @@ def run_intake_for_ticket(
                 return
             outcome = run_intake(ticket.markdown_text or "", config)
             _apply_outcome(repo, ticket, outcome)
-    except Exception as exc:  # a background worker must never crash the process
+    except Exception as exc:
         logger.warning("rfp_intake_failed error_type=%s", type(exc).__name__)
+        if raise_errors:
+            raise RetryableRfpProcessingError("RFP intake failed") from exc
         return
     _record_trace(outcome, env=env)
-    if rag_config is not None and outcome.status == "routed":
+    if raise_errors and outcome.status == "error":
+        raise RetryableRfpProcessingError("RFP intake returned an error outcome")
+    if chain and rag_config is not None and outcome.status == "routed":
         run_generation_for_ticket(ticket_id, rag_config, config.max_iterations, env=env)
         if settings is not None:
             start_ticket_approval(ticket_id, settings, rag_config, config.max_iterations, env=env)

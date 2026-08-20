@@ -3,6 +3,11 @@
 TrackFlow's independently managed FastAPI service for PostgreSQL-backed
 inventory, centralized operational incidents, and suppliers.
 
+> **DEV-55 submission-only branch:** Redis, Celery, and Flower in this branch are coursework
+> infrastructure only. The PR is **DO NOT MERGE**; `compose.coolify.yaml` and production remain
+> unchanged. The controlling specification is
+> [`docs/DEV-55-async-tasks.md`](../../docs/DEV-55-async-tasks.md).
+
 ## Delivery status
 
 Engagement 5 inventory and the Centralized Incident Manager subproject are delivered. Engagement 6
@@ -51,7 +56,7 @@ Engagement 10 Part 1 adds an application-scoped, bounded in-process real-time bu
 `GET /realtime/rfp/stream`. The async SSE handler authenticates only from the existing host-only
 access cookie, scopes subscriptions to `rfp.tickets.<owner_user_uuid>`, sends keep-alive comments,
 and closes at JWT expiry. RFP creation publishes `rfp_ticket_created` after the initial ticket commit
-and before background intake; this notification path imports or calls no model, RAG, or agent code.
+and after successful queue publication; this notification path imports or calls no model, RAG, or agent code.
 `RFP_ENABLED` gates the endpoint and remains off by default.
 
 Engagement 10 Phase 3 adds owner-scoped `chat_sessions` and ordered `chat_messages` at additive
@@ -104,6 +109,61 @@ router (HTTP) -> service (business rules) -> repository (queries) -> SQLModel
 Copy `.env.example` to an untracked `.env`, replace its local-only database password,
 and provide the Identity RS256 public key before exercising protected routes.
 
+## DEV-55 local queue demonstration
+
+Set `RFP_ENABLED=true`, `OPENAI_API_KEY`, and `DEEPSEEK_API_KEY` in the root Compose environment for
+the full RFP demonstration. Never paste these values into commands, logs, screenshots, or commits.
+Then build the submission services, apply migration `20260820_0019`, and start the stack:
+
+```bash
+docker compose build central-api celery-worker flower
+docker compose up -d postgres redis qdrant
+docker compose --profile setup run --rm migrate
+docker compose up -d central-api celery-worker flower
+docker compose ps postgres redis central-api celery-worker flower
+```
+
+Flower is available at `http://127.0.0.1:5555`. Upload a real seed RFP with the existing authenticated
+Back Office flow or the following equivalent request; the response remains Back Office-compatible
+and adds `task_id`:
+
+```bash
+curl -sS -w '\ntime_total=%{time_total}\n' \
+  -H "Authorization: Bearer $TRACKFLOW_DEV55_ACCESS_TOKEN" \
+  -F "file=@/absolute/path/to/a/sanitized-seed-rfp.pdf;type=application/pdf" \
+  http://127.0.0.1:8003/rfp/tickets
+
+curl -sS \
+  -H "Authorization: Bearer $TRACKFLOW_DEV55_ACCESS_TOKEN" \
+  http://127.0.0.1:8003/tasks/REPLACE_WITH_TASK_ID
+```
+
+Only the ticket UUID is queued. To prove worker independence, stop the API after an `analyzing`
+ticket exists, publish that ticket ID directly, and watch the worker complete it:
+
+```bash
+docker compose stop central-api
+docker compose exec celery-worker .venv/bin/python -c \
+  "from central_api.domains.tasks.dispatcher import enqueue_rfp_processing; enqueue_rfp_processing('REPLACE_WITH_TASK_ID')"
+docker compose logs --since=5m celery-worker
+docker compose start central-api
+```
+
+Invoke the repeatable non-production failure path and inspect its three attempts plus DLQ handler:
+
+```bash
+docker compose exec celery-worker .venv/bin/celery \
+  -A central_api.celery_app:celery_app call trackflow.dev55.failure --queue=dev55
+docker compose logs --since=5m celery-worker | grep 'async_task'
+```
+
+The grep output is safe because the worker emits fixed metadata only; review it before attaching it.
+Stop the branch-only services without deleting the persistent evidence volumes:
+
+```bash
+docker compose stop flower celery-worker central-api redis
+```
+
 ## Setup
 
 ```bash
@@ -147,6 +207,7 @@ without confirming the target, recovery posture, and explicit approval.
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | SQLAlchemy PostgreSQL URL |
+| `REDIS_URL` | DEV-55 local Celery broker and result backend; defaults to loopback Redis |
 | `MIGRATION_DATABASE_URL` | Dedicated migration-role URL; mandatory for Alembic in production and never supplied to runtime containers |
 | `APP_ENV` | `production` enables fail-closed migration-role and readiness checks |
 | `RUNTIME_DATABASE_ROLE` | Expected production runtime identity; defaults to `trackflow_runtime` |

@@ -29,6 +29,7 @@ from ...db.session import get_engine
 from ..agents.graph import AgentRunResult
 from ..agents.recorder import persist_run
 from .checkpointer import approval_checkpointer
+from .errors import RetryableRfpProcessingError
 from .evaluators import evaluate_section
 from .generation import draft_section
 from .models import RfpDepartmentSection, RfpFinalDocument, RfpTicket, utc_now
@@ -188,6 +189,7 @@ def start_ticket_approval(
     max_iterations: int,
     *,
     env: str,
+    raise_errors: bool = False,
 ) -> None:
     """Open a paused approval thread per department, then move the ticket to waiting_for_approval."""
     try:
@@ -210,8 +212,10 @@ def start_ticket_approval(
                 ticket.status = "waiting_for_approval"
                 ticket.updated_at = utc_now()
                 repo.save(ticket)
-    except Exception as exc:  # a background worker must never crash the process
+    except Exception as exc:
         logger.warning("rfp_start_approval_failed error_type=%s", type(exc).__name__)
+        if raise_errors:
+            raise RetryableRfpProcessingError("RFP approval setup failed") from exc
 
 
 def submit_decision(

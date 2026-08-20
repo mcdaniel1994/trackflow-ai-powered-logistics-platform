@@ -5,8 +5,8 @@ Alembic owns every shared schema change. Application startup never calls
 inventory revision, which are verified against the disposable PostgreSQL service in
 `../compose.yml`.
 
-The current additive head is `20260818_0018`, which adds owner-scoped Engagement 10
-`chat_sessions` and `chat_messages`. Production migration execution remains part of the normal
-approval-gated deployment path; Phase 3 verification uses only the disposable local PostgreSQL.
-The Engagement 10 implementation is complete and merged through PR #36, while its Phase 6
-production migration and rollout are explicitly deferred.
+The `codex/async-tasks-dev55` coursework branch has local-only additive head `20260820_0019`, which
+adds terminal Celery failure evidence and the RFP `failed` status. It is explicitly not approved for
+production or merge. The `main`/production line remains `20260818_0018`, which adds owner-scoped
+Engagement 10 `chat_sessions` and `chat_messages`; its production migration and rollout remain
+deferred. Migration verification for DEV-55 uses only disposable local PostgreSQL.

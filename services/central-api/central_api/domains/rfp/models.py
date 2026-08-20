@@ -43,6 +43,7 @@ TICKET_STATUS_VALUES: tuple[str, ...] = (
     "under_evaluation",
     "done",
     "discarded",
+    "failed",
 )
 DEPARTMENT_VALUES: tuple[str, ...] = ("warehouse", "lastmile", "reverse")
 APPROVAL_STATUS_VALUES: tuple[str, ...] = ("pending", "approved", "rejected", "changes_requested")
