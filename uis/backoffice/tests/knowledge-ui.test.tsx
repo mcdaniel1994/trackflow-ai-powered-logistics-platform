@@ -230,6 +230,26 @@ describe("Ask knowledge base", () => {
     vi.unstubAllGlobals();
   });
 
+  it("locks the page behind the panel and restores it on close", async () => {
+    // The document kept scrolling under the dialog, and on iOS the browser scrolls
+    // the page to reveal the focused composer when the keyboard opens, which slid
+    // the overlay up and exposed the Back Office beneath it.
+    window.scrollTo(0, 240);
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    const dialog = await screen.findByRole("dialog");
+
+    expect(document.body.style.position).toBe("fixed");
+    expect(document.body.style.overflow).toBe("hidden");
+
+    // The backdrop carries the same label, so scope to the header control.
+    await userEvent.click(within(dialog).getByRole("button", { name: /close chat/i }));
+
+    await waitFor(() => expect(document.body.style.position).not.toBe("fixed"));
+    expect(document.body.style.overflow).not.toBe("hidden");
+  });
+
   it("surfaces a safe server failure in the open chat panel", async () => {
     renderAsk();
     await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
