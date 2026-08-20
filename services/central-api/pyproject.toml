@@ -92,7 +92,8 @@ module = [
 ignore_missing_imports = true
 
 # The LangGraph/LangChain stack (Engagement 8) is typed but transitively pulls numpy, whose 1.26
-# stubs use 3.12-only `type` syntax that mypy rejects under python_version 3.11. Skip following into
+# stubs use 3.12-only `type` syntax that mypy rejects under python_version 3.11. WeasyPrint
+# (Engagement 9 RFP PDF rendering) ships no stubs or py.typed marker at all. Skip following into
 # these third-party libraries (treat as Any) rather than lowering our own strictness.
 [[tool.mypy.overrides]]
 module = [
@@ -104,6 +105,8 @@ module = [
   "langchain_openai.*",
   "numpy",
   "numpy.*",
+  "weasyprint",
+  "weasyprint.*",
 ]
 follow_imports = "skip"
 ignore_missing_imports = true
