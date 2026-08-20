@@ -307,7 +307,7 @@ export function ChatPanel() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="chat-panel-title"
-        className="absolute inset-0 flex bg-white shadow-2xl dark:bg-ink-900 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[min(48rem,calc(100vw-2rem))] sm:border-l sm:border-mist dark:sm:border-ink-600"
+        className="absolute inset-0 flex h-[100dvh] max-h-[100dvh] overflow-hidden bg-white shadow-2xl dark:bg-ink-900 sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[min(48rem,calc(100vw-2rem))] sm:border-l sm:border-mist dark:sm:border-ink-600"
       >
         <aside className="hidden w-56 shrink-0 border-r border-mist bg-neutral-50 p-4 dark:border-ink-600 dark:bg-ink-800 md:block">
           <button type="button" onClick={startNewChat} className="mb-5 flex w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2.5 text-sm font-black text-white hover:bg-navy-deep dark:bg-sky">
@@ -330,23 +330,23 @@ export function ChatPanel() {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex items-center justify-between border-b border-mist px-4 py-3 dark:border-ink-600 sm:px-5">
-            <div>
-              <h2 id="chat-panel-title" className="font-black text-navy-deep dark:text-neutral-100">First-line CX agent</h2>
-              <p className="text-xs text-neutral-400">
+          <header className="flex items-center justify-between gap-3 border-b border-mist px-4 py-3 dark:border-ink-600 sm:px-5">
+            <div className="min-w-0">
+              <h2 id="chat-panel-title" className="truncate font-black text-navy-deep dark:text-neutral-100">First-line CX agent</h2>
+              <p className="truncate text-xs text-neutral-400">
                 {selectedRoute.label} route · {connectionState === "reconnecting" ? "reconnecting…" : connectionState}
               </p>
             </div>
-            <button type="button" onClick={closePanel} aria-label="Close chat" className="flex h-10 w-10 items-center justify-center rounded-lg border border-mist text-navy hover:bg-ivory dark:border-ink-600 dark:text-neutral-100 dark:hover:bg-ink-700">
+            <button type="button" onClick={closePanel} aria-label="Close chat" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-mist text-navy hover:bg-ivory dark:border-ink-600 dark:text-neutral-100 dark:hover:bg-ink-700">
               <X className="h-5 w-5" aria-hidden="true" />
             </button>
           </header>
 
           <div className="border-b border-mist px-4 py-2 dark:border-ink-600 md:hidden">
             <div className="flex items-center gap-2">
-              <button type="button" onClick={startNewChat} className="rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white dark:bg-sky">New chat</button>
+              <button type="button" onClick={startNewChat} className="shrink-0 rounded-lg bg-navy px-3 py-2 text-xs font-bold text-white dark:bg-sky">New chat</button>
               <label htmlFor="mobile-chat-history" className="sr-only">Conversation history</label>
-              <select id="mobile-chat-history" value={activeSession?.session_id ?? ""} onChange={(event) => void openSession(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-mist bg-white px-2 py-2 text-xs text-navy dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100">
+              <select id="mobile-chat-history" value={activeSession?.session_id ?? ""} onChange={(event) => void openSession(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-mist bg-white px-2 py-2 text-base text-navy sm:text-xs dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100">
                 <option value="">Conversation history</option>
                 {sessions.map((session) => <option key={session.session_id} value={session.session_id}>{sessionLabel(session)}</option>)}
               </select>
@@ -364,7 +364,7 @@ export function ChatPanel() {
             {messages.map((message) => (
               <div key={message.message_id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${message.role === "user" ? "bg-navy text-white dark:bg-sky" : "border border-mist bg-neutral-50 text-navy-deep dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100"}`}>
-                  <p className="whitespace-pre-wrap">{message.content}</p>
+                  <p className="whitespace-pre-wrap break-words">{message.content}</p>
                   {message.route_taken ? <p className="mt-2 text-[0.68rem] font-bold uppercase tracking-wide text-neutral-400">Via {routeLabel(message.route_taken)}</p> : null}
                   {message.interrupted ? <p className="mt-2 text-xs italic text-coral">Response interrupted</p> : null}
                 </div>
@@ -378,13 +378,13 @@ export function ChatPanel() {
           <form onSubmit={(event) => { event.preventDefault(); void submit(panelQuestion); }} className="border-t border-mist p-3 dark:border-ink-600 sm:p-4">
             <div className="mb-2 flex items-center gap-2">
               <label htmlFor="panel-agent-route" className="text-xs font-bold text-neutral-500 dark:text-neutral-300">Agent route</label>
-              <select id="panel-agent-route" value={route} onChange={(event) => setRoute(event.target.value as AgentRoute)} className="rounded-lg border border-mist bg-white px-2 py-1.5 text-xs font-bold text-navy dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100">
+              <select id="panel-agent-route" value={route} onChange={(event) => setRoute(event.target.value as AgentRoute)} className="min-w-0 flex-1 rounded-lg border border-mist bg-white px-2 py-1.5 text-base font-bold text-navy sm:flex-none sm:text-xs dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100">
                 {ROUTES.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </div>
             <div className="flex items-end gap-2 rounded-xl border border-mist bg-neutral-50 p-2 focus-within:border-sky dark:border-ink-600 dark:bg-ink-800">
               <label htmlFor="chat-panel-question" className="sr-only">Send a message</label>
-              <textarea ref={panelInputRef} id="chat-panel-question" value={panelQuestion} onChange={(event) => setPanelQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(panelQuestion); } }} rows={2} placeholder="Send a message" className="min-h-[2.75rem] w-full resize-none bg-transparent px-2 py-1.5 text-sm text-navy-deep outline-none dark:text-neutral-100" />
+              <textarea ref={panelInputRef} id="chat-panel-question" value={panelQuestion} onChange={(event) => setPanelQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submit(panelQuestion); } }} rows={2} placeholder="Send a message" className="min-h-[2.75rem] min-w-0 flex-1 resize-none bg-transparent px-2 py-1.5 text-base text-navy-deep outline-none sm:text-sm dark:text-neutral-100" />
               <button type="submit" disabled={status === "connecting" || !panelQuestion.trim()} aria-label={status === "streaming" ? "Interrupt and redirect" : "Send message"} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-navy text-white disabled:opacity-40 dark:bg-sky">
                 {status === "connecting" ? <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" /> : <ArrowUp className="h-5 w-5" aria-hidden="true" />}
               </button>

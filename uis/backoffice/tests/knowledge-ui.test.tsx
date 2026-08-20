@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -145,6 +145,28 @@ describe("Ask knowledge base", () => {
     emit("generation_completed", { generation_id: "g8", message_id: "answer-8", route_taken: "rag" });
 
     expect(screen.getByText("Streamed answer.")).toBeInTheDocument();
+  });
+
+  it("keeps chat form controls at 16px so iOS Safari does not zoom the page", async () => {
+    // Safari force-zooms the whole document when a focused control is under 16px.
+    // That is what made the panel unusable on a phone: the layout was fine, but the
+    // viewport was zoomed and panned, pushing the send button and message bubbles
+    // off-screen. `text-base` is 16px; dropping back to text-sm/text-xs on mobile
+    // silently reintroduces it.
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    const panel = within(await screen.findByRole("dialog"));
+    // Every focusable control inside the panel, not just the composer: focusing the
+    // route or history select zooms the page just as readily.
+    for (const control of [
+      panel.getByLabelText(/send a message/i),
+      panel.getByLabelText(/agent route/i),
+      panel.getByLabelText(/conversation history/i),
+    ]) {
+      expect(control.className).toContain("text-base");
+    }
   });
 
   it("surfaces a safe server failure in the open chat panel", async () => {
