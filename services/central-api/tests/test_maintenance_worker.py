@@ -53,9 +53,8 @@ def test_worker_runs_guard_and_both_prunes(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 2)
     monkeypatch.setattr(maintenance_worker, "prune_agent_traces", lambda: calls.append("traces") or 6)
     monkeypatch.setattr(maintenance_worker, "prune_chat_history", lambda: calls.append("chat") or 7)
-    monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: calls.append("prefect") or 5)
     maintenance_worker.run_worker(stop=stop, schedule=DueSchedule(), tick_seconds=0.01)  # type: ignore[arg-type]
-    assert calls == ["guard", "telemetry", "business", "memory", "traces", "chat", "reporting_logs", "prefect"]
+    assert calls == ["guard", "telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
 
 
 def test_signal_handler_requests_shutdown() -> None:
@@ -84,54 +83,9 @@ def test_failed_daily_prune_is_due_again(monkeypatch: pytest.MonkeyPatch) -> Non
         raise RuntimeError("private diagnostic")
 
     monkeypatch.setattr(maintenance_worker, "prune_telemetry_events", fail_prune)
-    monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: 0)
     maintenance_worker.run_worker(stop=stop, schedule=schedule, tick_seconds=0.001)  # type: ignore[arg-type]
     assert calls == 2
     assert schedule.last_prune_date is None
-
-
-def test_prefect_retention_failure_does_not_repeat_business_prune(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    stop = Event()
-    calls: list[str] = []
-
-    class DueOnce:
-        last_prune_date = None
-
-        def tick(self, **_kwargs: object) -> tuple[bool, bool]:
-            if calls:
-                stop.set()
-                return False, False
-            return False, True
-
-    monkeypatch.setattr(
-        maintenance_worker,
-        "prune_telemetry_events",
-        lambda: calls.append("telemetry") or {"operational": 0, "security": 0},
-    )
-    monkeypatch.setattr(
-        maintenance_worker,
-        "prune_business_events",
-        lambda: calls.append("business") or {"inventory_discrepancies": 0, "stockout_events": 0},
-    )
-    monkeypatch.setattr(
-        maintenance_worker,
-        "prune_reporting_logs",
-        lambda: calls.append("reporting_logs") or {"files_deleted": 0, "bytes_deleted": 0},
-    )
-    monkeypatch.setattr(maintenance_worker, "prune_agent_memory", lambda: calls.append("memory") or 0)
-    monkeypatch.setattr(maintenance_worker, "prune_agent_traces", lambda: calls.append("traces") or 0)
-    monkeypatch.setattr(maintenance_worker, "prune_chat_history", lambda: calls.append("chat") or 0)
-    monkeypatch.setattr(
-        maintenance_worker,
-        "prune_prefect_runs",
-        lambda: (_ for _ in ()).throw(OSError("orchestrator unavailable")),
-    )
-    maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
-
-
 def test_trace_retention_failure_does_not_suppress_other_maintenance(monkeypatch: pytest.MonkeyPatch) -> None:
     stop = Event()
     calls: list[str] = []
@@ -166,10 +120,9 @@ def test_trace_retention_failure_does_not_suppress_other_maintenance(monkeypatch
         "prune_reporting_logs",
         lambda: calls.append("reporting_logs") or {"files_deleted": 0, "bytes_deleted": 0},
     )
-    monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: calls.append("prefect") or 0)
 
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs", "prefect"]
+    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs"]
 
 
 def test_chat_retention_failure_does_not_suppress_other_maintenance(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -206,7 +159,6 @@ def test_chat_retention_failure_does_not_suppress_other_maintenance(monkeypatch:
         "prune_reporting_logs",
         lambda: calls.append("reporting_logs") or {"files_deleted": 0, "bytes_deleted": 0},
     )
-    monkeypatch.setattr(maintenance_worker, "prune_prefect_runs", lambda: calls.append("prefect") or 0)
 
     maintenance_worker.run_worker(stop=stop, schedule=DueOnce(), tick_seconds=0.001)  # type: ignore[arg-type]
-    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs", "prefect"]
+    assert calls == ["telemetry", "business", "memory", "traces", "chat", "reporting_logs"]

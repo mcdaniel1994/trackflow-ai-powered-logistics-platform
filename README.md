@@ -32,12 +32,13 @@ gaps are documented in `docs/runbooks/`.
 
 **Engagement 6** is in progress. Delivered and running in production: a Central API `telemetry`
 domain with exact warehouse metrics, a live operations feed, always-on reporting and maintenance
-workers, approval-gated migrations, dependency-aware readiness, automatic immutable-image rollback,
-and a private, digest-pinned Prefect Server backed by its own PostgreSQL database.
-`reporting.pipeline_runs` is the sole dispatch authority.
+workers, approval-gated migrations, dependency-aware readiness, and automatic immutable-image
+rollback. `reporting.pipeline_runs` is the sole dispatch authority, and the direct SQL executor
+runs inside the reporting worker — Prefect was retired in August 2026
+([retirement note](docs/archive/prefect-orchestration-retirement.md)).
 
-**The weekly business report is working in production.** As of July 28, 2026 the reporting worker,
-Prefect, and reconciled hourly/weekly rollup path are healthy, and the authenticated Back Office
+**The weekly business report is working in production.** As of July 28, 2026 the reporting worker
+and reconciled hourly/weekly rollup path are healthy, and the authenticated Back Office
 serves the first verified six-row weekly snapshot.
 Two owner-approved specifications now cover the remaining work:
 [`spec.md`](docs/planning/remaining_planning/spec.md) for reporting reliability (Phases 6.1–6.4) and
@@ -185,7 +186,10 @@ TrackFlow reflects real-world logistics challenges:
 - Phase 6.4's 48-hour studies and seven-day clean run were waived by the owner, not passed or
   executed. The direct SQL executor passes same-day queue, recovery, parity, and 2× volume gates;
   its production swap is owner-approved and prepared for deployment without a resource-limit
-  change. Deployment verification and separately approved final Prefect removal remain open.
+  change. Prefect was retired in August 2026 under owner approval: the six orchestration containers
+  and their dedicated database are removed from both Compose files, `direct_sql` is the only
+  executor, and the evidence and waivers are recorded in
+  [the retirement note](docs/archive/prefect-orchestration-retirement.md).
 - Independent Phase 6.5 adds the generated 2016–2025 revenue dataset, a fixed-seed strict-recursive
   offline Random Forest baseline, five-fold chronological evaluation, and versioned
   metrics/model/report/chart artifacts.
@@ -341,7 +345,7 @@ Future production changes and the final Supplier Directory retirement remain app
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260728_0013`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived and direct-SQL production swap approved/prepared, deployment verification pending |
+| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260820_0019`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived, direct-SQL swap deployed, and Prefect retired August 2026. Deployment verification of the retirement pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
@@ -435,7 +439,7 @@ trackflow/
 | Frontend | HTML5, Tailwind CSS, vanilla JavaScript, React, Next.js App Router |
 | Language | TypeScript, Python |
 | Backend | Independent FastAPI services under `services/`; Central API uses SQLModel + PostgreSQL |
-| Data | Prefect-orchestrated pipelines, Supabase PostgreSQL |
+| Data | Direct SQL pipelines in a dedicated worker, Supabase PostgreSQL |
 | AI *(planned)* | RAG with a vector store, LangGraph agents, MCP server, semantic search |
 | Infra | npm workspaces, monorepo, Docker, GitHub Actions → GHCR, Coolify on a Hostinger VPS |
 

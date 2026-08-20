@@ -1,5 +1,13 @@
 # PIPELINE_DESIGN — TrackFlow Business Performance Data Pipeline
 
+> **Orchestration superseded (August 2026).** This is the dated Revision 3 approved design
+> and is preserved as a design record. Its Prefect-as-library execution layer and the R2
+> transformation cache were replaced by the in-process direct SQL executor under
+> specification §7.2 and removed entirely; see
+> `docs/archive/prefect-orchestration-retirement.md`. Everything else in this document —
+> the PostgreSQL durable queue, lease/claim-token state machine, Dallas schedule,
+> transactional publication, and the business contract — remains current.
+
 **Deliverable:** Weekly Warehouse & Client Performance Report (Milestone 6, Parts 1–3 consolidated)
 **Status:** Revision 3 approved design, with implementation evidence appended. GATE-8a was accepted
 on 2026-07-14 using the application-managed boto3 mechanism documented in

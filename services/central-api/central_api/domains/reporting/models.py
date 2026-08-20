@@ -306,6 +306,9 @@ class PipelineRun(SQLModel, table=True):
     heartbeat_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     lease_expires_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))
     cache_nonce: UUID | None = Field(default=None, sa_column=Column(PGUUID(as_uuid=True), nullable=True))
+    # Historical correlation for runs executed before the August 2026 Prefect
+    # retirement. Retained nullable and never written; see
+    # docs/archive/prefect-orchestration-retirement.md.
     prefect_flow_run_id: UUID | None = Field(default=None, sa_column=Column(PGUUID(as_uuid=True), nullable=True))
     current_stage: str | None = Field(default=None, sa_column=Column(Text, nullable=True))
     stage_started_at: datetime | None = Field(default=None, sa_column=Column(DateTime(timezone=True), nullable=True))

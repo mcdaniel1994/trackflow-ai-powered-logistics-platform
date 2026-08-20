@@ -88,7 +88,7 @@ fi
 probe_database_url="$(grep -E '^DATABASE_URL=' "$ENV_FILE" | tail -1 | cut -d= -f2- || true)"
 if [[ -n "$probe_database_url" ]]; then
   case "$probe_database_url" in
-    *localhost*|*127.0.0.1*|*example.invalid*|*@postgres:*|*@prefect-postgres:*) ;;
+    *localhost*|*127.0.0.1*|*example.invalid*|*@postgres:*) ;;
     *) die "DATABASE_URL in $ENV_FILE is not clearly disposable/local: refusing to start a probe against it." ;;
   esac
 fi
@@ -117,8 +117,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# A clean slate is what a first production deploy faces: an empty volume forces
-# Prefect's first-boot Alembic migration onto the critical path.
+# A clean slate is what a first production deploy faces: empty volumes force
+# every first-boot initialization onto the critical path.
 if [[ "$WARM" != true ]]; then
   compose down --volumes --remove-orphans --timeout 10 >/dev/null 2>&1 || true
 fi
@@ -172,15 +172,16 @@ done | sort | tee "$REPORT_DIR/services.txt" | while IFS='|' read -r svc state c
   printf '%-32s %-12s %-10s %s\n' "$svc" "$state" "$code" "$health"
 done
 
-# Guard logs carry the fixed tokens that name which check failed. Without these
+# One-shot logs carry the fixed tokens that name which check failed. Without these
 # a failure is indistinguishable from the opaque exit 255 seen in production.
+# Derived from what actually exited rather than a hard-coded list, so a newly
+# added one-shot is covered without editing this script.
 echo
-for guard in prefect-postgres-bootstrap prefect-postgres-guard prefect-version-guard; do
-  if compose ps --all --services 2>/dev/null | grep -qx "$guard"; then
-    echo "--- $guard ---"
-    compose logs --no-color --no-log-prefix "$guard" 2>&1 | tail -15
-  fi
-done
+while IFS='|' read -r svc state _code _health _started _finished; do
+  [[ "$state" == "exited" ]] || continue
+  echo "--- $svc ---"
+  compose logs --no-color --no-log-prefix "$svc" 2>&1 | tail -15
+done < "$REPORT_DIR/services.txt"
 
 compose logs --no-color > "$REPORT_DIR/all-logs.txt" 2>&1 || true
 echo

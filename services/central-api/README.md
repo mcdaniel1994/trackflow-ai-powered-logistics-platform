@@ -121,11 +121,9 @@ Local liveness: `http://127.0.0.1:8002/health/live`. Readiness is
 only the database, image schema floor, inventory columns, and production runtime role. Reporting
 grants, worker/orchestrator state, queue state, publication time, and safe latest failure evidence
 are isolated on `/health/reporting` and never trigger application rollback.
-The maintenance image also runs API-only Prefect terminal-run retention; the separate
-`prefect-db-backup` image owns `pg_dump` and backup R2 access so Central API never receives either.
 Reporting status uses one shared derivation for the reporting verification/API six-state
-`queue_state`. The reporting worker enforces the image-baked Prefect PostgreSQL and version
-contract fail-closed before claiming work; one-shot guards report but do not gate Compose startup.
+`queue_state`. The reporting worker resolves its executor from an allowlist fail-closed before
+claiming work.
 Container health uses `/health/live`; core `/health/ready` is the release gate.
 
 ## Quality gates
@@ -162,8 +160,6 @@ without confirming the target, recovery posture, and explicit approval.
 | `AGENT_MCP_RESOURCE_URL` | Public MCP resource identifier requested during token exchange |
 | `AGENT_MCP_OAUTH_CLIENT_ID` / `AGENT_MCP_OAUTH_CLIENT_SECRET` | Confidential Central API client provisioned through Identity; never logged or persisted in graph state |
 | `SEED_USER_UUID` | Existing local Identity user's UUID for seeded movements |
-| `PREFECT_API_URL` | Internal Prefect API used by maintenance retention; no Prefect DB credential |
-| `PREFECT_RUN_RETENTION_DAYS` | Terminal Prefect history retention, default 30 days |
 | `REPORTING_LOG_PATH` | Reporting-worker persisted log file; production uses `/var/log/trackflow/reporting/reporting-worker.log` and stdout remains active |
 | `REPORTING_LOG_MAX_BYTES` / `REPORTING_LOG_BACKUP_COUNT` | Per-file rotation limits; production uses 10 MiB and 9 backups |
 | `REPORTING_LOG_RETENTION_DAYS` / `REPORTING_LOG_TOTAL_BYTES` | Daily maintenance caps; production uses 14 days and 250 MiB |

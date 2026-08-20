@@ -94,7 +94,6 @@ Postgres drivers are listed in the copyleft table below and used unmodified.
 | [psycopg2-binary](https://pypi.org/project/psycopg2-binary/) | 2.9.12 | LGPL | Python | Direct (`services/central-api`) | PostgreSQL driver; used unmodified as a dynamically-linked dependency |
 | [psycopg](https://pypi.org/project/psycopg/) / psycopg-binary | 3.3.4 | LGPL-3.0-only | Python | Direct (`data`), transitive into `services/central-api` via the `trackflow-data-pipelines` path dependency | PostgreSQL driver; used unmodified |
 | [psycopg-pool](https://pypi.org/project/psycopg-pool/) | 3.3.1 | LGPL-3.0-only | Python | Transitive (`services/central-api` → `langgraph-checkpoint-postgres`) | Connection pool for the durable checkpointer; used unmodified |
-| [text-unidecode](https://pypi.org/project/text-unidecode/) | 1.3 | Artistic License / GPL / GPLv2+ (multi-license) | Python | Transitive (`prefect` → `python-slugify` → `text-unidecode`) | Used unmodified as installed |
 | [certifi](https://pypi.org/project/certifi/) | varies (2026.x) | MPL-2.0 | Python | Transitive (present in every Python service/package venv) | CA bundle; weak/file-level copyleft |
 | [orjson](https://pypi.org/project/orjson/) | 3.11.9 | MPL-2.0 AND (Apache-2.0 OR MIT) | Python | Transitive | Weak/file-level copyleft on the MPL-licensed portion |
 | [pathspec](https://pypi.org/project/pathspec/) | 1.1.1 | MPL-2.0 | Python | Transitive | Weak/file-level copyleft |

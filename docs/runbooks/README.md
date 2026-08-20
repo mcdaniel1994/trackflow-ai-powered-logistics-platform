@@ -34,7 +34,7 @@ to begin, but its production mutations and time-gate exceptions remain separatel
 | [identity-tinydb-backup-restore.md](identity-tinydb-backup-restore.md) | Deferred by portfolio waiver | Future Identity backup, isolated restore, revocation, and key rotation |
 | [telemetry-inventory.md](telemetry-inventory.md) | Living reference | Every telemetry signal: implemented today vs. Engagement 6 vs. deferred, with fields, storage, retention, access, and evidence |
 | [operations-feed.md](operations-feed.md) | Portfolio-production | The live operations feed worker, its single-writer/kill-switch safety, telemetry enablement, and the database-size guard that bounds Supabase Free |
-| [business-performance-pipeline.md](business-performance-pipeline.md) | Phase 6.3 owner-accepted by exception; Phase 6.4 approved to begin | Reporting authority, SQL rollups/reconciliation, idempotent database bootstrap, Prefect durability, operator triage, upgrade, recovery, and rollback |
+| [business-performance-pipeline.md](business-performance-pipeline.md) | Phase 6.4 direct-SQL executor deployed; Prefect retired August 2026 | Reporting authority, SQL rollups/reconciliation, operator triage, recovery, and rollback |
 
 ## Current Deployment Process (summary)
 
@@ -77,7 +77,7 @@ to begin, but its production mutations and time-gate exceptions remain separatel
 - [x] Add rollback steps to the backend deployment runbook.
 - [x] Define and verify Identity, Central API, and Back Office health endpoints.
 - [x] Add repository-side approval-gated SHA deployment and workflow rollback.
-- [x] Complete the approved Prefect hotfix redeployment.
+- [x] Complete the approved orchestration hotfix redeployment.
 - [x] Deploy and live-reconcile the Phase 6.2 shadow rollups.
 - [x] Complete Phase 6.3 rollback drill one: control-plane outage and verified-stale serving.
 - [x] Record Phase 6.3 rollback drill two and observation as waived, not passed, by owner exception.

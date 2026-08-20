@@ -42,6 +42,12 @@ verification is not deployment evidence.
 
 ## July 15, 2026 Prefect startup incident
 
+> **Historical record.** The dedicated-Prefect infrastructure described in this section was
+> retired in August 2026 (`docs/archive/prefect-orchestration-retirement.md`). This account is
+> kept because its lessons about Coolify bind mounts, health chains, and `up -d` blocking still
+> apply to the services that remain. Do not follow its remediation steps literally — the
+> containers, volume, and guards it names no longer exist.
+
 The first dedicated-Prefect release reached Supabase migration `20260716_0010`, but the application
 stack did not become ready. Coolify materialized both relative file bind mounts intended for
 `/docker-entrypoint-initdb.d` as **directories**. PostgreSQL therefore started and accepted
@@ -70,6 +76,12 @@ Do **not** delete or recreate `prefect-db` to recover this incident. The bootstr
 repair that volume in place without touching Supabase or TrackFlow business data.
 
 ## July 15, 2026 deployment exit 255 (bind-mount hotfix redeployment)
+
+> **Historical record.** The dedicated-Prefect infrastructure described in this section was
+> retired in August 2026 (`docs/archive/prefect-orchestration-retirement.md`). This account is
+> kept because its lessons about Coolify bind mounts, health chains, and `up -d` blocking still
+> apply to the services that remain. Do not follow its remediation steps literally — the
+> containers, volume, and guards it names no longer exist.
 
 The redeployment carrying the bootstrap hotfix started the stack correctly — `prefect-postgres`
 healthy, bootstrap exited 0, `prefect-server` healthy, Central API and Identity healthy, Back Office
@@ -235,14 +247,14 @@ Normal production releases use `.github/workflows/container-images.yml` and
    `sha-<40-lowercase-hex>` tag.
 4. Review and approve the waiting GitHub `production` Environment deployment.
 5. The workflow runs the target image's `central-api-migrate`, records before/after revisions,
-   verifies runtime grants, statically checks the pinned Prefect client/server contract, then
+   verifies runtime grants, validates the production Compose file, then
    mutates only the non-preview `TRACKFLOW_IMAGE_TAG`.
 6. It polls Coolify, then gates rollback only on Back Office/Identity/Central core readiness and
-   expected unauthenticated protection. The reporting worker enforces its Prefect PostgreSQL and
+   expected unauthenticated protection. The reporting worker enforces its executor
    digest-mapped version contract before claiming work.
 7. It probes `/api/health/reporting` separately, always uploads bounded JSON evidence, and reports
    degradation without rolling back an otherwise healthy app.
-8. Review the GitHub summary for SHA, revisions, Prefect guards, core readiness, reporting
+8. Review the GitHub summary for SHA, revisions, core readiness, reporting
    verification, smoke tests, and rollback state.
 
 Before enabling the first run, create the GitHub `production` Environment with
@@ -283,13 +295,17 @@ the integration; do not use migrations or seeds as a credential test.
 
 ## Runtime topology
 
-Normal deployment starts `identity`, `central-api`, `backoffice`, `operations-feed`,
-`reporting-worker`, `maintenance-worker`, private `prefect-server`/`prefect-postgres`, and the
-isolated `prefect-db-backup` service. The one-shot PostgreSQL bootstrap must complete before Prefect
-Server or its backup service starts. The two one-shot Prefect guards report on every deployment but
-must **not** gate the reporting worker: `up -d` stays attached until a `service_completed_successfully`
-dependency exits, which is what ended the redeployment as exit 255. The worker enforces the same
-conditions fail-closed at its own startup instead. Do not configure separate dispatcher, runner, prune, backup, or size-guard
+Normal deployment starts `identity`, `central-api`, `backoffice`, `qdrant`, `mcp`,
+`operations-feed`, `reporting-worker`, and `maintenance-worker`.
+
+Prefect was retired in August 2026 (`docs/archive/prefect-orchestration-retirement.md`), removing
+six containers and the `prefect-db` volume from this stack. The lesson its removal did **not**
+retire: a `service_completed_successfully` dependency keeps `up -d` attached until that one-shot
+exits, and Coolify runs its Compose command over SSH under a bounded timeout. Never gate a
+long-running service on a one-shot guard — that is what ended the July 15 redeployment as exit 255.
+Prove such conditions inside the service, fail-closed, at its own startup.
+
+Do not configure separate dispatcher, runner, prune, backup, or size-guard
 cron jobs. Worker services use one replica, read-only filesystems, `/tmp` tmpfs mounts, limits, and
 restart-on-failure.
 
@@ -340,10 +356,6 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
   `curl -D - -X GET …/api/v1/deploy?uuid=…`. The 4.1.2→4.3.6 upgrade made the deploy endpoint
   **POST-only** (`405` on `GET`), fixed by POSTing the webhook in `coolify_release.py`. A `401`/`403`
   means a missing token scope, `404` a wrong path/UUID, `422` a payload mismatch.
-- `prefect-postgres` is running and `pg_isready` succeeds, but `pg_trgm` or `prefect_backup` is
-  absent: inspect `prefect-postgres-bootstrap`. It must complete with the fixed token
-  `prefect_postgres_bootstrap=complete`. Do not wait for PostgreSQL's init directory to rerun and do
-  not delete the named volume.
 - A path under `/docker-entrypoint-initdb.d` appears as `drwx...` in a deployed container: stop and
   treat it as a Compose/platform mount-translation defect. Required init files must be image-baked,
   never production relative bind mounts.
@@ -354,12 +366,11 @@ Stop after any failure and inspect non-secret logs before retrying. Never run
   ceiling is long, or image pull/build time. Reproduce with
   `scripts/release/measure_compose_startup.sh`; do not hunt for the containers, Coolify's cleanup has
   already removed them.
-- `reporting-worker` restarts repeatedly logging `reporting_worker_startup_guard=failed reason=<slug>`:
-  its fail-closed startup guard is rejecting the deployment, and the slug names the cause.
-  `pg_trgm_missing` points at the bootstrap; `flow_run_table_missing` means Prefect never migrated
-  against this database (a SQLite fallback); `server_digest_not_approved` or `server_major_mismatch`
-  mean the pinned server image and the app's Prefect client disagree. The worker never claims work in
-  this state, which is intended — fix the cause rather than bypassing the guard.
+- `reporting-worker` restarts repeatedly logging `reporting_worker_startup_guard=failed
+  reason=unsupported_executor`: `REPORTING_EXECUTOR` is set to something other than `direct_sql`.
+  The most likely cause is a deployment environment still pinned to the retired `prefect` value.
+  The worker never claims work in this state, which is intended — correct the variable rather than
+  bypassing the guard.
 - `required variable TRACKFLOW_IMAGE_TAG is missing a value` before containers
   start means the variable is unavailable in Coolify's build phase. Enable both
   Buildtime and Runtime availability for every required Compose variable.

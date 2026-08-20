@@ -17,7 +17,6 @@ from scripts.prune_agent_memory import prune_once as prune_agent_memory
 from scripts.prune_agent_traces import prune_once as prune_agent_traces
 from scripts.prune_business_events import prune_once as prune_business_events
 from scripts.prune_chat_history import prune_once as prune_chat_history
-from scripts.prune_prefect_runs import prune_once as prune_prefect_runs
 from scripts.prune_reporting_logs import prune_once as prune_reporting_logs
 from scripts.prune_telemetry_events import prune_once as prune_telemetry_events
 
@@ -102,13 +101,6 @@ def run_worker(
                 )
             except Exception as exc:
                 _safe_failure("maintenance_prune_summary", exc)
-            try:
-                deleted_prefect_runs = prune_prefect_runs()
-                logger.info("maintenance_prefect_retention_complete flow_runs=%s", deleted_prefect_runs)
-            except Exception as exc:
-                # Prefect history is not business authority. API outages never block
-                # TrackFlow retention or reporting work and are retried the next day.
-                _safe_failure("prefect_retention", exc)
         stop.wait(tick_seconds)
     logger.info("maintenance_worker_stopped")
 

@@ -1,5 +1,10 @@
 # GATE-8a cache mechanism decision
 
+> **Superseded.** The R2 transformation cache this spike evaluated was removed in August
+> 2026 together with Prefect (`docs/archive/prefect-orchestration-retirement.md`). The
+> executable spike (`r2_cache_spike.py`) was deleted with the `cache` module it imported;
+> this record of the finding is retained. Nothing here describes current behaviour.
+
 **Executed:** 2026-07-14
 
 **Decision:** Use the application-managed boto3 cache in `cache.py`.
