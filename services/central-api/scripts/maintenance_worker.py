@@ -19,6 +19,7 @@ from scripts.prune_chat_history import prune_once as prune_chat_history
 from scripts.prune_movement_ledger import prune_once as prune_movement_ledger
 from scripts.prune_reporting_logs import prune_once as prune_reporting_logs
 from scripts.prune_telemetry_events import prune_once as prune_telemetry_events
+from scripts.reconcile_stock_balances import reconcile_once
 
 logger = logging.getLogger("central_api.maintenance_worker")
 
@@ -58,9 +59,23 @@ def run_worker(
 ) -> None:
     scheduler = schedule or MaintenanceSchedule()
     logger.info("maintenance_worker_started")
+    # A deployment migrates, then swaps containers. Until the swap finishes the
+    # previous image keeps writing movements without maintaining stock_balances,
+    # so every rollover leaves drift that over-states stock. Reconciling here
+    # closes that window as soon as this worker starts on the new image.
+    try:
+        reconcile_once()
+    except Exception as exc:
+        _safe_failure("balance_reconciliation_startup", exc)
     while not stop.is_set():
         guard_due, prune_due = scheduler.tick(now=datetime.now(UTC), monotonic_now=time.monotonic())
         if guard_due:
+            # Also on every tick: the startup pass can itself race a rollover that
+            # is still in progress, so convergence must not depend on one attempt.
+            try:
+                reconcile_once()
+            except Exception as exc:
+                _safe_failure("balance_reconciliation", exc)
             try:
                 guard_once()
             except Exception as exc:

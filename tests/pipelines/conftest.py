@@ -40,7 +40,7 @@ def clean_pipeline_tables(pipeline_engine: Engine) -> Generator[None, None, None
     with pipeline_engine.begin() as connection:
         connection.execute(
             text(
-                "TRUNCATE inventory_discrepancies, stockout_events, stock_exits, stock_entries, stock_balances, "
+                "TRUNCATE inventory_discrepancies, stockout_events, stock_exits, stock_entries, stock_balances, stock_ledger_checkpoints, "
                 "skus, clients, reporting.weekly_warehouse_client_performance, "
                 "reporting.hourly_activity_rollups, reporting.rollup_state, "
                 "reporting.pipeline_runs, reporting.incomplete_weeks, "

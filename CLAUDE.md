@@ -110,7 +110,10 @@ Then read the active engagement brief and the README for every folder being modi
   (`scripts/prune_movement_ledger.py`, FK-ordered and micro-batched), which replaced the separate
   26-week business-event prune — the `ON DELETE RESTRICT` keys into `stock_exits` make those two
   windows inseparable. Design and its `spec.md` §8.4 proof:
-  `docs/design/movement-ledger-retention.md`.
+  `docs/design/movement-ledger-retention.md`. Because a deploy migrates before it swaps containers,
+  the previous image writes movements that never reach `stock_balances`; the maintenance worker
+  therefore reconciles at startup and every guard tick, and `stock_ledger_checkpoints`
+  (`20260820_0021`) keeps balances derivable after retention deletes the movements behind them.
   Independent Phases 6.5.a–b produced an
   owner-accepted offline Random Forest baseline and formal chronological evaluation. The evaluation
   diagnoses overfitting and unstable temporal validation, so it is not approved for operational use;

@@ -70,6 +70,44 @@ class SKU(SQLModel, table=True):
     warehouse: str = Field(sa_column=Column(String(3), nullable=False))
 
 
+class StockLedgerCheckpoint(SQLModel, table=True):
+    """The authoritative balance for one SKU/warehouse as of a ledger prune cutoff.
+
+    Retention deletes old movements, which would otherwise make the balance
+    permanently unverifiable: re-deriving from a 30-day ledger yields
+    `(recent entries) - (recent exits)`, not real stock. Writing this checkpoint
+    *before* each prune preserves the exact value the deleted movements produced,
+    so the balance stays derivable forever as:
+
+        checkpoint.quantity + (entries at/after checkpoint_at) - (exits at/after)
+
+    With no rows here the ledger has never been pruned and derivation runs over
+    the whole ledger, which is the original behaviour. A SKU created after the
+    last checkpoint legitimately has no row and bases from zero.
+
+    `checkpoint_at` is identical across every row -- one prune writes them all in
+    one transaction. A non-uniform value means an interrupted or hand-edited
+    prune, and the balance helpers refuse to run rather than compute from an
+    ambiguous base.
+    """
+
+    __tablename__ = "stock_ledger_checkpoints"
+    __table_args__: ClassVar[tuple[SchemaItem, ...]] = (
+        ForeignKeyConstraint(
+            ["sku_id", "warehouse"],
+            ["skus.id", "skus.warehouse"],
+            name="fk_stock_ledger_checkpoints_sku_warehouse",
+            ondelete="RESTRICT",
+        ),
+        CheckConstraint("warehouse IN ('LA', 'ZGZ')", name="ck_stock_ledger_checkpoints_warehouse"),
+    )
+
+    sku_id: int = Field(primary_key=True, nullable=False)
+    warehouse: str = Field(sa_column=Column(String(3), primary_key=True, nullable=False))
+    quantity: int = Field(nullable=False)
+    checkpoint_at: datetime = Field(sa_column=Column(DateTime(timezone=True), nullable=False))
+
+
 class StockBalance(SQLModel, table=True):
     """The materialized entry-minus-exit balance for one SKU at one warehouse.
 
