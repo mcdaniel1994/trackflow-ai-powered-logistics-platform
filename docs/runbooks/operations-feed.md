@@ -87,6 +87,44 @@ to prevent duplicate execution.
 The July 28 read-only production rescan measured roughly 5.7% growth over the comparison window;
 retain the 15-minute guard cadence and remeasure before changing either threshold.
 
+### Growth trajectory against the reset threshold (spec.md §7.4 item 5)
+
+Measured from the Supabase snapshot of 2026-08-20, at the 15 s feed interval, **with no ledger rows
+deleted** — the movement ledger is deliberately never pruned (`spec.md` line 696), so the guard
+thresholds, not retention, are what bound it.
+
+| Object | Size | Share |
+|---|---|---|
+| `public.stock_exits` | 119.29 MB | 43.1% |
+| `public.stock_entries` | 106.23 MB | 38.4% |
+| `ix_stock_exits_*` | 19.64 MB | 7.1% |
+| `ix_stock_entries_*` | 17.35 MB | 6.3% |
+| `reporting.hourly_activity_rollups` | 15.41 MB | 5.6% |
+| **Total database** | **272.3 MB** | of a 2 GB volume (26% disk) |
+
+The ledger and its indexes are ~95% of the database. At a 15 s tick and a 1–4 movement batch
+(~2.5 average) the feed writes on the order of 14,000 movements/day; against the measured ~185 B
+per ledger row plus index, that is roughly **3 MB/day**.
+
+**That puts the 400 MB soft limit approximately six weeks out from the 2026-08-20 snapshot.**
+Reaching it does not lose data and does not fill the disk — the guard prunes telemetry and
+**pauses the live feed**, and it does not auto-resume. The dashboards go static until an operator
+acts. Treat the soft limit as a scheduled demo outage, not a storage emergency.
+
+Levers, cheapest first:
+
+1. **Raise `OPERATIONS_FEED_INTERVAL_SECONDS`** (Coolify env + restart, no redeploy, no code). 30 s
+   roughly doubles the runway and 60 s roughly quadruples it, at proportionally lower write IO.
+2. **Raise `DB_SIZE_SOFT_LIMIT_MB` / `DB_SIZE_HARD_LIMIT_MB`.** There is real headroom — 450 MB is
+   22% of the 2 GB volume — but re-measure before moving them, and keep the soft/hard gap.
+3. **Owner-approved ledger reset.** The documented destructive path: pause the feed, write the
+   `owner-approved-db-size-reset` note, and let the guard checkpoint, truncate, reseed, and resume.
+
+Note that disk space and disk **IO** are separate budgets. The August 2026 Supabase alert was IO
+budget exhaustion at 26% disk usage; see the covering-index and heartbeat changes in migration
+`20260820_0019` and `worker.py`. Slowing the feed helps both; raising the size thresholds helps
+only the former.
+
 ## Verification
 
 - `python -m scripts.operations_feed` with `OPERATIONS_FEED_ENABLED=true` populates
@@ -111,4 +149,8 @@ retain the 15-minute guard cadence and remeasure before changing either threshol
 - An owner-approved reset still uses a **reset/reseed** (disposable-data) strategy, not
   continuity-preserving ledger compaction; it is never an unattended quota response.
 - No external alerting on the guard's WARNING/ERROR logs yet (tracked with the broader monitoring
-  gap in [README.md](README.md)).
+  gap in [README.md](README.md)). The soft limit pausing the feed is therefore **silent**: the
+  dashboards simply stop advancing. Until alerting exists, re-check `db_size_measured` against the
+  trajectory above periodically rather than waiting to notice static dashboards.
+- Nothing watches the Supabase **disk IO** budget, which is a separate quota from disk space and is
+  what actually alerted in August 2026.
