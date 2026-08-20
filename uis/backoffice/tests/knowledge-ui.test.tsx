@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -109,6 +109,64 @@ describe("Ask knowledge base", () => {
     expect(screen.getByText("Our standard return window is 30 days.")).toBeInTheDocument();
     emit("generation_completed", { generation_id: "g1", message_id: "answer-1", route_taken: "rag" });
     expect(screen.getByText(/via knowledge base/i)).toBeInTheDocument();
+  });
+
+  it("replaces streamed tokens with the server's authoritative answer", async () => {
+    // An output guardrail that fires mid-stream has already emitted the tokens
+    // preceding it. Without replacement the blocked content stays on screen with the
+    // refusal appended -- which is how a rate-disclosure guard ended up displaying
+    // the rate it was blocking.
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "what does delivery cost?");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    emit("token_chunk", { generation_id: "g9", token: "Standard costs 6.40", sequence: 1 });
+    expect(screen.getByText("Standard costs 6.40")).toBeInTheDocument();
+
+    emit("generation_completed", {
+      generation_id: "g9",
+      message_id: "answer-9",
+      route_taken: "reject",
+      answer: "I couldn't return that answer safely.",
+    });
+
+    expect(screen.getByText("I couldn't return that answer safely.")).toBeInTheDocument();
+    expect(screen.queryByText(/6\.40/)).not.toBeInTheDocument();
+  });
+
+  it("keeps streamed content when the server sends no authoritative answer", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    emit("token_chunk", { generation_id: "g8", token: "Streamed answer.", sequence: 1 });
+    emit("generation_completed", { generation_id: "g8", message_id: "answer-8", route_taken: "rag" });
+
+    expect(screen.getByText("Streamed answer.")).toBeInTheDocument();
+  });
+
+  it("keeps chat form controls at 16px so iOS Safari does not zoom the page", async () => {
+    // Safari force-zooms the whole document when a focused control is under 16px.
+    // That is what made the panel unusable on a phone: the layout was fine, but the
+    // viewport was zoomed and panned, pushing the send button and message bubbles
+    // off-screen. `text-base` is 16px; dropping back to text-sm/text-xs on mobile
+    // silently reintroduces it.
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    const panel = within(await screen.findByRole("dialog"));
+    // Every focusable control inside the panel, not just the composer: focusing the
+    // route or history select zooms the page just as readily.
+    for (const control of [
+      panel.getByLabelText(/send a message/i),
+      panel.getByLabelText(/agent route/i),
+      panel.getByLabelText(/conversation history/i),
+    ]) {
+      expect(control.className).toContain("text-base");
+    }
   });
 
   it("surfaces a safe server failure in the open chat panel", async () => {
