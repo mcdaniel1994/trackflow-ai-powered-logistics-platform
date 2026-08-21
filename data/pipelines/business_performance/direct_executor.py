@@ -92,12 +92,18 @@ def _run_sql(operation: Callable[[], T]) -> T:
 
 def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
     """Translate failures into the existing safe queue-level taxonomy."""
+    # Carried through untouched so triage can tell the RollupValidationError
+    # cases apart without reading the code path.
+    reason = getattr(exc, "reason", None)
+    if not isinstance(reason, str):
+        reason = None
     if is_transient_connectivity_failure(exc):
         return PipelineStageError(
             stage=stage,
             error_code="DB_UNAVAILABLE",
             error_type=type(exc).__name__,
             retryable=True,
+            reason=reason,
         )
     if isinstance(exc, SQLAlchemyError):
         error_code: ErrorCode = (
@@ -112,6 +118,7 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
             error_code=error_code,
             error_type=type(exc).__name__,
             retryable=True,
+            reason=reason,
         )
     fallback_error_code: ErrorCode = (
         "LOAD_FAILED" if stage == "load" else "INTERNAL_FAILED"
@@ -123,6 +130,7 @@ def _stage_failure(stage: str, exc: Exception) -> PipelineStageError:
         error_code=fallback_error_code,
         error_type=type(exc).__name__,
         retryable=True,
+        reason=reason,
     )
 
 

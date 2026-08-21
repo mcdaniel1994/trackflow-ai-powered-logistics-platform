@@ -160,6 +160,22 @@ originating failure. Confirm readiness, then have an administrator create a new 
 `DB_UNAVAILABLE`, and `LOCK_UNAVAILABLE` are retryable before exhaustion; validation failures
 require a corrected request.
 
+For `LOAD_FAILED` with `error_type=RollupValidationError`, read the `reason=` token on the
+`reporting_pipeline_failure` log line. One exception class covers several conditions:
+
+| `reason` | Meaning | Action |
+|---|---|---|
+| `reconciliation_mismatch` | Rollups and the raw ledger disagree inside the verifiable window | Real drift. Do not republish; identify the mismatched week before acting. |
+| `no_rollups` | No hourly rollups at or below the run cutoff | Expected only before the first rollup run; otherwise check `REPORTING_HOURLY_ROLLUPS_ENABLED`. |
+| `no_verifiable_window` | Movement retention has overtaken every rolled-up hour | Misconfiguration: retention is shorter than the rollup cadence. Raise `MOVEMENT_RETENTION_DAYS`. |
+| `activation_state_changed` | Another writer moved `rollup_state` mid-transaction | Transient; the retry resolves it. Investigate only if it repeats. |
+| `empty_rollup_window` / `empty_reconciliation_window` | The requested window contains no completed UTC hour | Correct the request; not a pipeline fault. |
+
+Reconciliation covers only the hours that are both still sourced and already rolled up — it starts
+after the movement-retention checkpoint (`stock_ledger_checkpoints.checkpoint_at`) and stops at the
+last computed bucket. Weeks below that lower bound keep their last verified values and are not
+republished, because retention has removed the sources needed to recompute them.
+
 ## Resource limits and external gates
 
 Repository limits remain provisional: reporting worker 768 MiB, maintenance worker 512 MiB. Do not
