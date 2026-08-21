@@ -63,7 +63,10 @@ surfaces the route actually used, and restores ordered 90-day history from the a
 The client queues until open, renders guarded answer deltas progressively, reconnects with capped
 exponential backoff and jitter, replaces cached history with the authoritative persisted and active
 generation snapshot, and supports both Stop and interrupt-with-new-input. No token is exposed to
-browser JavaScript or a URL.
+browser JavaScript or a URL. The mobile sheet follows the complete visual viewport rectangle
+(including keyboard-driven offsets) and coalesces WebKit viewport events. A locally submitted turn
+keeps its explicit acknowledgement/generation lifecycle through empty or user-only snapshots, so
+the question and processing state do not flicker while the server starts the first generation.
 
 Engagement 10 browser implementation is complete and merged to `main` through PR #36. Phase 6
 production rollout is deferred; this closeout does not claim the UI is enabled or deployed in
