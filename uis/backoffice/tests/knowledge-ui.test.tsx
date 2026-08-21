@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const agentMocks = vi.hoisted(() => ({
   createChatSession: vi.fn(),
@@ -75,6 +75,20 @@ function emit(event: string, data: Record<string, unknown>) {
   act(() => socket.options.onEvent({ event, data }));
 }
 
+function stubVisualViewport(initial: { width: number; height: number; offsetTop: number; offsetLeft: number }) {
+  const viewport = Object.assign(new EventTarget(), {
+    ...initial,
+    pageTop: initial.offsetTop,
+    pageLeft: initial.offsetLeft,
+    scale: 1,
+    onresize: null,
+    onscroll: null,
+    onscrollend: null,
+  });
+  vi.stubGlobal("visualViewport", viewport);
+  return viewport;
+}
+
 describe("Ask knowledge base", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -82,6 +96,10 @@ describe("Ask knowledge base", () => {
     agentMocks.listChatSessions.mockResolvedValue([]);
     agentMocks.createChatSession.mockResolvedValue(session);
     agentMocks.getChatSession.mockResolvedValue({ ...session, messages: [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("opens immediately, clears input, and renders progressive server tokens", async () => {
@@ -169,6 +187,28 @@ describe("Ask knowledge base", () => {
     }
   });
 
+  it("pins the whole chat overlay to the visual viewport while the keyboard pans it", async () => {
+    const viewport = stubVisualViewport({ width: 390, height: 520, offsetTop: 84, offsetLeft: 0 });
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "anything");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    const overlay = dialog.parentElement;
+    expect(overlay).not.toBeNull();
+    await waitFor(() => {
+      expect(overlay).toHaveStyle({ top: "84px", left: "0px", width: "390px", height: "520px" });
+    });
+
+    Object.assign(viewport, { width: 844, height: 310, offsetTop: 46, offsetLeft: 12 });
+    act(() => viewport.dispatchEvent(new Event("resize")));
+    act(() => viewport.dispatchEvent(new Event("scroll")));
+
+    await waitFor(() => {
+      expect(overlay).toHaveStyle({ top: "46px", left: "12px", width: "844px", height: "310px" });
+    });
+  });
+
   it("keeps an in-flight question visible when a new session snapshot arrives empty", async () => {
     // A session created moments ago has nothing persisted yet, so its snapshot is
     // empty. Replacing state wholesale erased the question the sender was looking
@@ -186,6 +226,44 @@ describe("Ask knowledge base", () => {
     // Still on screen, and no empty state.
     expect(panel.getByText("what is the return window?")).toBeInTheDocument();
     expect(panel.queryByText(/how can i help\?/i)).not.toBeInTheDocument();
+  });
+
+  it("keeps responding after a snapshot acknowledges the question but has no generation yet", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "what is the return window?");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
+
+    emit("session_snapshot", {
+      session_id: session.session_id,
+      messages: [{
+        message_id: "message-1",
+        role: "user",
+        content: "what is the return window?",
+        interrupted: false,
+      }],
+      active_generation: null,
+    });
+
+    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+    expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
+
+    emit("user_message", {
+      generation_id: "generation-1",
+      message: {
+        message_id: "message-1",
+        role: "user",
+        content: "what is the return window?",
+        interrupted: false,
+      },
+    });
+    expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
+
+    emit("generation_completed", { generation_id: "generation-1", message_id: "answer-1" });
+    expect(panel.queryByText(/agent is responding/i)).not.toBeInTheDocument();
   });
 
   it("adopts an authoritative snapshot for a session that already has history", async () => {
@@ -227,7 +305,6 @@ describe("Ask knowledge base", () => {
     const composer = within(await screen.findByRole("dialog")).getByLabelText(/send a message/i);
     await waitFor(() => expect(document.activeElement).not.toBe(composer));
 
-    vi.unstubAllGlobals();
   });
 
   it("locks the page behind the panel and restores it on close", async () => {
@@ -298,6 +375,58 @@ describe("Ask knowledge base", () => {
 
     await userEvent.click(screen.getByRole("button", { name: /stop response/i }));
     expect(socketMocks.instances[0].interrupt).toHaveBeenLastCalledWith(null, "auto");
+  });
+
+  it("does not go idle when the interrupted generation ends before its redirected turn starts", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "track parcel");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+    emit("user_message", {
+      generation_id: "generation-1",
+      message: { message_id: "question-1", role: "user", content: "track parcel", interrupted: false },
+    });
+    emit("token_chunk", { generation_id: "generation-1", token: "Tracking", sequence: 1 });
+
+    const panel = within(await screen.findByRole("dialog"));
+    await userEvent.type(panel.getByLabelText("Send a message"), "start a return");
+    await userEvent.click(panel.getByRole("button", { name: /interrupt and redirect/i }));
+    emit("generation_interrupted", { generation_id: "generation-1", message_id: "partial-1" });
+
+    expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
+    expect(panel.getByText("start a return")).toBeInTheDocument();
+
+    emit("user_message", {
+      generation_id: "generation-2",
+      message: { message_id: "question-2", role: "user", content: "start a return", interrupted: false },
+    });
+    emit("generation_completed", { generation_id: "generation-2", message_id: "answer-2" });
+
+    expect(panel.queryByText(/agent is responding/i)).not.toBeInTheDocument();
+  });
+
+  it("ignores a late terminal event from the generation that was redirected", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "track parcel");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+    emit("user_message", {
+      generation_id: "generation-1",
+      message: { message_id: "question-1", role: "user", content: "track parcel", interrupted: false },
+    });
+
+    const panel = within(await screen.findByRole("dialog"));
+    await userEvent.type(panel.getByLabelText("Send a message"), "start a return");
+    await userEvent.click(panel.getByRole("button", { name: /interrupt and redirect/i }));
+    emit("user_message", {
+      generation_id: "generation-2",
+      message: { message_id: "question-2", role: "user", content: "start a return", interrupted: false },
+    });
+    emit("generation_interrupted", { generation_id: "generation-1", message_id: "partial-1" });
+
+    expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
+    emit("generation_completed", { generation_id: "generation-2", message_id: "answer-2" });
+    expect(panel.queryByText(/agent is responding/i)).not.toBeInTheDocument();
   });
 
   it("opens a recent conversation without creating a new chat session", async () => {
