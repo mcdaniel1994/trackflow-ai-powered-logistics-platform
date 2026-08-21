@@ -21,7 +21,16 @@ CUTOVER_FEATURE_FLAG: Final = "REPORTING_ROLLUP_CUTOVER_ENABLED"
 
 
 class RollupValidationError(RuntimeError):
-    """Raised when rollup inputs or aggregate invariants are invalid."""
+    """Raised when rollup inputs or aggregate invariants are invalid.
+
+    One exception class covers several distinct conditions, so it carries a
+    stable machine-readable ``reason``. Triage reads that code; the message is
+    never logged, because only the reason is guaranteed free of row data.
+    """
+
+    def __init__(self, message: str, *, reason: str = "unspecified") -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass(frozen=True)
@@ -84,8 +93,13 @@ def rollup_cutover_enabled() -> bool:
 
 def _floor_hour(value: datetime) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
-        raise RollupValidationError("rollup cutoff must be timezone-aware")
+        raise RollupValidationError("rollup cutoff must be timezone-aware", reason="cutoff_not_tz_aware")
     return value.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+
+
+def _ceil_hour(value: datetime) -> datetime:
+    floored = _floor_hour(value)
+    return floored if floored == value.astimezone(UTC) else floored + timedelta(hours=1)
 
 
 def _statement_timeout(connection: Any) -> None:
@@ -165,7 +179,7 @@ def capture_rollup_window(
         if last_reset is not None:
             start = max(start, _floor_hour(last_reset))
         if start >= end:
-            raise RollupValidationError("rollup window contains no completed UTC hour")
+            raise RollupValidationError("rollup window contains no completed UTC hour", reason="empty_rollup_window")
         return RollupWindow(
             start=start,
             end=end,
@@ -470,7 +484,10 @@ def reconcile_hourly_rollups(
     start_at = _floor_hour(start)
     end_at = _floor_hour(cutoff)
     if start_at >= end_at:
-        raise RollupValidationError("reconciliation window contains no completed UTC hour")
+        raise RollupValidationError(
+            "reconciliation window contains no completed UTC hour",
+            reason="empty_reconciliation_window",
+        )
     with engine.begin() as connection:
         _statement_timeout(connection)
         result = _reconciliation_result(
@@ -513,6 +530,65 @@ _WEEKLY_UPSERT_FROM_HOURLY = text(
     "discrepancy_rate = EXCLUDED.discrepancy_rate, "
     "computed_at = EXCLUDED.computed_at"
 )
+
+
+# The pruner records the cutoff it enforced before deleting anything, so this is
+# the authoritative "everything below here is gone" mark. Guarded by to_regclass
+# so the reconciliation still runs against a database predating retention.
+_PRUNED_THROUGH = text(
+    "SELECT CASE WHEN to_regclass('public.stock_ledger_checkpoints') IS NULL THEN NULL "
+    "ELSE (SELECT max(checkpoint_at) FROM stock_ledger_checkpoints) END"
+)
+
+
+def _reconciliation_bounds(connection: Connection, *, cutoff: datetime) -> tuple[datetime, datetime]:
+    """Bound reconciliation to hours that are both still sourced and already rolled up.
+
+    Reconciliation re-aggregates the raw ledger and demands exact equality, so it
+    is only meaningful where both sides are complete. Two things erode that:
+
+    * Movement retention deletes source rows out from under older buckets, so the
+      rollups legitimately retain history the ledger can no longer reproduce.
+    * A week-scoped run recomputes one week but leaves every later hour untouched,
+      so hours after the last rollup have ledger rows and no bucket to match.
+
+    Comparing outside that intersection reports drift that is an artifact of the
+    window rather than real disagreement, which is what turned both conditions
+    into permanent LOAD_FAILED loops.
+    """
+    span = (
+        connection.execute(
+            text(
+                "SELECT min(bucket_start) AS first_bucket, max(bucket_start) AS last_bucket "
+                "FROM reporting.hourly_activity_rollups WHERE source_cutoff_at <= :cutoff"
+            ),
+            {"cutoff": cutoff},
+        )
+        .mappings()
+        .one()
+    )
+    first_bucket = cast(datetime | None, span["first_bucket"])
+    last_bucket = cast(datetime | None, span["last_bucket"])
+    if first_bucket is None or last_bucket is None:
+        raise RollupValidationError(
+            "no hourly rollups are available for activation", reason="no_rollups"
+        )
+
+    start = _floor_hour(first_bucket)
+    pruned_through = cast(datetime | None, connection.scalar(_PRUNED_THROUGH))
+    if pruned_through is not None:
+        # The hour containing the cutoff is only partly deleted, so it can never
+        # reconcile. Start at the first hour retention left whole.
+        start = max(start, _ceil_hour(pruned_through))
+    end = min(_floor_hour(last_bucket) + timedelta(hours=1), _floor_hour(cutoff))
+    if start >= end:
+        # Retention has overtaken the rollups entirely. Publishing unverified
+        # aggregates is worse than stopping, and sane retention never gets here.
+        raise RollupValidationError(
+            "reconciliation window contains no verifiable UTC hour",
+            reason="no_verifiable_window",
+        )
+    return start, end
 
 
 def _week_floor(value: datetime) -> datetime:
@@ -569,29 +645,21 @@ def activate_reconciled_rollups(
                     "published_at": activated_at,
                 },
             )
-        history_start = cast(
-            datetime | None,
-            connection.scalar(
-                text(
-                    "SELECT min(bucket_start) FROM reporting.hourly_activity_rollups WHERE source_cutoff_at <= :cutoff"
-                ),
-                {"cutoff": cutoff},
-            ),
-        )
-        if history_start is None:
-            raise RollupValidationError("no hourly rollups are available for activation")
-        start_at = _floor_hour(history_start)
+        start_at, reconcile_end = _reconciliation_bounds(connection, cutoff=cutoff)
         first_week = _week_floor(start_at)
         if start_at > first_week:
             first_week += timedelta(days=7)
-        current_week = _week_floor(cutoff)
+        # Only republish weeks the reconciliation actually covered. Weeks below
+        # first_week keep their last verified values instead of being rewritten
+        # from rollups whose sources retention has since removed.
+        current_week = min(_week_floor(cutoff), _week_floor(reconcile_end))
         reconciliation = _reconciliation_result(
             connection,
             start=start_at,
-            cutoff=cutoff,
+            cutoff=reconcile_end,
         )
         if not reconciliation.exact:
-            raise RollupValidationError("rollup reconciliation failed")
+            raise RollupValidationError("rollup reconciliation failed", reason="reconciliation_mismatch")
         connection.execute(
             text(
                 "DELETE FROM reporting.weekly_warehouse_client_performance "
@@ -628,7 +696,7 @@ def activate_reconciled_rollups(
             },
         )
         if activation.rowcount != 1:
-            raise RollupValidationError("rollup activation state changed")
+            raise RollupValidationError("rollup activation state changed", reason="activation_state_changed")
     return ActivationResult(hourly_rows, weekly_rows, reconciliation)
 
 

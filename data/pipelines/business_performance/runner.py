@@ -78,12 +78,15 @@ class PipelineStageError(RuntimeError):
         error_code: ErrorCode,
         error_type: str,
         retryable: bool,
+        reason: str | None = None,
     ) -> None:
         super().__init__("pipeline stage failed")
         self.stage = stage
         self.error_code = error_code
         self.error_type = error_type
         self.retryable = retryable
+        # Fixed vocabulary from the raising module; never a message or row data.
+        self.reason = reason
 
 
 def _invoke_executor(executor: RunExecutor, engine: Engine, claim: RunClaim, abort: Event) -> RunMetrics:
@@ -177,12 +180,14 @@ def execute_claim_with_renewal(
             return ClaimOutcome(RunnerStatus.LEASE_LOST)
         except PipelineStageError as exc:
             logger.error(
-                "reporting_pipeline_failure run_id=%s attempt=%s stage=%s error_code=%s error_type=%s",
+                "reporting_pipeline_failure run_id=%s attempt=%s stage=%s error_code=%s "
+                "error_type=%s reason=%s",
                 run_id,
                 claim.attempt,
                 exc.stage,
                 exc.error_code,
                 exc.error_type,
+                exc.reason or "unspecified",
             )
             return ClaimOutcome(
                 RunnerStatus.RETRYABLE if exc.retryable else RunnerStatus.FAILED,

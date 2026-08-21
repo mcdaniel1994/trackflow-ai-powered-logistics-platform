@@ -562,3 +562,137 @@ def test_reconciliation_blocks_discrepancies_without_dispatch_denominator(
     )
     assert result.exact is False
     assert "discrepancy_rate_denominator" in result.mismatches[0].metrics
+
+
+def _prune_through(engine: Engine, sku_id: int, cutoff: datetime) -> None:
+    """Mimic one movement-retention pass: delete below the cutoff, record it."""
+    with engine.begin() as connection:
+        for statement in (
+            "DELETE FROM inventory_discrepancies WHERE detected_at < :cutoff",
+            "DELETE FROM stockout_events WHERE occurred_at < :cutoff",
+            "DELETE FROM stock_exits WHERE created_at < :cutoff",
+            "DELETE FROM stock_entries WHERE created_at < :cutoff",
+        ):
+            connection.execute(text(statement), {"cutoff": cutoff})
+        connection.execute(
+            text(
+                "INSERT INTO stock_ledger_checkpoints "
+                "(sku_id, warehouse, quantity, checkpoint_at) "
+                "VALUES (:sku, 'LA', 0, :cutoff)"
+            ),
+            {"sku": sku_id, "cutoff": cutoff},
+        )
+
+
+def _activated_week(engine: Engine, client_id: UUID) -> tuple[int, ...]:
+    with engine.connect() as connection:
+        return tuple(
+            connection.execute(
+                text(
+                    "SELECT inbound_units_count, outbound_orders_count, "
+                    "stockout_events_count, discrepancy_events_count "
+                    "FROM reporting.weekly_warehouse_client_performance "
+                    "WHERE week_start = :week AND client_id = :client"
+                ),
+                {"week": WEEK, "client": client_id},
+            ).one()
+        )
+
+
+def test_activation_survives_retention_and_freezes_the_pruned_week(
+    pipeline_engine: Engine,
+) -> None:
+    """Retention removes sources under older buckets; that is not rollup drift."""
+    active_client, _inactive_client, sku_id = _seed_dimensions(pipeline_engine)
+    _insert_activity(pipeline_engine, active_client, sku_id)
+    claim = _claim(pipeline_engine)
+    window = capture_rollup_window(pipeline_engine, claim, now=CUTOFF)
+    rows = compute_hourly_rollups(pipeline_engine, window)
+    publish_hourly_rollups(pipeline_engine, claim, window, rows, now=CUTOFF)
+    activate_reconciled_rollups(pipeline_engine, claim, window, now=CUTOFF + timedelta(seconds=1))
+    assert _activated_week(pipeline_engine, active_client) == (12, 1, 1, 1)
+
+    # The first hour's movements are gone, but its bucket still counts them.
+    _prune_through(pipeline_engine, sku_id, WEEK_START + timedelta(hours=1))
+
+    activated = activate_reconciled_rollups(
+        pipeline_engine,
+        claim,
+        window,
+        now=CUTOFF + timedelta(seconds=2),
+    )
+    assert activated.reconciliation.exact is True
+    # The pruned week is no longer fully verifiable, so it keeps its last verified
+    # values instead of being rewritten from sources retention has removed.
+    assert activated.weekly_rows_written == 0
+    assert _activated_week(pipeline_engine, active_client) == (12, 1, 1, 1)
+
+
+def test_activation_ignores_hours_after_the_last_computed_rollup(
+    pipeline_engine: Engine,
+) -> None:
+    """A week-scoped run reconciles to now but only recomputes its own week."""
+    active_client, _inactive_client, sku_id = _seed_dimensions(pipeline_engine)
+    _insert_activity(pipeline_engine, active_client, sku_id)
+    claim = _claim(pipeline_engine)
+    window = capture_rollup_window(pipeline_engine, claim, now=CUTOFF)
+    rows = compute_hourly_rollups(pipeline_engine, window)
+    publish_hourly_rollups(pipeline_engine, claim, window, rows, now=CUTOFF)
+
+    # Movements landing after the last rolled-up hour have no bucket to match.
+    with pipeline_engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO stock_entries "
+                "(sku_id, quantity, reference, warehouse, created_at, user_uuid) "
+                "VALUES (:sku, 11, 'after-last-rollup', 'LA', :at, :user)"
+            ),
+            {
+                "sku": sku_id,
+                "at": CUTOFF + timedelta(hours=1),
+                "user": str(uuid4()),
+            },
+        )
+
+    later = CUTOFF + timedelta(hours=5)
+    activated = activate_reconciled_rollups(
+        pipeline_engine,
+        claim,
+        replace(window, source_cutoff_at=later),
+        rows=rows,
+        now=later + timedelta(seconds=1),
+    )
+    assert activated.reconciliation.exact is True
+    assert _activated_week(pipeline_engine, active_client) == (12, 1, 1, 1)
+
+
+def test_narrowed_window_still_detects_drift_inside_it(
+    pipeline_engine: Engine,
+) -> None:
+    """Bounding the window must not blind reconciliation within the window."""
+    active_client, _inactive_client, sku_id = _seed_dimensions(pipeline_engine)
+    _insert_activity(pipeline_engine, active_client, sku_id)
+    claim = _claim(pipeline_engine)
+    window = capture_rollup_window(pipeline_engine, claim, now=CUTOFF)
+    rows = compute_hourly_rollups(pipeline_engine, window)
+    publish_hourly_rollups(pipeline_engine, claim, window, rows, now=CUTOFF)
+    _prune_through(pipeline_engine, sku_id, WEEK_START + timedelta(hours=1))
+
+    # Overstate a bucket that survives the narrowed lower bound.
+    with pipeline_engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE reporting.hourly_activity_rollups SET inbound_units = inbound_units + 1 "
+                "WHERE bucket_start = :bucket"
+            ),
+            {"bucket": WEEK_START + timedelta(hours=1)},
+        )
+
+    with pytest.raises(RollupValidationError) as failure:
+        activate_reconciled_rollups(
+            pipeline_engine,
+            claim,
+            window,
+            now=CUTOFF + timedelta(seconds=3),
+        )
+    assert failure.value.reason == "reconciliation_mismatch"
