@@ -6,6 +6,8 @@ An AI-powered platform for last-mile delivery and warehouse management.
 
 🔐 **Production Back Office:** [backoffice.forgehub.cloud](https://backoffice.forgehub.cloud/) *(authentication required)*
 
+🎥 **Final Project Demo:** [Watch TrackFlow: AI-Powered Logistics Operating System on YouTube](https://youtu.be/L4NAZUOqlU4)
+
 TrackFlow is a logistics operator running warehouses in Los Angeles and Zaragoza, serving e-commerce brands across the United States and Spain. This repository is the engineering platform that powers the company — a growing monorepo of websites, APIs, AI agents, and data pipelines built to replace manual operations with reliable, automated systems.
 
 ---
