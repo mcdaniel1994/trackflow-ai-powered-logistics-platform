@@ -118,3 +118,12 @@ No commit, push or hosted account change was performed.
 CI follow-up: the auth-package job reported Ruff UP017 in two existing token-test timestamps.
 Tests now use Python 3.11 `datetime.UTC`. Its CI Ruff/mypy/test/build commands passed locally
 (20 tests, 83% statement coverage); no runtime auth code changed. Remote CI remains authoritative.
+
+Docker CI follow-up: `.dockerignore` excluded `docs/public-knowledge-base` despite the new
+Dockerfile COPY. Added only the matching directory/Markdown exceptions. The full
+`docker build --platform linux/amd64 -f docker/central-api.Dockerfile` succeeded locally.
+Offline image inspection confirmed all four corpus files are readable, the support module imports,
+runtime UID is 10001 and no `.env*` files were packaged. Existing exclusions remain in place.
+All nine release-check jobs passed in GitHub run `38600501581`; its failed Central API image step
+is addressed by this correction. New remote image-build results remain pending. No image was
+published or deployed by the local check; no live AI/indexing operation ran.

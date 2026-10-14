@@ -39,7 +39,11 @@
   Hosted Identity was not changed; matching email maintenance is documented before rollout.
   CI follow-up: auth test timestamps now use `datetime.UTC`, resolving reported Ruff UP017.
   Auth-package CI commands pass locally: lint, mypy, 20 tests / 83% coverage, wheel/sdist builds.
-  Runtime authentication code is unchanged; remote CI result is still pending.
+  Runtime authentication code is unchanged; all nine remote release-check jobs passed in run
+  `38600501581`. Its Central API image build failed because `.dockerignore` excluded the public corpus.
+  Added the explicit public Markdown corpus exception; full local Linux AMD64 image build and
+  offline inspection passed (readable corpus, support import, UID 10001, no environment files).
+  Updated remote image-build result remains pending.
 
 
 - Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):

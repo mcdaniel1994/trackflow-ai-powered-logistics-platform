@@ -194,3 +194,8 @@ cannot enforce that cross-service reference.
 fields and a SHA-256 idempotency key, and reports aggregate counts plus safe row/field
 rule identifiers. Never run it against `scripts/incidents-trackflow.csv` without the
 explicit authorization required by `.agents/rules/sensitive-local-datasets.md`.
+
+Docker builds copy the curated public corpus into `/app/docs/public-knowledge-base`. Root
+`.dockerignore` must explicitly allow that directory and its Markdown files alongside the internal
+corpus. The Engagement 11 CI correction was verified with a complete Linux AMD64 image build
+and offline corpus/import/environment-file inspection; no indexing occurs during a build.

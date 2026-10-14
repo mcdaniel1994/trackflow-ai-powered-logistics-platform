@@ -14,6 +14,8 @@ matching local Identity login verified with the same account ID and history owne
 Identity maintenance remains part of the deferred rollout.
 
 CI follow-up: auth-test UTC aliases corrected; package lint/types/build and 20 tests pass locally.
+All nine remote release-check jobs passed on the prior run. The public corpus is now allowlisted
+in `.dockerignore`; a complete local Linux AMD64 Central API image build and corpus inspection passed.
 
 ## Background
 
