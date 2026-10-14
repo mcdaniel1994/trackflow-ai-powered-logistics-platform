@@ -153,3 +153,64 @@ def test_chat_query_threads_session_persists_messages_and_never_traces_content(
             ("user", "What is the return window?"),
             ("assistant", "The return window is 30 days."),
         ]
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        (None, "New conversation"),
+        ("  \n  ", "New conversation"),
+        ("  Spain\n returns   policy ", "Spain returns policy"),
+        ("¿Cuál es la política de devoluciones?", "¿Cuál es la política de devoluciones?"),
+        ("a" * 61, "a" * 60 + "…"),
+        (
+            "How can I request a return for an item delivered internationally yesterday?",
+            "How can I request a return for an item delivered…",
+        ),
+    ],
+)
+def test_conversation_title(question: str | None, expected: str) -> None:
+    from central_api.domains.chat.service import conversation_title
+
+    assert conversation_title(question) == expected
+
+
+def test_list_titles_come_from_first_user_message_in_one_owner_scoped_query(
+    app: FastAPI,
+    client: TestClient,
+    settings: Settings,
+    auth_headers: dict[str, str],
+    engine: Engine,
+) -> None:
+    from sqlalchemy import event
+
+    _enable_chat(app, settings)
+    ids = [client.post("/chat/sessions", headers=auth_headers).json()["session_id"] for _ in range(3)]
+    with Session(engine) as database:
+        repository = ChatRepository(database)
+        for session_id in ids[:2]:
+            repository.append_message_for_user(
+                session_id=session_id, user_id=OWNER, role="assistant", content="Welcome"
+            )
+            repository.append_message_for_user(
+                session_id=session_id, user_id=OWNER, role="user", content="  Spain\nreturns policy  "
+            )
+            repository.append_message_for_user(
+                session_id=session_id, user_id=OWNER, role="user", content="Another topic"
+            )
+        database.commit()
+        statements: list[str] = []
+
+        def track(_conn: Any, _cursor: Any, statement: str, *_args: Any) -> None:
+            statements.append(statement)
+
+        event.listen(engine, "before_cursor_execute", track)
+        try:
+            rows = repository.list_sessions_for_user(OWNER)
+        finally:
+            event.remove(engine, "before_cursor_execute", track)
+        assert len(statements) == 1
+        assert len(rows) == 3
+    listed = client.get("/chat/sessions", headers=auth_headers).json()
+    assert {row["title"] for row in listed} == {"Spain returns policy", "New conversation"}
+    assert client.get(f"/chat/sessions/{ids[0]}", headers=auth_headers).json()["title"] == "Spain returns policy"

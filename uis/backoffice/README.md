@@ -74,6 +74,33 @@ production.
 
 ## Local Development
 
+Engagement 11 renames the employee chat **TrackFlow Assistant** and leads desktop/mobile history
+with response-only first-question titles, keeping dates secondary. Immediate provisional titles
+reconcile with persisted messages and safe failure recovery; technical agent IDs stay compatible.
+The Talent Pipeline heading now covers all roles and its Refresh control re-reads sandbox records.
+
+October 14 local live verification passed at `http://127.0.0.1:3006`: a Careers sample reached the
+same configured sandbox, authenticated detail loaded, and stage/note updates persisted. Local
+public-support relay is enabled in ignored `.env`; hosted rollout remains deferred. Restart and
+verification evidence is in the customer-demo runbook.
+
+The fixed `/api/public-support/query` relay uses server authentication and no staff cookies. It
+requires `PUBLIC_SUPPORT_ENABLED=true` and a server-only `WEBSITE_GATEWAY_SECRET` matching Website
+and Central API. Public collection, provider keys and quotas remain Central API responsibilities.
+Match `TALENT_API_URL` with Website's setting for the careers demo.
+
+Local mocked cross-app verification:
+`npm exec --workspace trackflow-backoffice playwright test -- --config playwright.customer-demo.config.ts`.
+It starts both apps and a disposable sandbox/Identity fixture, then checks application, login,
+candidate stage and note persistence. Hosted rollout remains separate; see
+[the runbook](../../docs/runbooks/customer-demo.md).
+
+For the website preview already running on port 3005, use
+`npm exec --workspace trackflow-backoffice playwright test -- --config playwright.support-layout.config.ts`.
+This checks mobile/desktop footer hit targets, launcher geometry, greetings and disabled policy
+feedback on the home and careers pages. Dedicated cross-app/website suites are excluded from the
+default Back Office-only Playwright configuration.
+
 ```bash
 npm run dev --workspace trackflow-backoffice
 ```
@@ -114,5 +141,10 @@ Do not expose service URLs or token material through `NEXT_PUBLIC_*` values.
 The login page's demo-account controls only autofill the published demo credentials; they do not
 create users or bypass Identity. Create those accounts only in an isolated demo Identity store with
 disposable data, never in production.
+
+The Admin Demo card and autofill use `admin@trackflow.com`; Employee Demo uses
+`employee@trackflow.com`. The local admin's email was updated October 14 while preserving its ID,
+password, role, jurisdiction and history ownership. An existing hosted demo Identity must have the
+matching admin email before this UI is deployed; deployment does not rename database users.
 
 No customer emails should be rendered in the backoffice UI. Supplier contact emails are accepted by the create form for the local demo, but the `/suppliers` table must render only "Contact on file" from `has_contact_email`, never the raw email value. The `/suppliers/[id]` detail page may reveal the supplier contact email only through its explicit reveal control.

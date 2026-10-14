@@ -16,6 +16,7 @@ COPY packages/trackflow_auth packages/trackflow_auth
 COPY packages/trackflow_incidents packages/trackflow_incidents
 COPY data data
 COPY docs/company-knowledge-base docs/company-knowledge-base
+COPY docs/public-knowledge-base docs/public-knowledge-base
 COPY services/central-api services/central-api
 WORKDIR /app/services/central-api
 RUN uv sync --frozen --no-dev \

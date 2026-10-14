@@ -42,7 +42,7 @@ describe("LoginForm", () => {
     const passwordInput = screen.getByLabelText(/password/i);
 
     await user.click(screen.getByRole("button", { name: /admin demo/i }));
-    expect(emailInput).toHaveValue("corymcdaniel01@gmail.com");
+    expect(emailInput).toHaveValue("admin@trackflow.com");
     expect(passwordInput).toHaveValue("password123");
     expect(passwordInput).toHaveAttribute("type", "password");
     expect(screen.getByRole("status")).toHaveTextContent(/admin demo credentials filled in/i);

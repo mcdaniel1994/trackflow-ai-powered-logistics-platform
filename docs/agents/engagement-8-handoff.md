@@ -156,7 +156,7 @@ run **locally**, central-api can too:
   `identity.cli create_admin(name, email, password)`.
 - Back Office (local): from `uis/backoffice`, `CENTRAL_API_URL=http://localhost:8003
   IDENTITY_API_URL=http://localhost:8002 AUTH_COOKIE_SECURE=false npm run dev` → **http://localhost:3000**.
-- Demo login accounts (match the login page autofill): `corymcdaniel01@gmail.com` / `password123` and
+- Demo login accounts (match the login page autofill): `admin@trackflow.com` / `password123` and
   `employee@trackflow.com` / `password123`.
 - These local dev servers are session-scoped background processes; they get killed at session
   boundaries — restart as needed.

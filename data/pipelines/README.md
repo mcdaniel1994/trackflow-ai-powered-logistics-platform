@@ -20,3 +20,8 @@ Phase 6.4 replaced the Prefect executor with `direct_sql`, which runs inside the
 against PostgreSQL only. `REPORTING_EXECUTOR` remains an allowlisted selector that fails closed;
 `direct_sql` is its one accepted value. Prefect was retired in August 2026 — see
 `docs/archive/prefect-orchestration-retirement.md`.
+
+Engagement 11 adds opt-in public-support options to `rag.py`: bounded I/O with no retries,
+English/Spanish answer selection and untrusted conversational context. Current retrieved passages
+supply facts. Caller configuration pins the isolated public collection; existing internal callers
+retain their behavior. No public content or history is stored by this package.

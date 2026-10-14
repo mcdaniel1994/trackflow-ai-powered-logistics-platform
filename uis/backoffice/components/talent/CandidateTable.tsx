@@ -182,7 +182,7 @@ export function CandidateTable() {
                 : `${candidates.length} candidate${candidates.length === 1 ? "" : "s"} on this page`}
           </p>
         </div>
-        {loading ? <Spinner label="Updating" /> : null}
+        <div className="flex items-center gap-3">{loading ? <Spinner label="Updating" /> : null}<Button variant="secondary" disabled={loading} onClick={() => setReloadKey((key) => key + 1)}>Refresh</Button></div>
       </div>
 
       {error ? (

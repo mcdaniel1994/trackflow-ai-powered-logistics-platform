@@ -7,6 +7,7 @@ Qdrant client; ``query`` is tested with ``retrieve`` and the generation client b
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from types import SimpleNamespace
 from typing import Any
 
@@ -222,6 +223,70 @@ def test_query_returns_generated_answer_not_raw_chunks(
     user_message = stub.received["messages"][-1]["content"]
     assert chunk_text in user_message
     assert stub.received["model"] == "deepseek-chat"
+
+
+def test_public_generation_bounds_io_and_treats_history_as_untrusted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stub = _StubChat("La política pública establece 30 días.")
+    options: dict[str, Any] = {}
+
+    def with_options(**kwargs: Any) -> _StubChat:
+        options.update(kwargs)
+        return stub
+
+    monkeypatch.setattr(stub, "with_options", with_options, raising=False)
+    monkeypatch.setattr(rag, "_chat_client", lambda *_a, **_k: stub)
+    result = rag.generate_answer(
+        "¿Y las devoluciones?",
+        [{"text": "Standard return window: 30 days."}],
+        replace(
+            _config(), collection="trackflow_public", generation_timeout_seconds=15.0
+        ),
+        "ES",
+        answer_language="es",
+        recent_context=[("Earlier question", "Unverified assertion")],
+    )
+    assert result == "La política pública establece 30 días."
+    assert options == {"timeout": 15.0, "max_retries": 0}
+    request = stub.received
+    assert request["max_tokens"] == 1024
+    assert (
+        "stream" not in request
+        and "tools" not in request
+        and "response_format" not in request
+    )
+    system, user = request["messages"]
+    assert "Answer in Spanish." in system["content"]
+    assert "Sofía" not in system["content"] and "Miguel" not in system["content"]
+    assert (
+        "<untrusted_history>" in user["content"]
+        and "Unverified assertion" in user["content"]
+    )
+    assert "current evidence alone supplies facts" in user["content"]
+    assert "memory_candidate" not in user["content"]
+    with pytest.raises(ValueError, match="answer_language"):
+        rag.generate_answer("q", [], _config(), "ES", answer_language="fr")
+
+
+def test_public_embedding_disables_retries_and_sets_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options: dict[str, Any] = {}
+    client = SimpleNamespace(
+        embeddings=SimpleNamespace(
+            create=lambda **_k: SimpleNamespace(data=[SimpleNamespace(embedding=[0.1])])
+        )
+    )
+
+    def with_options(**kwargs: Any) -> Any:
+        options.update(kwargs)
+        return client
+
+    client.with_options = with_options
+    monkeypatch.setattr(rag, "_embeddings_client", lambda *_a: client)
+    assert rag.embed("q", replace(_config(), request_timeout_seconds=5.0)) == [0.1]
+    assert options == {"timeout": 5.0, "max_retries": 0}
 
 
 def test_query_handles_empty_retrieval_honestly(

@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     seed_user_uuid: str | None = None
     # RAG knowledge base (Engagement 7). The query endpoint is disabled unless a
     # vector store and both model API keys are configured; see docs/rag/rag-design.md.
+    public_support_enabled: bool = False
+    website_gateway_secret: SecretStr = SecretStr("")
+    # Dedicated collection is fixed: never point public support at internal knowledge.
     rag_enabled: bool = False
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None

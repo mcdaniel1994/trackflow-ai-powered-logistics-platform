@@ -46,9 +46,7 @@ def test_schema_has_exact_chat_entities_and_ordering_indexes(engine: Engine) -> 
         "interrupted",
         "created_at",
     }
-    assert "ix_chat_sessions_user_updated" in {
-        index["name"] for index in inspector.get_indexes("chat_sessions")
-    }
+    assert "ix_chat_sessions_user_updated" in {index["name"] for index in inspector.get_indexes("chat_sessions")}
     message_indexes = {index["name"]: index for index in inspector.get_indexes("chat_messages")}
     assert message_indexes["uq_chat_messages_session_sequence"]["unique"] is True
 
@@ -78,7 +76,8 @@ def test_repository_reads_sessions_and_messages_only_for_owner(engine: Engine) -
 
         assert first_message is not None and first_message.sequence == 1
         assert second_message is not None and second_message.sequence == 1
-        assert [row.session_id for row in repository.list_sessions_for_user(FIRST_OWNER)] == [first.session_id]
+        rows = repository.list_sessions_for_user(FIRST_OWNER)
+        assert [(row.session_id, title) for row, title in rows] == [(first.session_id, "Where is my parcel?")]
         assert repository.get_session_for_user(first.session_id, SECOND_OWNER) is None
         assert repository.messages_for_user(first.session_id, SECOND_OWNER) == []
         assert [row.content for row in repository.messages_for_user(first.session_id, FIRST_OWNER)] == [

@@ -44,6 +44,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 | **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |
 | **Engagement 9** — agentic workflows (RFP desk) | [`09_agentic_workflows/`](09_agentic_workflows/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 10** — real-time systems (SSE + WebSocket) | [`10_realtime/`](10_realtime/), [`spec-10-realtime.md`](spec-10-realtime.md) | ✅ approved | ✅ Implementation complete — PRs #35 and #36 merged; Phase 6 production rollout deferred |
+| **Engagement 11** — customer demo | [`spec-11-customer-demo.md`](spec-11-customer-demo.md) | ✅ owner approved 2026-10-13 | Local implementation and live demo verified; hosted rollout deferred |
 | **Cross-cutting backlog** | [`important_considerations/others.md`](important_considerations/others.md) | ❌ none | Unscheduled; fold into the engagement that needs it |
 
 ---

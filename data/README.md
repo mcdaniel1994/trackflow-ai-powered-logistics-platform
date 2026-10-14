@@ -69,6 +69,12 @@ uv run --project data --extra dev pytest -c data/pyproject.toml tests/pipelines 
 uv build --project data
 ```
 
+Engagement 11's public-support path reuses `pipelines/rag.py` with opt-in bounded SDK timeouts,
+disabled retries, English/Spanish generation, and untrusted previous-exchange context. Existing
+callers retain their defaults. Public factual answers use only current retrieved passages, with
+no memory generation, tool calls or streaming. Curated public indexing targets `trackflow_public`
+via Central API's `rag-index --public`; see [the runbook](../docs/runbooks/customer-demo.md).
+
 Run the opt-in Phase 6.2 production-volume gate only against the disposable local PostgreSQL on
 `127.0.0.1:55432`; it loads and then removes 2.12 million deterministic source/event rows:
 
