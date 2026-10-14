@@ -60,6 +60,7 @@ function renderAsk() {
 }
 
 const session = {
+  title: "New conversation",
   session_id: "11111111-1111-4111-8111-111111111111",
   agent_id: "first_line_cx" as const,
   user_id: "owner",
@@ -109,7 +110,7 @@ describe("Ask knowledge base", () => {
     await userEvent.type(input, "return window?");
     await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
 
-    expect(screen.getByRole("dialog", { name: /first-line cx agent/i })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /TrackFlow Assistant/i })).toBeInTheDocument();
     expect(input).toHaveValue("");
     await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
     const socket = socketMocks.instances[0];
@@ -219,12 +220,12 @@ describe("Ask knowledge base", () => {
     await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
 
     const panel = within(await screen.findByRole("dialog"));
-    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+    expect(panel.getByText("what is the return window?", { selector: "p" })).toBeInTheDocument();
 
     emit("session_snapshot", { session_id: "s1", messages: [] });
 
     // Still on screen, and no empty state.
-    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+    expect(panel.getByText("what is the return window?", { selector: "p" })).toBeInTheDocument();
     expect(panel.queryByText(/how can i help\?/i)).not.toBeInTheDocument();
   });
 
@@ -248,7 +249,7 @@ describe("Ask knowledge base", () => {
       active_generation: null,
     });
 
-    expect(panel.getByText("what is the return window?")).toBeInTheDocument();
+    expect(panel.getByText("what is the return window?", { selector: "p" })).toBeInTheDocument();
     expect(panel.getByText(/agent is responding/i)).toBeInTheDocument();
 
     emit("user_message", {
@@ -284,7 +285,7 @@ describe("Ask knowledge base", () => {
     expect(panel.getByText("earlier question")).toBeInTheDocument();
     expect(panel.getByText("earlier answer")).toBeInTheDocument();
     // The unacknowledged question is carried alongside the recovered history.
-    expect(panel.getByText("hello")).toBeInTheDocument();
+    expect(panel.getByText("hello", { selector: "p" })).toBeInTheDocument();
   });
 
   it("dismisses the on-screen keyboard after sending on a touch device", async () => {
@@ -435,9 +436,34 @@ describe("Ask knowledge base", () => {
 
     await userEvent.click(await screen.findByRole("button", { name: /resume recent conversation/i }));
 
-    expect(await screen.findByRole("dialog", { name: /first-line cx agent/i })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: /TrackFlow Assistant/i })).toBeInTheDocument();
     // Opening issues no write: a session is created only when the first message is sent.
     expect(agentMocks.createChatSession).not.toHaveBeenCalled();
+  });
+
+  it("shows persisted titles in desktop history and the mobile selector after reopening", async () => {
+    agentMocks.listChatSessions.mockResolvedValue([{ ...session, title: "¿Cuál es la política de devoluciones?" }]);
+    renderAsk();
+    await userEvent.click(await screen.findByRole("button", { name: /resume recent conversation/i }));
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByRole("button", { name: /¿Cuál es la política de devoluciones/ })).toBeInTheDocument();
+    expect(panel.getByRole("option", { name: /¿Cuál es la política de devoluciones/ })).toBeInTheDocument();
+  });
+
+  it("reconciles the provisional first question title only after persistence", async () => {
+    renderAsk();
+    await userEvent.type(screen.getByLabelText(/ask a question/i), "Spain returns policy");
+    await userEvent.click(screen.getByRole("button", { name: /^ask$/i }));
+    await waitFor(() => expect(socketMocks.instances).toHaveLength(1));
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByRole("option", { name: /Spain returns policy/ })).toBeInTheDocument();
+    agentMocks.listChatSessions.mockResolvedValue([{ ...session, title: "New conversation" }]);
+    emit("generation_failed", { detail: "Unavailable" });
+    await waitFor(() => expect(panel.getByRole("option", { name: /New conversation/ })).toBeInTheDocument());
+    expect(panel.queryByRole("option", { name: /Spain returns policy/ })).not.toBeInTheDocument();
+    agentMocks.listChatSessions.mockResolvedValue([{ ...session, title: "Spain returns policy" }]);
+    emit("user_message", { message: { message_id: "persisted", role: "user", content: "Spain returns policy" } });
+    await waitFor(() => expect(panel.getByRole("option", { name: /Spain returns policy/ })).toBeInTheDocument());
   });
 
   it("restores an owner session, accepts its authoritative snapshot, and closes with Escape", async () => {

@@ -65,6 +65,8 @@ services:
       traefik.http.routers.trackflow-realtime.tls.certresolver: "letsencrypt"
       traefik.http.services.trackflow-realtime.loadbalancer.server.port: "8000"
     environment:
+      PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
+      WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?required}
       CENTRAL_API_CORS_ORIGINS: https://backoffice.forgehub.cloud
@@ -148,6 +150,8 @@ services:
     pull_policy: always
     expose: ["3000"]
     environment:
+      PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
+      WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       IDENTITY_API_URL: http://identity:8000
       CENTRAL_API_URL: http://central-api:8000
       TALENT_API_URL: ${TALENT_API_URL:?required}

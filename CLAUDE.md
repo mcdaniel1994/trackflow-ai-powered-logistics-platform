@@ -47,6 +47,11 @@ Then read the active engagement brief and the README for every folder being modi
 
 ## Where New Engagement Code Goes
 
+- **Engagement 11** — `uis/website/`, `uis/backoffice/`, `services/central-api/central_api/domains/public_support/`, `data/`. Local customer-demo implementation verified; see `docs/briefs/11-customer-demo.md` and `docs/runbooks/customer-demo.md`. Local public indexing, live policy answers and fictional sandbox writes verified October 14; Admin Demo email changed to `admin@trackflow.com` with local sign-in verified; test-only CI follow-up in `packages/trackflow_auth/tests/` and public-corpus Docker context correction verified locally; hosted rollout remains gated.
+
+  October 14 preview corrections keep public chat clear of the footer, add static greetings and
+  explicit disabled-policy feedback. Dedicated website/cross-app browser checks use their own configs.
+
 - **Engagement 1** - delivered in `apps/marketing-site/`  
   Built; code retired June 2026. Surface lives at `uis/website/` — see `docs/archive/marketing-site-retirement.md`.
 
@@ -220,7 +225,7 @@ Then read the active engagement brief and the README for every folder being modi
   `lib/chat/panel-context.tsx`) from any route; the top Business/Technical view toggle and
   `TechnicalOverview` were removed.
 
-- **Engagement 11+** - planned from `docs/planning/remaining_planning/`.
+- **Engagement 12+** - planned from `docs/planning/remaining_planning/`.
   Read its `README.md` before planning or implementing: it holds the index, the sequence, and the
   precedence rule between owner-approved specifications and bootcamp planning inputs (which are
   requirements, not architecture). A project there with no approved specification is not ready to

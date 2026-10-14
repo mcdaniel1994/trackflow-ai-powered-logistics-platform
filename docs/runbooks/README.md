@@ -28,6 +28,7 @@ to begin, but its production mutations and time-gate exceptions remain separatel
 
 | Runbook | Status | Scope |
 |---|---|---|
+| [customer-demo.md](customer-demo.md) | Locally verified; hosted enablement gated | Chat history, fictional careers sandbox, public-only support collection/gateway and quota controls |
 | [frontend-vercel-deployment.md](frontend-vercel-deployment.md) | Partial (gaps noted) | How the public website is built and deployed via Vercel |
 | [backend-coolify-deployment.md](backend-coolify-deployment.md) | SHA deployment verified; Phase 6.3 drill one passed | Approval-gated migration, SHA deployment, readiness/smoke verification, Compose incident recovery, and automatic image rollback |
 | [supabase-migrations.md](supabase-migrations.md) | Hardened command verified locally; production credential rotation pending | Two-role setup, database CREATE grant, automated grants, disposable-data waiver, and recovery |

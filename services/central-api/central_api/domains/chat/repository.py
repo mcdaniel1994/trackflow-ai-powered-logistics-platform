@@ -26,17 +26,24 @@ class ChatRepository:
             )
         ).one_or_none()
 
-    def list_sessions_for_user(self, user_id: str, *, limit: int = 50) -> list[ChatSession]:
+    def list_sessions_for_user(self, user_id: str, *, limit: int = 50) -> list[tuple[ChatSession, str | None]]:
         if limit < 1 or limit > 100:
             raise ValueError("limit must be between 1 and 100")
-        return list(
-            self.session.exec(
-                select(ChatSession)
-                .where(ChatSession.user_id == user_id)
-                .order_by(ChatSession.updated_at.desc(), ChatSession.session_id)  # type: ignore[attr-defined]
-                .limit(limit)
-            ).all()
+        first_question = (
+            select(ChatMessage.content)
+            .where(ChatMessage.session_id == ChatSession.session_id, ChatMessage.role == "user")
+            .order_by(ChatMessage.sequence)  # type: ignore[arg-type]
+            .limit(1)
+            .correlate(ChatSession)
+            .scalar_subquery()
         )
+        rows = self.session.exec(
+            select(ChatSession, first_question)
+            .where(ChatSession.user_id == user_id)
+            .order_by(ChatSession.updated_at.desc(), ChatSession.session_id)  # type: ignore[attr-defined]
+            .limit(limit)
+        ).all()
+        return [(row[0], row[1]) for row in rows]
 
     def messages_for_user(
         self,
@@ -83,13 +90,14 @@ class ChatRepository:
         ).one_or_none()
         if chat_session is None:
             return None
-        next_sequence = int(
-            self.session.exec(
-                select(func.coalesce(func.max(ChatMessage.sequence), 0)).where(
-                    ChatMessage.session_id == session_id
-                )
-            ).one()
-        ) + 1
+        next_sequence = (
+            int(
+                self.session.exec(
+                    select(func.coalesce(func.max(ChatMessage.sequence), 0)).where(ChatMessage.session_id == session_id)
+                ).one()
+            )
+            + 1
+        )
         message = ChatMessage(
             session_id=session_id,
             role=role,
@@ -118,7 +126,5 @@ class ChatRepository:
         )
         if not expired_ids:
             return 0
-        result = self.session.execute(
-            delete(ChatSession).where(col(ChatSession.session_id).in_(expired_ids))
-        )
+        result = self.session.execute(delete(ChatSession).where(col(ChatSession.session_id).in_(expired_ids)))
         return int(cast(Any, result).rowcount or 0)

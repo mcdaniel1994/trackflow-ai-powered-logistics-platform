@@ -14,9 +14,9 @@ const SUGGESTIONS = [
 ];
 
 const ROUTES: { value: AgentRoute; label: string; description: string }[] = [
-  { value: "auto", label: "Auto", description: "Let the CX agent choose the best source" },
+  { value: "auto", label: "Auto", description: "Let TrackFlow Assistant choose the best source" },
   { value: "knowledge", label: "Knowledge base", description: "Use policies, SLAs, and procedures" },
-  { value: "ticket", label: "Ticket lookup", description: "Use a specific ticket or order number" },
+  { value: "ticket", label: "Ticket lookup", description: "Use a specific support ticket number" },
 ];
 
 // The home hero box. It opens the shared chat panel (mounted in the protected layout) with the typed
@@ -61,9 +61,9 @@ export function AskKnowledgeBox() {
           <Sparkles className="h-5 w-5" aria-hidden="true" />
         </span>
         <div>
-          <h2 className="text-base font-black text-navy-deep dark:text-neutral-100">Ask your CX agent</h2>
+          <h2 className="text-base font-black text-navy-deep dark:text-neutral-100">TrackFlow Assistant</h2>
           <p className="text-xs text-neutral-500 dark:text-neutral-300">
-            Grounded in TrackFlow policy documents and live ticket status — never invented.
+            Ask about company policies and support tickets.
           </p>
         </div>
       </div>

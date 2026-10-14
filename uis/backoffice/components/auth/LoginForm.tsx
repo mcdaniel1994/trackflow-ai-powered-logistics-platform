@@ -21,7 +21,7 @@ import { Spinner } from "@/components/talent/ui/Spinner";
 const DEMO_ACCOUNTS = [
   {
     label: "Admin Demo",
-    email: "corymcdaniel01@gmail.com",
+    email: "admin@trackflow.com",
     password: "password123",
     Icon: ShieldCheck,
     iconClasses: "bg-coral/10 text-coral",

@@ -79,6 +79,24 @@ feature flags remain off by default, and no production deployment is claimed.
 
 ## Ownership and boundaries
 
+Engagement 11 adds response-only first-user-message titles to chat create/list/detail responses.
+The list uses one bounded owner-scoped query; no schema column or migration is added. Titles never
+enter traces or logs. Existing sessions acquire titles automatically.
+
+The independent [public-support domain](central_api/domains/public_support/README.md) provides
+`POST /public-support/query` only to the service-authenticated Back Office gateway. It uses the
+fixed `trackflow_public` collection with shared retrieval/generation/guardrails, no MCP tools,
+staff identity, memory or database persistence. Missing configuration/collection fails closed.
+Set `PUBLIC_SUPPORT_ENABLED` (default false) and server-only `WEBSITE_GATEWAY_SECRET`; reuse
+existing provider settings. Two active, 30/min and 200/day limits are process-local and reset on
+restart. Run one worker/replica. Approved `rag-index --public` indexing is a paid operation,
+never automatic. See [rollout instructions](../../docs/runbooks/customer-demo.md).
+
+October 14 local live preview is enabled in ignored `.env`: `trackflow_public` contains 26 chunks
+from three curated documents, and grounded policy answers are verified using existing OpenAI
+credentials with `gpt-4o-mini`. DeepSeek returned HTTP 402 during diagnosis; no billing settings
+were changed. The local index persists in the demo Qdrant volume; hosted rollout is deferred.
+
 - Central API owns inventory SKUs and stock movements in PostgreSQL.
 - Central API owns operational incidents, lifecycle transitions, and summary metrics.
 - Central API owns owner-scoped chat sessions and their 90-day message history.
@@ -176,3 +194,8 @@ cannot enforce that cross-service reference.
 fields and a SHA-256 idempotency key, and reports aggregate counts plus safe row/field
 rule identifiers. Never run it against `scripts/incidents-trackflow.csv` without the
 explicit authorization required by `.agents/rules/sensitive-local-datasets.md`.
+
+Docker builds copy the curated public corpus into `/app/docs/public-knowledge-base`. Root
+`.dockerignore` must explicitly allow that directory and its Markdown files alongside the internal
+corpus. The Engagement 11 CI correction was verified with a complete Linux AMD64 image build
+and offline corpus/import/environment-file inspection; no indexing occurs during a build.

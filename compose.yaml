@@ -72,6 +72,8 @@ services:
   central-api:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
     environment:
+      PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
+      WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       CENTRAL_API_CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       IDENTITY_JWT_PUBLIC_KEY: ${IDENTITY_JWT_PUBLIC_KEY}
@@ -109,6 +111,8 @@ services:
   backoffice:
     build: {context: ., dockerfile: docker/backoffice.Dockerfile}
     environment:
+      PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
+      WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       IDENTITY_API_URL: http://identity:8000
       CENTRAL_API_URL: http://central-api:8000
       TALENT_API_URL: ${TALENT_API_URL:-https://playground.4geeks.com/tracker/api/v1}

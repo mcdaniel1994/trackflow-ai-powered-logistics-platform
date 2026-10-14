@@ -11,6 +11,7 @@ class ChatAPIModel(BaseModel):
 
 
 class ChatSessionRead(ChatAPIModel):
+    title: str = "New conversation"
     session_id: str
     agent_id: str
     user_id: str

@@ -22,6 +22,30 @@
 
 ## Active
 
+- Engagement 11 — Customer Chat, History & Careers Demo: all three local phases implemented and verified October 13, 2026. Central API 502 tests / 91.41% coverage; data 146 tests, one skipped / 92.16%; Back Office 202 tests; Website 27 tests; two mocked browser journeys. Lint, types and builds pass for all four targets. Live sandbox schema read only; no applicant reads/writes, deployment, indexing or paid AI calls performed. Hosted enablement awaits separate approval; October 14 local live checks are recorded below. `docs/briefs/11-customer-demo.md`, `docs/runbooks/customer-demo.md`.
+  October 14 owner preview fixes: launcher clears footer links on desktop/mobile (compact mobile
+  icon); static greetings work without AI/country; disabled policy service gets explicit feedback.
+  Website now has 32 unit/route tests plus two dedicated footer/greeting browser regressions;
+  Back Office retains 202 tests and the separate mocked applicant journey.
+  October 14 owner-authorized local enablement: three public documents / 26 chunks indexed into
+  `trackflow_public`; existing OpenAI model reused for grounded English/Spanish US/Spain and follow-up
+  answers; country clarification, private tracking redirect and injection refusal passed. Mobile/desktop
+  live UI clears footer and returns focus. One fictional sandbox application was confirmed, opened
+  after authentication, moved to review and annotated; stage/note persisted after reload. Ignored local
+  environment files configured; hosted deployment remains unexecuted. DeepSeek returned HTTP 402 during
+  diagnosis; original `gpt-4o-mini` configuration restored and verified.
+  Owner privacy correction: Admin Demo now displays/autofills `admin@trackflow.com`; local Identity
+  email updated with private backup, preserving ID/password/role/history. Alias browser login passed.
+  Hosted Identity was not changed; matching email maintenance is documented before rollout.
+  CI follow-up: auth test timestamps now use `datetime.UTC`, resolving reported Ruff UP017.
+  Auth-package CI commands pass locally: lint, mypy, 20 tests / 83% coverage, wheel/sdist builds.
+  Runtime authentication code is unchanged; all nine remote release-check jobs passed in run
+  `38600501581`. Its Central API image build failed because `.dockerignore` excluded the public corpus.
+  Added the explicit public Markdown corpus exception; full local Linux AMD64 image build and
+  offline inspection passed (readable corpus, support import, UID 10001, no environment files).
+  Updated remote image-build result remains pending.
+
+
 - Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):
   complete — merged to `main` and deployed to production on 2026-08-17 (RFP Desk + agent Ask-AI live
   and verified); owner-approved spec, delivered in phases with an owner pause after each. A multi-agent

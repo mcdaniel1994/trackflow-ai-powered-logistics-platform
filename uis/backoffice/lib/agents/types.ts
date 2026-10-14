@@ -53,6 +53,7 @@ export interface AgentAnswer {
 export type AgentRoute = "auto" | "knowledge" | "ticket";
 
 export interface ChatSession {
+  title: string;
   session_id: string;
   agent_id: "first_line_cx";
   user_id: string;

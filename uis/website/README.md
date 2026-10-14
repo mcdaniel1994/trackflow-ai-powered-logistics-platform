@@ -20,6 +20,40 @@ The app runs on `http://localhost:3000` by default.
 
 - `NEXT_PUBLIC_BACKOFFICE_URL` - hosted Back Office login origin used by both
   desktop and mobile navigation. Defaults to `https://backoffice.forgehub.cloud`.
+- `TALENT_API_URL` - server-only sandbox origin/API prefix, identical to Back Office's setting.
+- `CAREERS_DEMO_ENABLED` - off by default; enables fictional applications after live contract verification.
+- `PUBLIC_SUPPORT_ENABLED` - off by default; independent of employee chat.
+- `SUPPORT_GATEWAY_URL` - server-only fixed HTTPS Back Office origin.
+- `WEBSITE_GATEWAY_SECRET` - shared only by the three servers; never `NEXT_PUBLIC_*`.
+
+Copy `.env.example` to an untracked local environment file. Provider keys stay in Central API.
+
+## Customer demo (Engagement 11)
+
+`/careers` offers three illustrative roles and a general application, bilingual demo disclosures,
+sample fill and strict fictional-data validation. The same-origin submission route writes only
+allowlisted fields to the existing talent sandbox. It validates received/pending/server timestamp
+confirmation before returning an opaque candidate ID and rendering the authenticated detail link.
+Ambiguous write outcomes are never retried automatically. No applicant database or uploads are added.
+
+The site-wide TrackFlow Support panel keeps history in page memory, separates language from policy
+country, and uses a fixed authenticated gateway to the private public-only knowledge endpoint. It
+shows complete answers with loading/error states. Public history, tools and staff identity are absent
+from the backend. Application/chat text is never included in telemetry.
+
+The chat launcher stays above visible footer links and is compact on mobile. Greetings such as
+"Hello" receive a static welcome without a country selection or paid AI call. Policy questions
+remain gated; when disabled, the panel explains that policy answers have not been enabled yet.
+
+Website tests mock upstreams. The cross-app local journey runs from the Back Office workspace:
+`npm exec --workspace trackflow-backoffice playwright test -- --config playwright.customer-demo.config.ts`.
+See [rollout and local verification](../../docs/runbooks/customer-demo.md) for feature flags,
+single-instance limits, verified local live checks and remaining hosted checks.
+
+October 14 owner-authorized preview: `http://127.0.0.1:3005`, with Careers and grounded public
+policy answers enabled through ignored `.env.local`. Public indexing and the fictional live
+application-to-Back-Office journey passed; hosted rollout is still deferred. `.env.example`
+is a template and does not configure a running Next.js server.
 
 ## Lead Form
 

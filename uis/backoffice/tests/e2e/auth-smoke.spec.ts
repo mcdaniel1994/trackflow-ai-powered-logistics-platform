@@ -14,7 +14,7 @@ test("login page excludes public registration and shows recovery", async ({ page
   );
 
   await page.getByRole("button", { name: /admin demo/i }).click();
-  await expect(page.getByLabel(/email/i)).toHaveValue("corymcdaniel01@gmail.com");
+  await expect(page.getByLabel(/email/i)).toHaveValue("admin@trackflow.com");
   await expect(page.getByLabel(/password/i)).toHaveValue("password123");
   await expect(page.getByLabel(/password/i)).toHaveAttribute("type", "password");
 

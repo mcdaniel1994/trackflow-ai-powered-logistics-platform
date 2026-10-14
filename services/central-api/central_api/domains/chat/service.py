@@ -11,6 +11,19 @@ from .repository import ChatRepository
 from .schemas import ChatMessageRead, ChatSessionDetail, ChatSessionRead
 
 
+def conversation_title(question: str | None) -> str:
+    """A response-only label; never copied to traces, logs or storage."""
+    text = " ".join((question or "").split())
+    if not text:
+        return "New conversation"
+    if len(text) <= 60:
+        return text
+    prefix = text[:60]
+    if not text[60].isspace() and " " in prefix:
+        prefix = prefix.rsplit(" ", 1)[0]
+    return prefix.rstrip() + "…"
+
+
 @dataclass
 class ChatError(Exception):
     status_code: int
@@ -51,7 +64,10 @@ class ChatService:
 
     def list_sessions(self, *, user_id: str) -> list[ChatSessionRead]:
         self._require_enabled()
-        return [ChatSessionRead.model_validate(row) for row in self.repository.list_sessions_for_user(user_id)]
+        return [
+            ChatSessionRead.model_validate(row).model_copy(update={"title": conversation_title(question)})
+            for row, question in self.repository.list_sessions_for_user(user_id)
+        ]
 
     def get_session(self, session_id: str, *, user_id: str) -> ChatSessionDetail:
         self._require_enabled()
@@ -62,4 +78,6 @@ class ChatService:
         return ChatSessionDetail(
             **ChatSessionRead.model_validate(chat_session).model_dump(),
             messages=[ChatMessageRead.model_validate(row) for row in messages],
+        ).model_copy(
+            update={"title": conversation_title(next((row.content for row in messages if row.role == "user"), None))}
         )

@@ -32,6 +32,8 @@ from .domains.incidents.service import IncidentError
 from .domains.inventory.router import router as inventory_router
 from .domains.inventory.schemas import HealthRead
 from .domains.inventory.service import InventoryError
+from .domains.public_support.limits import SupportAdmission
+from .domains.public_support.router import router as public_support_router
 from .domains.rag.router import router as rag_router
 from .domains.rag.service import RagError
 from .domains.realtime.bus import RealtimeBus
@@ -81,6 +83,7 @@ def create_app() -> FastAPI:
     """Build the service app while keeping configuration injectable in later phases."""
     settings = get_settings()
     app = FastAPI(title="TrackFlow Central API", version="0.1.0", lifespan=_application_lifespan)
+    app.state.public_support_admission = SupportAdmission()
     app.state.realtime_bus = RealtimeBus()
     app.state.chat_generation_manager = ChatGenerationManager(app.state.realtime_bus)
 
@@ -272,6 +275,7 @@ def create_app() -> FastAPI:
     app.include_router(suppliers_router)
     app.include_router(telemetry_router)
     app.include_router(reporting_router)
+    app.include_router(public_support_router)
     app.include_router(rag_router)
     app.include_router(agents_router)
     app.include_router(chat_router)

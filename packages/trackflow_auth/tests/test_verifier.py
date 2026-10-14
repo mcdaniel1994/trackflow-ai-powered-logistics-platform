@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -49,7 +49,7 @@ def verifier_config(public_key: str) -> TokenVerifierConfig:
 
 
 def access_claims(**overrides: Any) -> dict[str, Any]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     claims: dict[str, Any] = {
         "sub": "user-123",
         "role": "user",
@@ -107,7 +107,7 @@ def test_valid_rs256_access_token_is_accepted(key_pair: tuple[str, str]):
 
 def test_expired_token_is_rejected(key_pair: tuple[str, str]):
     private_pem, public_pem = key_pair
-    expired = int((datetime.now(timezone.utc) - timedelta(minutes=1)).timestamp())
+    expired = int((datetime.now(UTC) - timedelta(minutes=1)).timestamp())
 
     token = encode_token(private_pem, access_claims(exp=expired))
 

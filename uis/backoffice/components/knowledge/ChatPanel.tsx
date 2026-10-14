@@ -9,9 +9,9 @@ import { ChatSocketClient } from "@/lib/realtime/chat";
 import type { ChatConnectionState, ChatSocketEvent } from "@/lib/realtime/chat";
 
 const ROUTES: { value: AgentRoute; label: string; description: string }[] = [
-  { value: "auto", label: "Auto", description: "Let the CX agent choose the best source" },
+  { value: "auto", label: "Auto", description: "Let TrackFlow Assistant choose the best source" },
   { value: "knowledge", label: "Knowledge base", description: "Use policies, SLAs, and procedures" },
-  { value: "ticket", label: "Ticket lookup", description: "Use a specific ticket or order number" },
+  { value: "ticket", label: "Ticket lookup", description: "Use a specific support ticket number" },
 ];
 
 type Status = "idle" | "creating_session" | "awaiting_acknowledgement" | "generating" | "error";
@@ -21,13 +21,22 @@ type DisplayMessage = Pick<ChatMessage, "role" | "content" | "interrupted"> & {
   route_taken?: string;
 };
 
-function sessionLabel(session: ChatSession) {
+function sessionDate(session: ChatSession) {
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(session.updated_at));
+}
+
+function questionTitle(question: string) {
+  const text = question.trim().replace(/\s+/g, " ");
+  if (Array.from(text).length <= 60) return text || "New conversation";
+  const chars = Array.from(text);
+  let prefix = chars.slice(0, 60).join("");
+  if (!/\s/.test(chars[60]) && prefix.includes(" ")) prefix = prefix.slice(0, prefix.lastIndexOf(" "));
+  return `${prefix.trimEnd()}…`;
 }
 
 function routeLabel(route: string) {
@@ -69,6 +78,7 @@ export function ChatPanel() {
   const socketRef = useRef<ChatSocketClient | null>(null);
   const tokenSequencesRef = useRef<Record<string, number>>({});
   const pendingQuestionRef = useRef<string | null>(null);
+  const [provisionalTitle, setProvisionalTitle] = useState<{ sessionId: string; title: string } | null>(null);
   const activeGenerationIdRef = useRef<string | null>(null);
   const seedNonceRef = useRef<number | null>(null);
   const openHandledRef = useRef(false);
@@ -83,6 +93,7 @@ export function ChatPanel() {
   const refreshSessions = useCallback(async () => {
     try {
       setSessions(await listChatSessions());
+      setProvisionalTitle(null);
     } catch {
       // The feature is off by default. A send attempt surfaces an actionable error in the panel.
     }
@@ -92,6 +103,11 @@ export function ChatPanel() {
     const { event, data } = frame;
     if (event === "session_snapshot") {
       const snapshotMessages = Array.isArray(data.messages) ? data.messages as ChatMessage[] : [];
+      const firstQuestion = snapshotMessages.find((row) => row.role === "user");
+      if (firstQuestion) {
+        setProvisionalTitle(null);
+        setSessions((current) => current.map((row) => row.session_id === data.session_id ? { ...row, title: questionTitle(firstQuestion.content) } : row));
+      }
       const active = data.active_generation && typeof data.active_generation === "object"
         ? data.active_generation as Record<string, unknown>
         : null;
@@ -144,6 +160,7 @@ export function ChatPanel() {
         if (pending < 0) return [...current, message];
         return current.map((row, index) => index === pending ? message : row);
       });
+      void refreshSessions();
       setStatus("generating");
       return;
     }
@@ -206,6 +223,8 @@ export function ChatPanel() {
       pendingQuestionRef.current = null;
       activeGenerationIdRef.current = null;
       setErrorMessage(typeof data.detail === "string" ? data.detail : "The assistant is temporarily unavailable.");
+      setProvisionalTitle(null);
+      void refreshSessions();
       setStatus("error");
     }
   }, [refreshSessions]);
@@ -260,6 +279,9 @@ export function ChatPanel() {
         setActiveSession(session);
         setSessions((current) => [session as ChatSession, ...current]);
       }
+      if (!messages.some((row) => row.role === "user" && !row.message_id.startsWith("pending-user-"))) {
+        setProvisionalTitle({ sessionId: session.session_id, title: questionTitle(trimmed) });
+      }
       const socket = socketRef.current ?? connectSession(session.session_id);
       if (redirecting) {
         socket.interrupt(trimmed, activeRoute);
@@ -272,9 +294,10 @@ export function ChatPanel() {
       pendingQuestionRef.current = null;
       activeGenerationIdRef.current = null;
       setErrorMessage(agentError(error).message);
+      setProvisionalTitle(null);
       setStatus("error");
     }
-  }, [activeSession, connectSession, route, status]);
+  }, [activeSession, connectSession, messages, route, status]);
 
   // Lock the page behind the dialog while it is open.
   //
@@ -417,6 +440,7 @@ export function ChatPanel() {
       setStatus("idle");
     } catch (error) {
       setErrorMessage(agentError(error).message);
+      setProvisionalTitle(null);
       setStatus("error");
     }
   }, [connectSession]);
@@ -440,6 +464,7 @@ export function ChatPanel() {
     socketRef.current?.close();
     socketRef.current = null;
     setActiveSession(null);
+    setProvisionalTitle(null);
     setMessages([]);
     setErrorMessage("");
     setStatus("idle");
@@ -480,7 +505,8 @@ export function ChatPanel() {
                 aria-current={activeSession?.session_id === session.session_id ? "true" : undefined}
                 className="w-full rounded-lg px-3 py-2 text-left text-xs font-bold text-neutral-600 hover:bg-white aria-[current=true]:bg-white aria-[current=true]:text-navy dark:text-neutral-300 dark:hover:bg-ink-700 dark:aria-[current=true]:bg-ink-700 dark:aria-[current=true]:text-white"
               >
-                {sessionLabel(session)}
+                <span className="block truncate">{provisionalTitle?.sessionId === session.session_id ? provisionalTitle.title : session.title || "New conversation"}</span>
+                <span className="mt-1 block text-[11px] font-normal text-neutral-400">{sessionDate(session)}</span>
               </button>
             )) : <p className="text-xs text-neutral-400">No previous conversations.</p>}
           </div>
@@ -489,9 +515,9 @@ export function ChatPanel() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex items-center justify-between gap-3 border-b border-mist px-4 pb-3 pt-[calc(0.75rem+env(safe-area-inset-top))] dark:border-ink-600 sm:px-5 sm:py-3">
             <div className="min-w-0">
-              <h2 id="chat-panel-title" className="truncate font-black text-navy-deep dark:text-neutral-100">First-line CX agent</h2>
+              <h2 id="chat-panel-title" className="truncate font-black text-navy-deep dark:text-neutral-100">TrackFlow Assistant</h2>
               <p className="truncate text-xs text-neutral-400">
-                {selectedRoute.label} route · {connectionState === "reconnecting" ? "reconnecting…" : connectionState}
+                Ask about company policies and support tickets. {selectedRoute.label} · {connectionState === "reconnecting" ? "reconnecting…" : connectionState}
               </p>
             </div>
             <button type="button" onClick={closePanel} aria-label="Close chat" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-mist text-navy hover:bg-ivory dark:border-ink-600 dark:text-neutral-100 dark:hover:bg-ink-700">
@@ -505,7 +531,7 @@ export function ChatPanel() {
               <label htmlFor="mobile-chat-history" className="sr-only">Conversation history</label>
               <select id="mobile-chat-history" value={activeSession?.session_id ?? ""} onChange={(event) => void openSession(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-mist bg-white px-2 py-2 text-base text-navy sm:text-xs dark:border-ink-600 dark:bg-ink-800 dark:text-neutral-100">
                 <option value="">Conversation history</option>
-                {sessions.map((session) => <option key={session.session_id} value={session.session_id}>{sessionLabel(session)}</option>)}
+                {sessions.map((session) => <option key={session.session_id} value={session.session_id}>{provisionalTitle?.sessionId === session.session_id ? provisionalTitle.title : session.title || "New conversation"} · {sessionDate(session)}</option>)}
               </select>
             </div>
           </div>

@@ -16,3 +16,5 @@
 docs/*
 !docs/company-knowledge-base/
 !docs/company-knowledge-base/*.md
+!docs/public-knowledge-base/
+!docs/public-knowledge-base/*.md

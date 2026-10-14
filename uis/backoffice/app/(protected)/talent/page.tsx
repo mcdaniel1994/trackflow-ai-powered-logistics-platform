@@ -7,7 +7,7 @@ import { isStage, isStatus } from "@/lib/talent/labels";
 
 export const metadata: Metadata = {
   title: "Talent Pipeline - TrackFlow Backoffice",
-  description: "Internal candidate management for the Executive Assistant search at Zaragoza HQ.",
+  description: "Internal candidate management across TrackFlow demo roles.",
 };
 
 type TalentPageProps = {
@@ -29,7 +29,7 @@ export default async function TalentPage({ searchParams }: TalentPageProps) {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-wide text-coral">Talent Pipeline Tracker</p>
-          <h1 className="text-2xl font-bold text-navy-deep">Executive Assistant - Zaragoza HQ</h1>
+          <h1 className="text-2xl font-bold text-navy-deep">Talent Pipeline</h1>
         </div>
         <Link href="/talent/new" className={buttonClassName("primary")}>
           Register candidate

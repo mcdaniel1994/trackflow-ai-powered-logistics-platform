@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { LocaleProvider } from "@/components/layout/LocaleProvider";
+import { SupportChat } from "@/components/support/SupportChat";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SkipToContent } from "@/components/layout/SkipToContent";
@@ -42,6 +43,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <SiteHeader />
           {children}
           <SiteFooter />
+          <SupportChat />
         </LocaleProvider>
         <JsonLd data={organizationSchema()} />
         <Analytics />

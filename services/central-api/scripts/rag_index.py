@@ -13,6 +13,8 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from dataclasses import replace
+from pathlib import Path
 
 from pipelines.rag import setup  # type: ignore[import-untyped]
 
@@ -27,7 +29,12 @@ def entrypoint() -> None:
     parser = argparse.ArgumentParser(description="Index the TrackFlow knowledge base into Qdrant.")
     parser.add_argument("--recreate", action="store_true", help="Drop and rebuild the collection.")
     parser.add_argument("--corpus-dir", default=None, help="Override the corpus directory.")
+    parser.add_argument(
+        "--public", action="store_true", help="Index only the curated public corpus into trackflow_public"
+    )
     args = parser.parse_args()
+    if args.public and (args.corpus_dir or args.recreate):
+        parser.error("--public does not allow a custom corpus or destructive recreation")
 
     settings = get_settings()
     if not settings.openai_api_key:
@@ -35,11 +42,11 @@ def entrypoint() -> None:
         raise SystemExit(1)
 
     config = build_rag_config(settings)
+    if args.public:
+        config = replace(config, collection="trackflow_public")
+        args.corpus_dir = Path(__file__).resolve().parents[3] / "docs" / "public-knowledge-base"
     result = setup(config, corpus_dir=args.corpus_dir, recreate=args.recreate)
-    print(
-        f"Indexed collection '{result.collection}': "
-        f"{result.documents} documents -> {result.chunks} chunks."
-    )
+    print(f"Indexed collection '{result.collection}': {result.documents} documents -> {result.chunks} chunks.")
 
 
 if __name__ == "__main__":
