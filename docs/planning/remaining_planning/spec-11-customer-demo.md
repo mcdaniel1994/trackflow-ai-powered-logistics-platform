@@ -114,3 +114,7 @@ requires the corresponding approved maintenance step before rollout; no producti
 Privacy correction verification: all 202 Back Office tests, lint, type-check and production build
 passed. Existing login/autofill assertions now use the demo alias; the live browser login passed.
 No commit, push or hosted account change was performed.
+
+CI follow-up: the auth-package job reported Ruff UP017 in two existing token-test timestamps.
+Tests now use Python 3.11 `datetime.UTC`. Its CI Ruff/mypy/test/build commands passed locally
+(20 tests, 83% statement coverage); no runtime auth code changed. Remote CI remains authoritative.

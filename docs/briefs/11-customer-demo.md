@@ -13,6 +13,8 @@ October 14 owner privacy correction: Admin Demo card/autofill now use `admin@tra
 matching local Identity login verified with the same account ID and history ownership. Hosted
 Identity maintenance remains part of the deferred rollout.
 
+CI follow-up: auth-test UTC aliases corrected; package lint/types/build and 20 tests pass locally.
+
 ## Background
 
 The Engagement 7–10 assistant serves employees in the authenticated Back Office. Its CX label is ambiguous, saved chat entries show only dates, and the public website has no customer chat or careers entry point. The existing talent sandbox already supports candidate management.

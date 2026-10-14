@@ -37,6 +37,9 @@
   Owner privacy correction: Admin Demo now displays/autofills `admin@trackflow.com`; local Identity
   email updated with private backup, preserving ID/password/role/history. Alias browser login passed.
   Hosted Identity was not changed; matching email maintenance is documented before rollout.
+  CI follow-up: auth test timestamps now use `datetime.UTC`, resolving reported Ruff UP017.
+  Auth-package CI commands pass locally: lint, mypy, 20 tests / 83% coverage, wheel/sdist builds.
+  Runtime authentication code is unchanged; remote CI result is still pending.
 
 
 - Engagement 9 - Agentic Workflows: Automated RFP Desk (`docs/briefs/09-agentic-workflows.md`):

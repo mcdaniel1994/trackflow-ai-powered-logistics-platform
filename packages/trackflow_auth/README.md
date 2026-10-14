@@ -18,3 +18,7 @@ It is a Python package, not an npm workspace package.
 ```bash
 COVERAGE_FILE=/tmp/trackflow-auth.coverage uv run --with pytest --with pytest-cov pytest --cov=trackflow_auth --cov-report=term-missing
 ```
+
+CI also runs Ruff, mypy and `uv build --project packages/trackflow_auth`. Tests use the Python 3.11
+`datetime.UTC` alias. The Engagement 11 CI follow-up verified all four commands locally: 20 tests
+passed, 83% statement coverage, and wheel/sdist builds succeeded. Runtime verification is unchanged.

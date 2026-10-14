@@ -346,7 +346,7 @@ Future production changes and the final Supplier Directory retirement remain app
 
 ### ✅ Engagement 11 — Customer Chat, History & Careers Demo (Local Implementation)
 
-Locally implemented and verified: TrackFlow Assistant naming and readable history, bilingual public policy chat with isolated knowledge and bounded usage, and fictional careers applications in the existing talent sandbox. The mocked browser journey verifies application → sign-in → candidate → stage → note. No applicant database or new AI credentials. October 14 local enablement verified: public corpus indexed, live policy answers and fictional sandbox application/stage/note journey passed. Admin Demo now displays/autofills `admin@trackflow.com`, with matching local login verified. Hosted deployment remains gated. See [the brief](docs/briefs/11-customer-demo.md) and [rollout instructions](docs/runbooks/customer-demo.md).
+Locally implemented and verified: TrackFlow Assistant naming and readable history, bilingual public policy chat with isolated knowledge and bounded usage, and fictional careers applications in the existing talent sandbox. The mocked browser journey verifies application → sign-in → candidate → stage → note. No applicant database or new AI credentials. October 14 local enablement verified: public corpus indexed, live policy answers and fictional sandbox application/stage/note journey passed. Admin Demo now displays/autofills `admin@trackflow.com`, with matching local login verified. Reported auth-test lint errors are corrected and its package checks pass locally. Hosted deployment remains gated. See [the brief](docs/briefs/11-customer-demo.md) and [rollout instructions](docs/runbooks/customer-demo.md).
 
 October 14 preview fixes keep the chat launcher clear of footer links, use a compact mobile icon,
 respond to greetings without an AI call, and explain when policy answers are not enabled.
@@ -366,7 +366,7 @@ respond to greetings without an AI call, and explain when policy answers are not
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
 | 9 | Agentic workflows — automated RFP desk (LangGraph) | ✅ Complete — all phases (0–3) merged to `main` and deployed to production (2026-08-17): intake & routing; generation + evaluators; durable-checkpointer `interrupt()` human approval + final document; RFP Desk UI. RFP Desk and agent Ask-AI live and verified in production. |
 | 10 | Real-time systems — SSE notifications + WebSocket chat | ✅ Implementation complete — Part 1 merged through PR #35 and Part 2 through PR #36 on 2026-08-18; Phase 6 production rollout deferred by owner, production unchanged |
-| 11 | Customer chat, readable history & careers demo | ✅ Local implementation and live demo verification complete; admin demo email updated; hosted rollout deferred |
+| 11 | Customer chat, readable history & careers demo | ✅ Local implementation and live demo verification complete; admin demo email updated; auth lint follow-up verified locally; hosted rollout deferred |
 
 All remaining work is planned from
 **[`docs/planning/remaining_planning/`](docs/planning/remaining_planning/)** — see its

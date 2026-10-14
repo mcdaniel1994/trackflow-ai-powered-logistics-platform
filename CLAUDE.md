@@ -47,7 +47,7 @@ Then read the active engagement brief and the README for every folder being modi
 
 ## Where New Engagement Code Goes
 
-- **Engagement 11** — `uis/website/`, `uis/backoffice/`, `services/central-api/central_api/domains/public_support/`, `data/`. Local customer-demo implementation verified; see `docs/briefs/11-customer-demo.md` and `docs/runbooks/customer-demo.md`. Local public indexing, live policy answers and fictional sandbox writes verified October 14; Admin Demo email changed to `admin@trackflow.com` with local sign-in verified; hosted rollout remains gated.
+- **Engagement 11** — `uis/website/`, `uis/backoffice/`, `services/central-api/central_api/domains/public_support/`, `data/`. Local customer-demo implementation verified; see `docs/briefs/11-customer-demo.md` and `docs/runbooks/customer-demo.md`. Local public indexing, live policy answers and fictional sandbox writes verified October 14; Admin Demo email changed to `admin@trackflow.com` with local sign-in verified; test-only CI follow-up in `packages/trackflow_auth/tests/` verified locally; hosted rollout remains gated.
 
   October 14 preview corrections keep public chat clear of the footer, add static greetings and
   explicit disabled-policy feedback. Dedicated website/cross-app browser checks use their own configs.
