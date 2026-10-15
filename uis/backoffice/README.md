@@ -148,3 +148,28 @@ password, role, jurisdiction and history ownership. An existing hosted demo Iden
 matching admin email before this UI is deployed; deployment does not rename database users.
 
 No customer emails should be rendered in the backoffice UI. Supplier contact emails are accepted by the create form for the local demo, but the `/suppliers` table must render only "Contact on file" from `has_contact_email`, never the raw email value. The `/suppliers/[id]` detail page may reveal the supplier contact email only through its explicit reveal control.
+
+## Engagement 6 connection recovery correction
+
+Operations Overview and Operations → Fulfilment load resources independently through
+`lib/hooks/useResourcePolling.ts`. Successful sections render immediately; unavailable totals use
+`—`, while genuine empty results remain zero/empty. Failed refreshes retain values with stale
+last-success timestamps. Range changes clear prior values. Healthy reads poll every 20 seconds;
+network/502/503/504 failures retry at 2/4/8/16/30 seconds with ±20% jitter, resetting on success.
+Other HTTP errors stop automatic polling. Hidden tabs pause/cancel reads; visibility restores them.
+Each resource permits one active read, has a bounded deadline, and cancels on unmount/range changes.
+The existing cookie authentication refresh is preserved. Live requires all latest attempts to have
+succeeded within 60 seconds. Other dashboards retain their existing polling behavior.
+
+Local verification: 229 unit/component/route tests (previously 202), clean lint/types/build, and the
+mocked fresh-login → partial result → recovery → stale result → recovery → range-change browser
+journey, including authentication refresh and desktop/mobile screenshots. Back Office has no
+configured numeric coverage threshold/provider; the existing suite is retained, with new failure
+and scheduling branches covered by targeted tests. Python coverage gates are recorded separately.
+
+Run the production build, then:
+`npm exec --workspace trackflow-backoffice playwright test -- --config playwright.connection-recovery.config.ts`.
+This explicit suite runs standalone output with local fixture services only; it is excluded from
+the default auth browser suite. The owner approved commit/push; production approval remains pending. See the
+[approved specification](../../docs/planning/remaining_planning/spec-06-connection-reliability.md)
+and [connection-budget release runbook](../../docs/runbooks/connection-budget.md).

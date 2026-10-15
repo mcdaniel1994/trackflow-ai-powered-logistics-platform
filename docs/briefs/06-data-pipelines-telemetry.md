@@ -4,6 +4,15 @@
 
 ## Status
 
+October 15 connection reliability correction: owner-approved backend Phase 1 is implemented
+and verified locally; the owner approved continuation to Phase 2. It caps runtime sessions at 13 of the Supavisor pool's 15,
+corrects advisory-lock transaction lifetimes and bounds RFP checkpoint connections. Dashboard
+recovery and release preparation are also locally verified (229 Back Office tests and the mocked
+standalone browser journey). Owner approved commit/push; separate production approval remains pending;
+no production change has been performed. See the
+[corrective specification](../planning/remaining_planning/spec-06-connection-reliability.md) and
+[connection-budget runbook](../runbooks/connection-budget.md).
+
 In progress — reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
 Alembic `20260728_0011`. On 2026-07-28 the owner directed the team to omit the remaining controlled
 exercises and proceed; Phase 6.1 is closed by that documented exception, not by passing evidence.

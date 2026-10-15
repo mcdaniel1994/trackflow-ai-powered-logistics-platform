@@ -1,5 +1,9 @@
 # `data/pipelines` folder
 
+`database.py` provides the shared bounded-pool diagnostics and session advisory-lock lifecycle
+helpers for the October 15 Engagement 6 connection correction. Backend verification passed locally;
+dashboard recovery also passed local acceptance. The owner approved commit/push; production rollout remains pending.
+
 This folder groups **all data pipelines in the monorepo** related to the company: ingestion, ETL/ELT, cleaning, transformation, and loading into analytical or production systems.
 
 Each subfolder or file under `data/pipelines/` should represent **one pipeline or job set** (for example `sales-etl`, `telemetry-stream`, `customer-segmentation`) and include the required configuration (scripts, orchestration, connectors, schemas, etc.).

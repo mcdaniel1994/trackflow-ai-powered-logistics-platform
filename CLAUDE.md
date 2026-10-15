@@ -72,6 +72,13 @@ Then read the active engagement brief and the README for every folder being modi
   `docs/planning/supplier-directory-postgres-migration.md`.
 
 - **Engagement 6** - Data Pipelines & Telemetry
+  October 15 connection correction: backend Phase 1 lives in the existing Central API engine,
+  RFP checkpoint/approval helpers, operations feed, `data/pipelines/database.py`, reporting lock
+  helpers and both Compose files. Phase 2 adds `useResourcePolling` / `ResourceStatus` for
+  Operations Overview and Fulfilment only, cancellable fetch helpers and a standalone mocked browser
+  journey. Both phases pass local acceptance; the owner approved commit/push. Production approval is pending.
+  See `docs/planning/remaining_planning/spec-06-connection-reliability.md` and
+  `docs/runbooks/connection-budget.md`. Production rollout remains separately owner-gated.
   In progress. A `telemetry` domain in `services/central-api/` (table
   `telemetry_events`, exact metrics from `StockEntry`/`StockExit`, best-effort
   post-response diagnostics, enforced retention), Identity auth audit logs in

@@ -112,8 +112,8 @@ export function createOutboundOrder(input: OutboundOrderInput) {
   return request("/orders/outbound", { method: "POST", body: JSON.stringify(input) });
 }
 
-export function listMovements(limit = 20, offset = 0) {
-  return request<Page<StockMovement>>(`/orders${pageQuery(limit, offset)}`);
+export function listMovements(limit = 20, offset = 0, signal?: AbortSignal) {
+  return request<Page<StockMovement>>(`/orders${pageQuery(limit, offset)}`, { signal });
 }
 
 export function inventoryError(error: unknown): InventoryAPIError {

@@ -3,6 +3,13 @@
 This package owns the durable PostgreSQL queue, Dallas dispatcher, single-concurrency runner,
 in-process direct SQL execution, durable hourly SQL rollups, and exact reconciliation.
 
+The October 15 connection correction gives the reporting engine explicit size/overflow/checkout
+settings (2/3/5 seconds in both Compose files). The publication lock uses a dedicated autocommit
+connection and explicit unlock/invalidation, avoiding a transaction held across the run.
+Queue, lease and publication semantics are unchanged. Local backend acceptance passed; dashboard recovery and release preparation also passed local
+acceptance. The owner approved commit/push; production
+is unchanged. See [the budget runbook](../../../docs/runbooks/connection-budget.md).
+
 Production runs `python -m pipelines.business_performance.worker` as one always-on, read-only
 Compose service. It polls every five seconds, records a worker heartbeat every ten seconds from a single
 writer, and checks the America/Chicago schedule every minute. Polling itself does not write:

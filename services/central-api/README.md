@@ -160,9 +160,17 @@ without confirming the target, recovery posture, and explicit approval.
 
 ## Configuration
 
+The October 15 Engagement 6 connection correction is implemented and verified locally. The owner
+reviewed the backend and approved the dashboard phase, which also passed local acceptance. Final
+owner review is complete and commit/push approved; separate production approval remains pending. Both Compose files cap all runtime pools at 13 sessions
+combined. See [connection budget and review gates](../../docs/runbooks/connection-budget.md).
+
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | SQLAlchemy PostgreSQL URL |
+| `DATABASE_POOL_SIZE` / `DATABASE_MAX_OVERFLOW` | Explicit per-process retained/overflow limits; API defaults 3/0, feed 2/1, maintenance 1/0 through Compose |
+| `DATABASE_POOL_TIMEOUT_SECONDS` | Bounded pool checkout wait; defaults 5 seconds |
+| `DATABASE_SERVICE_NAME` | Fixed engine diagnostic label: `central-api`, `operations-feed`, or `maintenance-worker` |
 | `MIGRATION_DATABASE_URL` | Dedicated migration-role URL; mandatory for Alembic in production and never supplied to runtime containers |
 | `APP_ENV` | `production` enables fail-closed migration-role and readiness checks |
 | `RUNTIME_DATABASE_ROLE` | Expected production runtime identity; defaults to `trackflow_runtime` |

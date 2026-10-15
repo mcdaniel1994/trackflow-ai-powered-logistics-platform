@@ -36,10 +36,11 @@ async function parseError(response: Response): Promise<TelemetryAPIError> {
   return error;
 }
 
-async function request<T>(path: string): Promise<T> {
+async function request<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetchWithAuth(`${API_PATH}${path}`, {
     headers: { Accept: "application/json" },
     cache: "no-store",
+    signal,
   });
   if (!response.ok) throw await parseError(response);
   return (await response.json()) as T;
@@ -49,16 +50,16 @@ function rangeQuery(range: DateRange) {
   return `?${new URLSearchParams({ from: range.from, to: range.to })}`;
 }
 
-export function getDispatchMetrics(range: DateRange) {
-  return request<DispatchMetrics>(`/metrics/dispatch${rangeQuery(range)}`);
+export function getDispatchMetrics(range: DateRange, signal?: AbortSignal) {
+  return request<DispatchMetrics>(`/metrics/dispatch${rangeQuery(range)}`, signal);
 }
 
-export function getReceivingMetrics(range: DateRange) {
-  return request<ReceivingMetrics>(`/metrics/receiving${rangeQuery(range)}`);
+export function getReceivingMetrics(range: DateRange, signal?: AbortSignal) {
+  return request<ReceivingMetrics>(`/metrics/receiving${rangeQuery(range)}`, signal);
 }
 
-export function getStockLossMetrics(range: DateRange) {
-  return request<StockLossMetrics>(`/metrics/stock-loss${rangeQuery(range)}`);
+export function getStockLossMetrics(range: DateRange, signal?: AbortSignal) {
+  return request<StockLossMetrics>(`/metrics/stock-loss${rangeQuery(range)}`, signal);
 }
 
 export function getAccessDenialMetrics(range: DateRange) {

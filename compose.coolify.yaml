@@ -65,6 +65,10 @@ services:
       traefik.http.routers.trackflow-realtime.tls.certresolver: "letsencrypt"
       traefik.http.services.trackflow-realtime.loadbalancer.server.port: "8000"
     environment:
+      DATABASE_POOL_SIZE: "3"
+      DATABASE_MAX_OVERFLOW: "0"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: central-api
       PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
       WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       APP_ENV: production
@@ -118,6 +122,7 @@ services:
     deploy:
       resources:
         limits: {cpus: "0.75", memory: 1G}
+      replicas: 1
 
   # Internal-only until the owner approves an MCP production domain and exposure.
   mcp:
@@ -173,6 +178,10 @@ services:
     image: ghcr.io/mcdaniel1994/trackflow-central-api:${TRACKFLOW_IMAGE_TAG:?required}
     pull_policy: always
     environment:
+      DATABASE_POOL_SIZE: "2"
+      DATABASE_MAX_OVERFLOW: "1"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: operations-feed
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?required}
       OPERATIONS_FEED_ENABLED: ${OPERATIONS_FEED_ENABLED:-true}
@@ -201,6 +210,9 @@ services:
     restart: on-failure
     stop_grace_period: 15m
     environment:
+      DATABASE_POOL_SIZE: "2"
+      DATABASE_MAX_OVERFLOW: "3"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?required}
       DATABASE_CONNECT_TIMEOUT_SECONDS: "10"
@@ -244,6 +256,10 @@ services:
     restart: on-failure
     stop_grace_period: 5m
     environment:
+      DATABASE_POOL_SIZE: "1"
+      DATABASE_MAX_OVERFLOW: "0"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: maintenance-worker
       APP_ENV: production
       DATABASE_URL: ${DATABASE_URL:?required}
       OPERATIONS_FEED_USER_UUID: ${OPERATIONS_FEED_USER_UUID:-${SEED_USER_UUID:?required}}

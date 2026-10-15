@@ -2,8 +2,9 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from trackflow_auth import OAuthTokenVerifierConfig, TokenVerifierConfig  # type: ignore[import-untyped]
 
@@ -20,6 +21,10 @@ class Settings(BaseSettings):
     database_connect_timeout_seconds: int = 10
     database_statement_timeout_ms: int = 15_000
     database_lock_timeout_ms: int = 5_000
+    database_pool_size: int = Field(default=3, ge=1, le=15)
+    database_max_overflow: int = Field(default=0, ge=0, le=14)
+    database_pool_timeout_seconds: float = Field(default=5.0, gt=0, le=30, allow_inf_nan=False)
+    database_service_name: Literal["central-api", "operations-feed", "maintenance-worker"] = "central-api"
     central_api_cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     app_env: str = "local"
     runtime_database_role: str = "trackflow_runtime"
@@ -92,6 +97,12 @@ class Settings(BaseSettings):
     rfp_model: str = "gpt-4o-mini"
     rfp_llm_timeout_seconds: float = 12.0
     rfp_max_iterations: int = 2
+
+    @model_validator(mode="after")
+    def bounded_database_pool(self) -> Self:
+        if self.database_pool_size + self.database_max_overflow > 15:
+            raise ValueError("Database pool maximum must not exceed 15")
+        return self
 
     @field_validator("database_url")
     @classmethod

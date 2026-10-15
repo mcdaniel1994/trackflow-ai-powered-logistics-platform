@@ -6,6 +6,7 @@ import logging
 from datetime import UTC, datetime
 
 import pytest
+from pipelines.database import release_session_lock, session_lock_owner
 from sqlalchemy import func, text
 from sqlalchemy import select as sa_select
 from sqlalchemy.engine import Engine
@@ -77,8 +78,43 @@ def test_advisory_lock_admits_only_one_writer(engine: Engine) -> None:
         # A second connection cannot acquire the same key while the first holds it.
         assert operations_feed.acquire_singleton_lock(second, key) is False
     finally:
-        first.close()  # closing the session releases its advisory locks
+        release_session_lock(first, key)
+        first.close()
         second.close()
+
+
+def test_feed_lock_is_idle_outside_transaction_and_released_for_reuse(engine: Engine) -> None:
+    key = 999_000_112
+    with engine.connect() as first, engine.connect() as second:
+        assert operations_feed.acquire_singleton_lock(first, key)
+        owner = session_lock_owner(first, key)
+        assert owner is not None and not first.in_transaction()
+        assert second.scalar(text("SELECT state FROM pg_stat_activity WHERE pid=:pid"), {"pid": owner}) == "idle"
+        operations_feed.require_singleton_lock(first, key, owner)
+        assert not first.in_transaction()
+        release_session_lock(first, key)
+        assert operations_feed.acquire_singleton_lock(second, key)
+        release_session_lock(second, key)
+
+
+def test_feed_refuses_writes_after_lock_connection_loss(engine: Engine) -> None:
+    key = 999_000_113
+    with engine.connect() as connection:
+        assert operations_feed.acquire_singleton_lock(connection, key)
+        owner = session_lock_owner(connection, key)
+        connection.invalidate()
+        with pytest.raises(SystemExit, match="lost singleton lock"):
+            operations_feed.require_singleton_lock(connection, key, owner)
+
+
+def test_feed_refuses_writes_after_lock_is_released(engine: Engine) -> None:
+    key = 999_000_114
+    with engine.connect() as connection:
+        assert operations_feed.acquire_singleton_lock(connection, key)
+        owner = session_lock_owner(connection, key)
+        release_session_lock(connection, key)
+        with pytest.raises(SystemExit, match="lost singleton lock"):
+            operations_feed.require_singleton_lock(connection, key, owner)
 
 
 # --- Runtime kill switch ------------------------------------------------------------------

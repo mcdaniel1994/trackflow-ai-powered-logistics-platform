@@ -19,6 +19,7 @@ from trackflow_auth import ACCESS_COOKIE_NAME, CSRF_COOKIE_NAME, CSRF_HEADER_NAM
 from central_api.core.config import Settings, get_settings
 from central_api.db.session import get_session
 from central_api.domains.inventory.models import Client
+from central_api.domains.rfp.checkpointer import close_checkpoint_pool
 from central_api.main import create_app
 
 TokenFactory = Callable[..., str]
@@ -43,6 +44,7 @@ def engine(database_url: str) -> Engine:
 @pytest.fixture(autouse=True)
 def clean_database(engine: Engine) -> Generator[None, None, None]:
     """Give every test deterministic tables without bypassing Alembic schema ownership."""
+    close_checkpoint_pool()
     with engine.begin() as connection:
         connection.execute(
             text(
@@ -75,6 +77,7 @@ def clean_database(engine: Engine) -> Generator[None, None, None]:
         )
         connection.execute(text("INSERT INTO reporting.rollup_state (id) VALUES (1) ON CONFLICT (id) DO NOTHING"))
     yield
+    close_checkpoint_pool()
 
 
 @pytest.fixture(scope="session")

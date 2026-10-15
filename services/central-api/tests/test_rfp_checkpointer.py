@@ -44,6 +44,10 @@ class _FakeConn:
     def cursor(self, **_kwargs: object) -> _FakeCursor:
         return _FakeCursor(self._exists)
 
+    @contextmanager
+    def connection(self) -> Iterator[_FakeConn]:
+        yield self
+
 
 class _FakeSaver:
     def __init__(self, *, tables_present: bool) -> None:
@@ -53,12 +57,16 @@ class _FakeSaver:
 
 def _install(monkeypatch: pytest.MonkeyPatch, saver: _FakeSaver) -> None:
     class _FakePostgresSaver:
+        def __new__(cls, _pool: object) -> _FakeSaver:
+            return saver
+
         @staticmethod
         @contextmanager
         def from_conn_string(_conn: str) -> Iterator[Any]:
             yield saver
 
     monkeypatch.setattr(cp, "PostgresSaver", _FakePostgresSaver)
+    monkeypatch.setattr(cp, "checkpoint_pool", lambda _settings: saver.conn)
 
 
 @pytest.fixture(autouse=True)
@@ -100,3 +108,9 @@ def test_provision_checkpointer_tables_runs_setup(monkeypatch: pytest.MonkeyPatc
     _install(monkeypatch, saver)
     cp.provision_checkpointer_tables(_DB_URL)
     saver.setup.assert_called_once()
+
+
+@pytest.mark.parametrize("scheme", ["postgresql", "postgresql+psycopg", "postgresql+psycopg2"])
+def test_driver_normalization_preserves_opaque_credentials(scheme: str) -> None:
+    opaque_part = "user:synthetic+psycopg2+psycopg@localhost/database"
+    assert cp._normalize_conn_string(f"{scheme}://{opaque_part}") == f"postgresql://{opaque_part}"

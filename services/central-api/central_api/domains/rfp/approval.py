@@ -265,8 +265,13 @@ def submit_decision(
     finalized, output_summary = _maybe_finalize(repo, ticket, steps)
     if finalized:
         steps.append(_step("finalize", time.time(), "ok"))
+    # Repository refreshes and the finalization read can leave a transaction checked out.
+    # Capture the result before commit expires ORM objects, then release the business
+    # connection before the independent, best-effort trace sink requests another one.
+    outcome = DecisionOutcome(section.approval_status, ticket.status, finalized)
+    session.commit()
     _record_trace(steps, env=env, output_summary=output_summary)
-    return DecisionOutcome(section.approval_status, ticket.status, finalized)
+    return outcome
 
 
 def _maybe_finalize(

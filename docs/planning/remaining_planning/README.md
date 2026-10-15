@@ -39,6 +39,7 @@ proposed spec first, and stop for owner approval. That is how `spec.md` and
 | Project | Folder / file | Spec | Status |
 |---|---|---|---|
 | **Engagement 6.1–6.4** — reporting reliability | [`spec.md`](spec.md) | ✅ approved | Ready to implement |
+| **Engagement 6 correction** — connection budget and dashboard recovery | [`spec-06-connection-reliability.md`](spec-06-connection-reliability.md) | ✅ owner approved 2026-10-15 | Both corrective phases verified locally; commit/push approved; production approval pending |
 | **Engagement 6.5** — sales forecasting | [`spec-6.5-sales-forecasting.md`](spec-6.5-sales-forecasting.md), [`sales_forcasting/`](sales_forcasting/) | ✅ approved | Ready to implement, **parallel to 6.1–6.4** |
 | **Engagement 7** — RAG knowledge base | [`07_rag_knowledge_base/`](07_rag_knowledge_base/) | ✅ delivered | Complete — merged to `main` and deployed to production (2026-08-17) |
 | **Engagement 8** — agent engineering | [`08_agent_engineering/`](08_agent_engineering/), [`docs/agents/agent-design.md`](../../agents/agent-design.md) | ✅ approved | ✅ Complete — owner accepted August 3, 2026 |

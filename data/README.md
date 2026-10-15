@@ -2,6 +2,13 @@
 
 Data engineering assets for the TrackFlow platform.
 
+The October 15 Engagement 6 correction bounds reporting at two retained plus three overflow
+connections and a five-second checkout wait. `pipelines/database.py` supplies payload-free
+pool diagnostics and session-lock lifecycle helpers consumed by Central API and reporting.
+Backend review passed; both corrective phases are locally verified, with commit/push approved by the owner.
+Production is unchanged. See the
+[connection-budget runbook](../docs/runbooks/connection-budget.md).
+
 | Folder | Purpose |
 |---|---|
 | `raw/` | Source data: exports, dumps, sample files, untransformed datasets |

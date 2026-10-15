@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import math
 import os
 import re
 from dataclasses import dataclass
@@ -12,6 +14,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import Connection, Engine, RowMapping, create_engine, text
 from sqlalchemy.exc import IntegrityError
 
+from pipelines.database import ObservedQueuePool
 from process.business_performance import TransformError, iso_week_start, recomputable_weeks, validate_requested_week
 
 PIPELINE_NAME: Final = "business_performance"
@@ -181,11 +184,31 @@ def engine_from_environment() -> Engine:
         database_url = database_url.replace("postgresql+psycopg2://", "postgresql+psycopg://", 1)
     connect_timeout = int(os.environ.get("DATABASE_CONNECT_TIMEOUT_SECONDS", DEFAULT_CONNECT_TIMEOUT_SECONDS))
     statement_timeout = int(os.environ.get("DATABASE_STATEMENT_TIMEOUT_MS", DEFAULT_STATEMENT_TIMEOUT_MS))
+    try:
+        pool_size = int(os.environ.get("DATABASE_POOL_SIZE", "2"))
+        max_overflow = int(os.environ.get("DATABASE_MAX_OVERFLOW", "3"))
+        pool_timeout = float(os.environ.get("DATABASE_POOL_TIMEOUT_SECONDS", "5"))
+        if not (1 <= pool_size <= 15 and 0 <= max_overflow <= 14 and pool_size + max_overflow <= 15
+                and math.isfinite(pool_timeout) and 0 < pool_timeout <= 30):
+            raise ValueError
+    except ValueError:
+        raise QueueConfigurationError("Invalid database pool limits") from None
+    logging.getLogger(__name__).info(
+        "database_pool_configured service=reporting-worker size=%s max_overflow=%s timeout_seconds=%s",
+        pool_size, max_overflow, pool_timeout,
+    )
     return create_engine(
         database_url,
         pool_pre_ping=True,
+        pool_recycle=300,
+        poolclass=ObservedQueuePool,
+        pool_logging_name="reporting-worker",
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_timeout=pool_timeout,
         connect_args={
             "connect_timeout": connect_timeout,
+            "application_name": "trackflow:reporting-worker",
             "options": f"-c statement_timeout={statement_timeout}",
         },
     )

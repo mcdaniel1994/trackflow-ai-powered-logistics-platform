@@ -10,6 +10,8 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from psycopg import Error as CheckpointDatabaseError
+from psycopg_pool import PoolTimeout, TooManyRequests
 from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -20,7 +22,7 @@ from trackflow_auth import (  # type: ignore[import-untyped]
 )
 
 from .core.config import get_settings
-from .db.session import get_session
+from .db.session import dispose_engine, get_session
 from .domains.agents.router import router as agents_router
 from .domains.agents.service import AgentError
 from .domains.chat.realtime import router as chat_realtime_router
@@ -40,6 +42,7 @@ from .domains.realtime.bus import RealtimeBus
 from .domains.realtime.router import router as realtime_router
 from .domains.reporting.router import router as reporting_router
 from .domains.reporting.service import ReportingError
+from .domains.rfp.checkpointer import close_checkpoint_pool
 from .domains.rfp.router import router as rfp_router
 from .domains.rfp.service import RfpError
 from .domains.suppliers.router import router as suppliers_router
@@ -70,13 +73,19 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Release application-scoped realtime subscriptions during shutdown."""
-    yield
-    chat_manager = getattr(app.state, "chat_generation_manager", None)
-    if isinstance(chat_manager, ChatGenerationManager):
-        await chat_manager.close()
-    bus = getattr(app.state, "realtime_bus", None)
-    if isinstance(bus, RealtimeBus):
-        bus.close()
+    try:
+        yield
+    finally:
+        try:
+            chat_manager = getattr(app.state, "chat_generation_manager", None)
+            if isinstance(chat_manager, ChatGenerationManager):
+                await chat_manager.close()
+            bus = getattr(app.state, "realtime_bus", None)
+            if isinstance(bus, RealtimeBus):
+                bus.close()
+        finally:
+            close_checkpoint_pool()
+            dispose_engine()
 
 
 def create_app() -> FastAPI:
@@ -86,6 +95,13 @@ def create_app() -> FastAPI:
     app.state.public_support_admission = SupportAdmission()
     app.state.realtime_bus = RealtimeBus()
     app.state.chat_generation_manager = ChatGenerationManager(app.state.realtime_bus)
+
+    @app.exception_handler(CheckpointDatabaseError)
+    @app.exception_handler(PoolTimeout)
+    @app.exception_handler(TooManyRequests)
+    async def checkpoint_database_error(_request: Request, exc: Exception) -> JSONResponse:
+        logger.error("checkpoint_database_failure service=central-api-rfp error_type=%s", type(exc).__name__)
+        return JSONResponse(status_code=503, content={"detail": "RFP service temporarily unavailable"})
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(request: Request, exc: Exception) -> JSONResponse:

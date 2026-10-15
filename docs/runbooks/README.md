@@ -18,6 +18,8 @@ to begin, but its production mutations and time-gate exceptions remain separatel
 
 ## Purpose & Structure
 
+- [Backoffice connection budget](connection-budget.md): October 15 correction, local backend/dashboard
+  acceptance and later rollout/recovery boundaries; production changes remain unexecuted.
 - One runbook per operational procedure, named `topic.md` (kebab-case).
 - Each runbook should state: what it covers, prerequisites/access, the step-by-step procedure,
   verification, rollback, and known gaps.
