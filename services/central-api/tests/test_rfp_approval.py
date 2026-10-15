@@ -9,6 +9,7 @@ from __future__ import annotations
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
@@ -104,6 +105,26 @@ def test_approve_single_section_finalizes(engine: Engine, settings: Settings) ->
             select(RfpFinalDocument).where(RfpFinalDocument.ticket_id == ticket_id)
         ).one()
         assert document.currency == "USD" and "warehouse" in document.sections
+
+
+def test_decision_releases_business_connection_before_trace_checkout(
+    engine: Engine, settings: Settings, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from central_api.domains.agents import recorder
+
+    cfg = _configured(settings)
+    ticket_id = _seed_under_eval(engine, departments=["warehouse"])
+    _start(ticket_id, cfg)
+    bounded = create_engine(settings.database_url, pool_size=1, max_overflow=0, pool_timeout=0.1)
+    monkeypatch.setattr(recorder, "get_engine", lambda: bounded)
+    try:
+        _decide(bounded, cfg, ticket_id, "warehouse", "approve")
+        with Session(bounded) as session:
+            runs = session.exec(select(AgentRun).where(AgentRun.route_taken == "approval")).all()
+            assert len(runs) == 1
+            assert session.get(RfpTicket, ticket_id).status == "done"
+    finally:
+        bounded.dispose()
 
 
 def test_approval_run_reports_summed_duration_and_output_preview(

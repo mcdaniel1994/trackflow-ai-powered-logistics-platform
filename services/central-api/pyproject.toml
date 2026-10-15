@@ -8,6 +8,7 @@ dependencies = [
   "alembic>=1.16.0",
   "fastapi>=0.116.0",
   "psycopg2-binary>=2.9.10",
+  "psycopg-pool==3.3.1",
   "pydantic-settings>=2.10.0",
   "sqlmodel>=0.0.24",
   "trackflow-auth",

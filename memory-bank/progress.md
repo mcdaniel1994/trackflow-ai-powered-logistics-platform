@@ -115,6 +115,18 @@
   `rag-index` + `rag-eval` (Recall@3 ≥ 80%, faithfulness) against live services.
 
 - Engagement 6 - Data Pipelines & Telemetry (`docs/briefs/06-data-pipelines-telemetry.md`):
+  October 15 connection correction: owner-approved backend Phase 1 is implemented locally,
+  with a 13-session runtime cap, one borrowed RFP checkpoint connection, transaction-free
+  dedicated lock connections and explicit lock cleanup/loss handling. Local acceptance passed:
+  Central API 520 tests / 91.56%, data 158 tests / 92.50%, release safety 17 tests; ten-minute
+  workload passed with 2,327 samples and peak 11 runtime sessions. Typing, lint, builds, Compose,
+  no-schema-drift and dependency audit checks pass. Owner approved Phase 2 continuation. Independent
+  Overview/Fulfilment loading, cancellation, transient backoff, stale timestamps and accurate Live
+  status are implemented; Back Office 229 tests plus the standalone mocked login/recovery journey,
+  lint, types and production build pass. Release preflight/overlap/image-plus-Compose recovery are
+  documented. Owner approved commit/push; no production change performed.
+  Specification: `docs/planning/remaining_planning/spec-06-connection-reliability.md`;
+  evidence/runbook: `docs/runbooks/connection-budget.md`.
   in progress. Reporting-reliability Phase 6.1 is deployed as immutable image `13bba2e` through
   Alembic `20260728_0011` and closed by explicit owner exception after the remaining controlled
   exercises were omitted on 2026-07-28. Phase 6.2 additive revision `20260728_0012` is deployed

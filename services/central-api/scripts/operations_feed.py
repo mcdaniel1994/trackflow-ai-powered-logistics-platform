@@ -29,9 +29,11 @@ from datetime import UTC, datetime, timedelta
 from types import FrameType
 from uuid import UUID
 
-from sqlalchemy import func, text
+from pipelines.database import acquire_session_lock, release_session_lock, session_lock_owner
+from sqlalchemy import func
 from sqlalchemy import select as sa_select
 from sqlalchemy.engine import Connection
+from sqlalchemy.exc import SQLAlchemyError
 from sqlmodel import Session
 
 from central_api.core.config import Settings, get_settings
@@ -86,7 +88,17 @@ def resolve_user_uuid(settings: Settings) -> str:
 
 def acquire_singleton_lock(connection: Connection, key: int) -> bool:
     """Try to take the process-lifetime advisory lock; False means another feed owns it."""
-    return bool(connection.execute(text("SELECT pg_try_advisory_lock(:key)"), {"key": key}).scalar())
+    return acquire_session_lock(connection, key)
+
+
+def require_singleton_lock(connection: Connection, key: int, original_pid: int | None) -> None:
+    """Stop before a write if a disconnected or replaced backend lost leadership."""
+    try:
+        if original_pid is not None and session_lock_owner(connection, key) == original_pid:
+            return
+    except SQLAlchemyError as exc:
+        logger.error("operations_feed_lock_check_failed error_type=%s", type(exc).__name__)
+    raise SystemExit("Operations feed lost singleton lock")
 
 
 def _tracking_number() -> str:
@@ -258,11 +270,19 @@ def main() -> None:
     signal.signal(signal.SIGINT, runner.stop)
 
     # Hold one dedicated connection for the lifetime lock; work uses separate sessions.
-    lock_connection = engine.connect()
     try:
-        if not acquire_singleton_lock(lock_connection, settings.operations_feed_lock_key):
+        lock_connection = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+    except SQLAlchemyError as exc:
+        logger.error("operations_feed_database_failure error_type=%s", type(exc).__name__)
+        raise SystemExit("Operations feed database unavailable") from None
+    acquired = False
+    try:
+        acquired = acquire_singleton_lock(lock_connection, settings.operations_feed_lock_key)
+        if not acquired:
             logger.warning("operations_feed_not_leader reason=advisory_lock_held_elsewhere")
             return
+        original_pid = session_lock_owner(lock_connection, settings.operations_feed_lock_key)
+        require_singleton_lock(lock_connection, settings.operations_feed_lock_key, original_pid)
         logger.info("operations_feed_started interval=%.1fs", settings.operations_feed_interval_seconds)
 
         with Session(engine) as session:
@@ -271,18 +291,25 @@ def main() -> None:
                 backfill_history(session, user_uuid, days=settings.operations_feed_backfill_days)
 
         while runner.running:
+            require_singleton_lock(lock_connection, settings.operations_feed_lock_key, original_pid)
             try:
                 with Session(engine) as session:
                     if feed_enabled(session):
                         run_tick(session, user_uuid, settings)
                     else:
                         logger.info("operations_feed_paused reason=control_flag_disabled")
-            except Exception:
-                logger.exception("operations_feed_tick_failed")
+            except Exception as exc:
+                logger.error("operations_feed_tick_failed error_type=%s", type(exc).__name__)
             _sleep_with_jitter(settings.operations_feed_interval_seconds, runner)
         logger.info("operations_feed_stopped")
+    except SQLAlchemyError as exc:
+        logger.error("operations_feed_database_failure error_type=%s", type(exc).__name__)
+        raise SystemExit("Operations feed database unavailable") from None
     finally:
+        if acquired:
+            release_session_lock(lock_connection, settings.operations_feed_lock_key)
         lock_connection.close()
+        engine.dispose()
 
 
 if __name__ == "__main__":

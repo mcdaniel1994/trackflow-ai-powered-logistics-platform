@@ -72,6 +72,10 @@ services:
   central-api:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
     environment:
+      DATABASE_POOL_SIZE: "3"
+      DATABASE_MAX_OVERFLOW: "0"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: central-api
       PUBLIC_SUPPORT_ENABLED: ${PUBLIC_SUPPORT_ENABLED:-false}
       WEBSITE_GATEWAY_SECRET: ${WEBSITE_GATEWAY_SECRET:-}
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
@@ -90,6 +94,8 @@ services:
     depends_on:
       postgres: {condition: service_healthy}
     ports: ["8003:8000"]
+    deploy:
+      replicas: 1
 
   mcp:
     build: {context: ., dockerfile: docker/mcp.Dockerfile}
@@ -127,6 +133,10 @@ services:
   operations-feed:
     build: {context: ., dockerfile: docker/central-api.Dockerfile}
     environment:
+      DATABASE_POOL_SIZE: "2"
+      DATABASE_MAX_OVERFLOW: "1"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: operations-feed
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       OPERATIONS_FEED_ENABLED: ${OPERATIONS_FEED_ENABLED:-false}
       OPERATIONS_FEED_INTERVAL_SECONDS: ${OPERATIONS_FEED_INTERVAL_SECONDS:-15}
@@ -139,6 +149,8 @@ services:
     # This image bakes a HEALTHCHECK against :8000, which this command never binds.
     healthcheck: {disable: true}
     command: [".venv/bin/python", "-m", "scripts.operations_feed"]
+    deploy:
+      replicas: 1
 
   # Durable reporting queue consumer, worker heartbeat, and Dallas scheduler.
   reporting-worker:
@@ -146,6 +158,9 @@ services:
     restart: on-failure
     stop_grace_period: 15m
     environment:
+      DATABASE_POOL_SIZE: "2"
+      DATABASE_MAX_OVERFLOW: "3"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       HOME: /tmp/trackflow
       DATABASE_CONNECT_TIMEOUT_SECONDS: ${DATABASE_CONNECT_TIMEOUT_SECONDS:-10}
@@ -188,6 +203,10 @@ services:
     restart: on-failure
     stop_grace_period: 5m
     environment:
+      DATABASE_POOL_SIZE: "1"
+      DATABASE_MAX_OVERFLOW: "0"
+      DATABASE_POOL_TIMEOUT_SECONDS: "5"
+      DATABASE_SERVICE_NAME: maintenance-worker
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-trackflow}:${POSTGRES_PASSWORD:-trackflow_local_only}@postgres:5432/${POSTGRES_DB:-trackflow_inventory}
       MOVEMENT_RETENTION_DAYS: ${MOVEMENT_RETENTION_DAYS:-30}
       OPERATIONS_FEED_USER_UUID: ${OPERATIONS_FEED_USER_UUID:-${SEED_USER_UUID:-}}

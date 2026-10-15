@@ -21,6 +21,11 @@ portfolio-production Back Office feeling like a real, moving operations platform
 
 ## Architecture & safety properties
 
+- **Connection correction (local, October 15):** the feed pool is capped at 2 retained + 1 overflow
+  connection, with a 5-second checkout wait. Its dedicated lock connection uses autocommit;
+  original backend/lock ownership is checked before each tick. Lock loss stops writes and exits;
+  cleanup explicitly unlocks or invalidates the session. Production rollout remains pending.
+  See [connection budget](connection-budget.md).
 - **Single writer:** the feed holds a process-lifetime PostgreSQL advisory lock
   (`pg_try_advisory_lock`, key `operations_feed_lock_key`). A second instance (rolling-redeploy
   overlap, accidental scale-out) fails to acquire it and exits — no double writes.

@@ -175,6 +175,10 @@ TrackFlow reflects real-world logistics challenges:
 
 ### 🚧 Engagement 6 / 6.5 — Data, Telemetry & Forecasting *(in progress)*
 
+- October 15 connection reliability correction: both corrective phases are implemented locally, with
+  a 13-session runtime budget, bounded RFP checkpoint pool and corrected advisory-lock transaction
+  lifetimes. Overview and Fulfilment now load/recover independently with accurate freshness. Local
+  backend/frontend/browser acceptance passed; owner approved commit/push; production approval remains pending. See [the corrective specification](docs/planning/remaining_planning/spec-06-connection-reliability.md).
 - Production telemetry, live synthetic-but-canonical operations, and the durable weekly reporting
   queue remain in service; the weekly report now serves its first verified six-row snapshot.
 - Phase 6.1 adds durable per-attempt failure evidence, separate liveness/core
@@ -360,7 +364,7 @@ respond to greetings without an AI call, and explain when policy answers are not
 | 3 | Talent Pipeline Tracker | ✅ Delivered — now `uis/backoffice/app/talent/` (standalone app retired June 2026) |
 | 4 | AI-Driven Engineering Infrastructure | ✅ Delivered — `memory-bank/`, `.agents/`, `uis/`, `services/` |
 | 5 | Backend Inventory Management (Central API) | ✅ Delivered — `services/central-api/` |
-| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260820_0019`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived, direct-SQL swap deployed, and Prefect retired August 2026. Deployment verification of the retirement pending |
+| 6 | Data pipelines & telemetry | 🚧 Weekly reporting is live through `20260820_0019`; Phases 6.1 and 6.3 closed by owner exception, Phase 6.2 accepted; Phase 6.4 time gates waived, direct-SQL swap deployed, and Prefect retired August 2026. Deployment verification of the retirement pending; October 15 connection correction: backend and dashboard recovery verified locally; release instructions prepared; commit/push approved; production approval pending |
 | 6.5 | Sales forecasting (regression + evaluation) | ✅ Complete offline evaluation; owner accepted the overfitting diagnosis, model not approved for operational use |
 | 7 | RAG knowledge base & semantic search | ✅ Complete — merged to `main` and deployed to production (2026-08-17): Qdrant + FastAPI `/knowledge/query` + Back Office Ask-AI; `RAG_ENABLED` with provider keys and a provisioned Qdrant indexed via `rag-index`. Grounds the RFP Desk and powers the agent Ask-AI. |
 | 8 | Agent Engineering (LangGraph) | ✅ Complete — Phases 0–6 owner-accepted August 3, 2026; local MCP/Inspector evidence accepted, unexecuted Codespaces-specific exercise waived (not passed) |
